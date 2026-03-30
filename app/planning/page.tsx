@@ -1,7 +1,7 @@
 export default function Planning (){
     return(
         <div>
-            planning
+            Planning
         </div>
     )
 }

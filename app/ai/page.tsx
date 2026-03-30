@@ -1,7 +1,7 @@
-export default function Ai() {
+export default function AI (){
     return(
         <div>
-            ai 
+            AI
         </div>
     )
 }

@@ -1,7 +1,7 @@
-export default function Business () {
+export default function Business(){
     return (
         <div>
-            business
+            Business
         </div>
     )
 }
