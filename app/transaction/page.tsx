@@ -1,12 +1,25 @@
 "use client"
 import { supabase } from "@/lib/supabase"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 export  default function Transaction() {
     const [name, setName] = useState("")
     const [amount, setAmount] = useState("")
     const [date, setDate] = useState("")
     const [type, setType] = useState("income")
     const [ transaction, setTransaction ] = useState([])
+        const fetchTransaction = async () => {
+            const { data, error } = await supabase
+        .from("transactions")
+        .select("*") 
+    
+    if (data) {
+        setTransaction(data)
+        } 
+    }
+
+    useEffect(() => {
+        fetchTransaction()
+    }, [])
     const handleSubmit = async () => {
         const { error } = await supabase
             .from("transactions")
@@ -14,7 +27,11 @@ export  default function Transaction() {
         if (error) {
             console.log(error)
         } else {
-            console.log("sucsess")
+            setName("")
+            setAmount("")
+            setDate("")
+            setType("income")
+            fetchTransaction()
         }
     }
     return (
