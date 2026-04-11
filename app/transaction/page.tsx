@@ -34,6 +34,14 @@ export  default function Transaction() {
             fetchTransaction()
         }
     }
+    const handleDelete = async (id: number) => {
+  await supabase
+    .from("transactions")
+    .delete()
+    .eq("id", id)
+  
+  fetchTransaction()
+}
     return (
         <main className="p-8">
             <h1 className="text-2xl font-bold">Transaction</h1>
@@ -45,6 +53,7 @@ export  default function Transaction() {
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     className="w-full border rounded-lg p-2 mt-1"
+            
                 />
             </div>
             <div className="mt-6">
@@ -84,14 +93,22 @@ export  default function Transaction() {
                      Record
             </button>
             </div>
-            <div className="mt-8">
-                {transaction.map((item, index) => (
-                <div key={index} className="bg-white rounded-lg p-4 shadow mt-2">
-                    <p>{item.name} - ฿{item.amount}</p>
-                    <p className="text-sm text-gray-500">{item.date} . {item.type}</p>
-                    </div>
-                    ))}
+        <div className="mt-8">
+            {transaction.map((item, index) => (
+             <div key={index} className="bg-white rounded-lg p-4 shadow mt-2 flex justify-between items-center">
+            <div>
+                <p>{item.name} - ฿{item.amount}</p>
+                <p className="text-sm text-gray-500">{item.date} . {item.type}</p>
             </div>
+            <button
+                onClick={() => handleDelete(item.id)}
+                className="text-red-500 hover:text-red-700"
+      >
+        ลบ
+      </button>
+    </div>
+  ))}
+</div>
         </main>
     )
 }
