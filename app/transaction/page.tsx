@@ -13,7 +13,7 @@ export  default function Transaction() {
         .select("*") 
     
     if (data) {
-        setTransaction(data)
+        setTransaction(data as any[])
         } 
     }
 
