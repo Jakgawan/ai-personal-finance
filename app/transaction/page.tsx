@@ -6,7 +6,7 @@ export  default function Transaction() {
     const [amount, setAmount] = useState("")
     const [date, setDate] = useState("")
     const [type, setType] = useState("income")
-    const [ transaction, setTransaction ] = useState([])
+    const [ transaction, setTransaction ] = useState<any[]>([])
         const fetchTransaction = async () => {
             const { data, error } = await supabase
         .from("transactions")
