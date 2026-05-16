@@ -22,21 +22,31 @@ export  default function Transaction() {
     useEffect(() => {
         fetchTransaction()
     }, [])
-    const handleSubmit = async () => {
+    const [editId, setEditId] = useState<number | null>(null)
+
+const handleSubmit = async () => {
     const { data: { user } } = await supabase.auth.getUser()
-    const { error } = await supabase
-        .from("transactions")
-        .insert({ name, amount, date, type, user_id: user?.id })
-        if (error) {
-            console.log(error)
-        } else {
-            setName("")
-            setAmount("")
-            setDate("")
-            setType("income")
-            fetchTransaction()
-        }
+    
+    if (editId) {
+        // Update
+        await supabase
+            .from("transactions")
+            .update({ name, amount, date, type })
+            .eq("id", editId)
+        setEditId(null)
+    } else {
+        // Insert ใหม่
+        await supabase
+            .from("transactions")
+            .insert({ name, amount, date, type, user_id: user?.id })
     }
+    
+     setName("")
+     setAmount("")
+     setDate("")
+     setType("income")
+     fetchTransaction()
+}
     const handleDelete = async (id: number) => {
   await supabase
     .from("transactions")
@@ -108,7 +118,19 @@ export  default function Transaction() {
                 className="text-red-500 hover:text-red-700"
       >
         ลบ
-      </button>
+            </button>
+            <button
+    onClick={() => {
+        setEditId(item.id)
+        setName(item.name)
+        setAmount(item.amount)
+        setDate(item.date)
+        setType(item.type)
+    }}
+                 className="text-blue-500 hover:text-blue-700 mr-2"
+>
+                     แก้ไข
+            </button>
     </div>
   ))}
 </div>
