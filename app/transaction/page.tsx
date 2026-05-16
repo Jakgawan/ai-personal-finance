@@ -7,6 +7,9 @@ export  default function Transaction() {
     const [date, setDate] = useState("")
     const [type, setType] = useState("income")
     const [ transaction, setTransaction ] = useState<any[]>([])
+    const [category, setCategory] = useState("")
+    const [categories, setCategories] = useState<any[]>([])
+    const [newCategory, setNewCategory] = useState("")
     const fetchTransaction = async () => {
     const { data: { user } } = await supabase.auth.getUser()
     const { data } = await supabase
@@ -18,13 +21,25 @@ export  default function Transaction() {
         setTransaction(data as any[])
     }
 }
+    const fetchCategories = async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    const { data } = await supabase
+        .from("categories") 
+        .select("*")
+        .eq("user_id", user?.id)
+    if (data) {
+        setCategories(data as any[])
+    }
+}
 
     useEffect(() => {
-        fetchTransaction()
-    }, [])
+    fetchTransaction()
+    fetchCategories()
+}, [])
     const [editId, setEditId] = useState<number | null>(null)
 
-const handleSubmit = async () => {
+    const handleSubmit = async () => {
+        
     const { data: { user } } = await supabase.auth.getUser()
     
     if (editId) {
@@ -35,11 +50,11 @@ const handleSubmit = async () => {
             .eq("id", editId)
         setEditId(null)
     } else {
-        // Insert ใหม่
-        await supabase
-            .from("transactions")
-            .insert({ name, amount, date, type, user_id: user?.id })
-    }
+    // Insert ใหม่
+    await supabase
+        .from("transactions")
+        .insert({ name, amount, date, type, category, user_id: user?.id })  // ← เพิ่ม category
+}
     
      setName("")
      setAmount("")
@@ -48,13 +63,24 @@ const handleSubmit = async () => {
      fetchTransaction()
 }
     const handleDelete = async (id: number) => {
-  await supabase
-    .from("transactions")
-    .delete()
-    .eq("id", id)
-  
-  fetchTransaction()
+    await supabase
+        .from("transactions")
+        .delete()
+        .eq("id", id)
+    fetchTransaction()
 }
+
+const handleAddCategory = async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    await supabase
+        .from("categories")
+        .insert({ name: newCategory, user_id: user?.id })
+    setNewCategory("")
+    fetchCategories()
+}
+    
+  
+
     return (
         <main className="p-8">
             <h1 className="text-2xl font-bold">Transaction</h1>
@@ -99,6 +125,34 @@ const handleSubmit = async () => {
                     <option value="expense">Expense</option>
                 </select>
             </div>
+            <div className="mt-6">
+    <label className="text-sm text-gray-500">หมวดหมู่</label>
+             <select
+                     value={category}
+                     onChange={(e) => setCategory(e.target.value)}
+                    className="w-full border rounded-lg p-2 mt-1"
+    >
+        <option value="">-- เลือกหมวดหมู่ --</option>
+        {categories.map((cat, index) => (
+            <option key={index} value={cat.name}>{cat.name}</option>
+        ))}
+                </select>
+            </div>
+            <div className="mt-4 flex gap-2">
+    <input
+        type="text"
+        placeholder="เพิ่มหมวดหมู่ใหม่"
+        value={newCategory}
+        onChange={(e) => setNewCategory(e.target.value)}
+        className="flex-1 border rounded-lg p-2"
+    />
+    <button
+        onClick={handleAddCategory}
+        className="bg-green-500 text-white rounded-lg px-4 hover:bg-green-600"
+    >
+        เพิ่ม
+    </button>
+</div>
             <div>
                 <button 
                     onClick={handleSubmit}
@@ -111,7 +165,7 @@ const handleSubmit = async () => {
              <div key={index} className="bg-white rounded-lg p-4 shadow mt-2 flex justify-between items-center">
             <div>
                 <p>{item.name} - ฿{item.amount}</p>
-                <p className="text-sm text-gray-500">{item.date} . {item.type}</p>
+                <p className="text-sm text-gray-500">{item.date} . {item.type} . {item.category}</p>
             </div>
             <button
                 onClick={() => handleDelete(item.id)}
@@ -127,7 +181,7 @@ const handleSubmit = async () => {
         setDate(item.date)
         setType(item.type)
     }}
-                 className="text-blue-500 hover:text-blue-700 mr-2"
+             className="text-blue-500 hover:text-blue-700 mr-2"
 >
                      แก้ไข
             </button>
