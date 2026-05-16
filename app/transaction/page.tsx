@@ -7,23 +7,26 @@ export  default function Transaction() {
     const [date, setDate] = useState("")
     const [type, setType] = useState("income")
     const [ transaction, setTransaction ] = useState<any[]>([])
-        const fetchTransaction = async () => {
-            const { data, error } = await supabase
+    const fetchTransaction = async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    const { data } = await supabase
         .from("transactions")
-        .select("*") 
+        .select("*")
+        .eq("user_id", user?.id)
     
     if (data) {
         setTransaction(data as any[])
-        } 
     }
+}
 
     useEffect(() => {
         fetchTransaction()
     }, [])
     const handleSubmit = async () => {
-        const { error } = await supabase
-            .from("transactions")
-            .insert({ name, amount, date, type })
+    const { data: { user } } = await supabase.auth.getUser()
+    const { error } = await supabase
+        .from("transactions")
+        .insert({ name, amount, date, type, user_id: user?.id })
         if (error) {
             console.log(error)
         } else {

@@ -7,12 +7,12 @@ export default function Dashboard(){
   const [total, setTotal] = useState(0)
 useEffect(() => {
   const fetchData = async () => {
+    const { data: { user } } = await supabase.auth.getUser()
     const { data } = await supabase
-      .from("transactions")
-      .select("*")
-    
+        .from("transactions")
+        .select("*")
+        .eq("user_id", user?.id)
     if (data) {
-      // วนลูปคำนวณ income และ expense
       let totalIncome = 0
       let totalExpense = 0
       
