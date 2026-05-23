@@ -21,6 +21,29 @@ export default function CategoriesSection() {
   const [icon, setIcon] = useState("")
   const [editId, setEditId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const DEFAULT_CATEGORIES = [
+  { name: "อาหาร", type: "expense", color: "#D85A30", icon: "🍔" },
+  { name: "น้ำมัน", type: "expense", color: "#F59E0B", icon: "⛽" },
+  { name: "ที่พัก", type: "expense", color: "#8B5CF6", icon: "🏠" },
+  { name: "สุขภาพ", type: "expense", color: "#EC4899", icon: "💊" },
+  { name: "บันเทิง", type: "expense", color: "#378ADD", icon: "🎮" },
+  { name: "เสื้อผ้า", type: "expense", color: "#6B7280", icon: "👕" },
+  { name: "ชำระหนี้", type: "expense", color: "#D85A30", icon: "💳" },
+  { name: "อื่นๆ", type: "expense", color: "#6B7280", icon: "📦" },
+  { name: "เงินเดือน", type: "income", color: "#1D9E75", icon: "💰" },
+  { name: "รายได้เสริม", type: "income", color: "#1D9E75", icon: "💵" },
+]
+
+const handleLoadTemplate = async () => {
+  if (!confirm("โหลด template หมวดหมู่? (จะเพิ่มเข้าไปในรายการที่มีอยู่)")) return
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return
+
+  await supabase.from("categories").insert(
+    DEFAULT_CATEGORIES.map(c => ({ ...c, user_id: user.id }))
+  )
+  fetchCategories()
+}
 
   const fetchCategories = async () => {
     const { data: { user } } = await supabase.auth.getUser()
@@ -136,6 +159,12 @@ export default function CategoriesSection() {
           </div>
         </div>
       </div>
+      <button
+  onClick={handleLoadTemplate}
+  className="w-full border border-dashed border-gray-300 text-gray-500 rounded-lg px-4 py-2 text-sm hover:bg-gray-50 mb-4"
+>
+  📋 โหลด template หมวดหมู่เริ่มต้น
+</button>
 
       {/* Lists */}
       {[{ label: "รายจ่าย", items: expense }, { label: "รายรับ", items: income }].map(({ label, items }) => (
