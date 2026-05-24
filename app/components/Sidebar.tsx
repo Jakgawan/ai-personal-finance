@@ -10,6 +10,7 @@ const menuItems = [
   { href: "/transaction", label: "รายการ", icon: "📋" },
   { href: "/planning", label: "วางแผน", icon: "📅" },
   { href: "/balance-sheet", label: "งบการเงิน", icon: "⚖️" },
+  { href: "/business", label: "ธุรกิจ", icon: "🏢" },
   { href: "/ai", label: "ปรึกษาการเงิน", icon: "💬" },
   { href: "/courses", label: "คอร์สการเงิน", icon: "🎓" },
   { href: "/settings", label: "Settings", icon: "⚙️" },
@@ -88,18 +89,6 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
           )
         })}
       </nav>
-
-      {/* Quick Add button */}
-      {!collapsed && (
-        <div className="p-2 mb-2">
-          <button
-            onClick={() => { setShowQuickAdd(true); setMobileOpen(false) }}
-            className="w-full bg-[#1D9E75] text-white rounded-lg py-2 text-sm hover:bg-[#178a64] transition-colors"
-          >
-            + บันทึกรายการ
-          </button>
-        </div>
-      )}
     </div>
   )
 
@@ -203,6 +192,19 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
           </div>
         </div>
       )}
+      <button
+         onClick={() => {
+        if (pathname === "/business") {
+          // dispatch event ให้หน้า business รับรู้
+           window.dispatchEvent(new CustomEvent("openBusinessTxModal"))
+          } else {
+           setShowQuickAdd(true)
+          }
+  }}
+          className="fixed bottom-6 right-6 w-14 h-14 bg-[#1D9E75] text-white rounded-full shadow-lg text-2xl hover:bg-[#178a64] transition-colors z-30 flex items-center justify-center"
+>
+  +
+      </button>
     </div>
   )
 }
