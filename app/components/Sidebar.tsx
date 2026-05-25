@@ -14,6 +14,7 @@ const menuItems = [
   { href: "/ai", label: "ปรึกษาการเงิน", icon: "💬" },
   { href: "/courses", label: "คอร์สการเงิน", icon: "🎓" },
   { href: "/settings", label: "Settings", icon: "⚙️" },
+  { href: "/recurring", label: "รายการซ้ำ", icon: "🔄" },
 ]
 
 export default function Sidebar({ children }: { children: React.ReactNode }) {

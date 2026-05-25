@@ -121,7 +121,21 @@ export default function PlanningPage() {
   )
   fetchItems()
 }
+  const fillRow = async (item: PlanItem) => {
+  const firstMonth = Object.keys(item.monthly_amount).sort()[0]
+  if (!firstMonth) return
+  const firstValue = item.monthly_amount[firstMonth]
+  if (!confirm(`fill ฿${firstValue.toLocaleString()} ไปทุกเดือนที่ยังว่างอยู่?`)) return
 
+  const updated = { ...item.monthly_amount }
+  for (let m = 1; m <= 12; m++) {
+    if (!updated[String(m)]) {
+      updated[String(m)] = firstValue
+    }
+  }
+  await supabase.from("planning_items").update({ monthly_amount: updated }).eq("id", item.id)
+  fetchItems()
+}
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
       <div className="flex items-center justify-between mb-6">
@@ -235,9 +249,19 @@ export default function PlanningPage() {
                         })}
 
                         
-                        <td className="px-4 py-2 text-right font-semibold text-gray-700">
-                          {rowTotal(item).toLocaleString()}
-                        </td>
+                      
+                      <td className="px-4 py-2 text-right font-semibold text-gray-700">
+                         {rowTotal(item).toLocaleString()}
+                      </td>
+                      <td className="px-2 py-2">
+                     <button
+                         onClick={() => fillRow(item)}
+                         className="text-xs text-gray-400 hover:text-[#1D9E75] px-2 py-1 rounded hover:bg-green-50 transition-colors whitespace-nowrap"
+                         title="copy ค่าเดือนแรกไปทุกเดือน"
+                       >
+                        fill →
+                     </button>
+                      </td>
                       </tr>
                     ))}
 
