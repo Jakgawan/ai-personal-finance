@@ -4,11 +4,13 @@ import { useState } from "react"
 import ProfileSection from "./components/ProfileSection"
 import PayCyclesSection from "./components/PayCyclesSection"
 import CategoriesSection from "./components/CategoriesSection"
+import RecurringSection from "./components/RecurringSection"
 
 const menuItems = [
   { id: "profile", label: "บัญชีและโปรไฟล์", icon: "👤" },
   { id: "paycycles", label: "รอบเงินเดือน", icon: "📅" },
   { id: "categories", label: "หมวดหมู่รายการ", icon: "🏷️" },
+    { id: "recurring", label: "รายการซ้ำ", icon: "🔄" },
   { id: "goals", label: "เป้าหมายการเงิน", icon: "🎯" },
   { id: "notifications", label: "การแจ้งเตือน", icon: "🔔" },
   { id: "display", label: "ภาษาและการแสดงผล", icon: "🌐" },
@@ -47,6 +49,7 @@ export default function SettingsPage() {
         {active === "profile" && <ProfileSection />}
         {active === "paycycles" && <PayCyclesSection />}
         {active === "categories" && <CategoriesSection />}
+        {active === "recurring" && <RecurringSection />}
         {!["profile", "paycycles", "categories"].includes(active) && (
           <div className="text-gray-400 text-sm">🚧 Coming soon...</div>
         )}

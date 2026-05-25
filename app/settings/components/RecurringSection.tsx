@@ -29,12 +29,12 @@ type CreatedLog = {
 }
 
 const CYCLE_LABEL: Record<string, string> = {
-  monthly: "ทุกเดือน",
   weekly: "ทุกสัปดาห์",
+  monthly: "ทุกเดือน",
   yearly: "ทุกปี",
 }
 
-export default function RecurringPage() {
+export default function RecurringSection() {
   const [items, setItems] = useState<Recurring[]>([])
   const [businesses, setBusinesses] = useState<Business[]>([])
   const [showModal, setShowModal] = useState(false)
@@ -162,12 +162,23 @@ export default function RecurringPage() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
 
+   const calcFirstNextDate = (date: string, cycle: string) => {
+  const today = new Date().toISOString().split("T")[0]
+  let d = new Date(date)
+ while (d.toISOString().split("T")[0] <= today) {
+    if (cycle === "monthly") d.setMonth(d.getMonth() + 1)
+    if (cycle === "weekly") d.setDate(d.getDate() + 7)
+    if (cycle === "yearly") d.setFullYear(d.getFullYear() + 1)
+  }
+  return d.toISOString().split("T")[0]
+}
+
     const payload = {
-      name, amount: Number(amount), type, category,
-      cycle, start_date: startDate,
-      next_date: startDate,
-      user_id: user.id,
-      business_id: businessId || null,
+        name, amount: Number(amount), type, category,
+        cycle, start_date: startDate,
+        next_date: calcFirstNextDate(startDate, cycle),
+        user_id: user.id,
+        business_id: businessId || null,
     }
 
     if (editItem) {
@@ -204,8 +215,7 @@ export default function RecurringPage() {
     .reduce((s, i) => i.type === "expense" ? s - i.amount : s + i.amount, 0)
 
   return (
-    <div className="p-6 bg-gray-50 min-h-screen">
-      {/* Header */}
+    <div className="max-w-3xl">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-gray-800">รายการซ้ำอัตโนมัติ</h1>
         <button onClick={() => openAdd(activeTab === "personal" ? "" : activeTab)}
@@ -214,7 +224,6 @@ export default function RecurringPage() {
         </button>
       </div>
 
-      {/* Log แจ้งเตือนรายการที่สร้างอัตโนมัติ */}
       {showLog && createdLogs.length > 0 && (
         <div className="bg-green-50 border border-green-200 rounded-xl p-4 mb-6">
           <div className="flex items-center justify-between mb-2">
@@ -355,8 +364,8 @@ export default function RecurringPage() {
                 className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75]" />
               <select value={cycle} onChange={e => setCycle(e.target.value)}
                 className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none">
-                <option value="monthly">ทุกเดือน</option>
                 <option value="weekly">ทุกสัปดาห์</option>
+                <option value="monthly">ทุกเดือน</option>
                 <option value="yearly">ทุกปี</option>
               </select>
               <select value={businessId} onChange={e => setBusinessId(e.target.value)}
@@ -365,7 +374,10 @@ export default function RecurringPage() {
                 {businesses.map(b => <option key={b.id} value={b.id}>🏢 {b.name}</option>)}
               </select>
               <div>
-                <label className="text-xs text-gray-500 mb-1 block">วันเริ่มต้น</label>
+                <label className="text-xs text-gray-500 mb-1 block">
+                                            วันเริ่มต้น 
+                 <span className="text-yellow-500 ml-1">⚠️ ควรเป็นวันในอนาคต</span>
+                </label>
                 <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)}
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75]" />
               </div>
