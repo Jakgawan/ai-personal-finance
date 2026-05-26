@@ -24,11 +24,85 @@ type PayCycle = {
   end_day: number
 }
 
+type Asset = {
+  id: string
+  name: string
+  asset_group: string
+  value: number
+}
+
 const COLORS = ["#1D9E75", "#D85A30", "#378ADD", "#F59E0B", "#8B5CF6", "#EC4899", "#6B7280"]
+
+function calcFinancialScore(
+  cycleIncome: number,
+  cycleExpense: number,
+  cycleBalance: number,
+  assets: Asset[],
+  transactions: Transaction[]
+) {
+  let score = 0
+  const details: { label: string; score: number; max: number; tip: string }[] = []
+
+  const savingRate = cycleIncome > 0 ? ((cycleIncome - cycleExpense) / cycleIncome) * 100 : 0
+  const savingScore = Math.min(25, Math.round((savingRate / 20) * 25))
+  details.push({
+    label: "อัตราออม", score: savingScore, max: 25,
+    tip: savingRate >= 20 ? "ออมเงินได้ดีมาก!" : `ออมอยู่ ${savingRate.toFixed(1)}% เป้า 20%`
+  })
+  score += savingScore
+
+  const debtRate = cycleIncome > 0 ? (cycleExpense / cycleIncome) * 100 : 100
+  const debtScore = debtRate <= 35 ? 25 : debtRate <= 50 ? 15 : debtRate <= 70 ? 8 : 0
+  details.push({
+    label: "ภาระรายจ่าย", score: debtScore, max: 25,
+    tip: debtRate <= 35 ? "ภาระรายจ่ายอยู่ในเกณฑ์ดี" : `รายจ่าย ${debtRate.toFixed(1)}% ของรายรับ เป้า < 35%`
+  })
+  score += debtScore
+
+  const liquidAssets = assets.filter(a => a.asset_group === "liquid").reduce((s, a) => s + Number(a.value), 0)
+  const monthlyExpenseAvg = cycleExpense || 1
+  const emergencyMonths = liquidAssets / monthlyExpenseAvg
+  const emergencyScore = emergencyMonths >= 6 ? 20 : Math.round((emergencyMonths / 6) * 20)
+  details.push({
+    label: "เงินสำรองฉุกเฉิน", score: emergencyScore, max: 20,
+    tip: emergencyMonths >= 6 ? "มีเงินสำรองเพียงพอ!" : `มีเงินสำรอง ${emergencyMonths.toFixed(1)} เดือน เป้า 6 เดือน`
+  })
+  score += emergencyScore
+
+  const cashflowScore = cycleBalance >= 0 ? 20 : 0
+  details.push({
+    label: "กระแสเงินสด", score: cashflowScore, max: 20,
+    tip: cycleBalance >= 0 ? "รายรับมากกว่ารายจ่าย ดีมาก!" : "รายจ่ายมากกว่ารายรับ ควรปรับแผน"
+  })
+  score += cashflowScore
+
+  const last7Days = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date()
+    d.setDate(d.getDate() - i)
+    return d.toISOString().split("T")[0]
+  })
+  const activeDays = last7Days.filter(day => transactions.some(t => t.date === day)).length
+  const consistencyScore = Math.round((activeDays / 7) * 10)
+  details.push({
+    label: "ความสม่ำเสมอ", score: consistencyScore, max: 10,
+    tip: activeDays >= 5 ? "บันทึกสม่ำเสมอมาก!" : `บันทึก ${activeDays}/7 วัน ลองบันทึกทุกวัน`
+  })
+  score += consistencyScore
+
+  return { score, details }
+}
+
+const getScoreColor = (score: number) => {
+  if (score >= 80) return { text: "text-[#1D9E75]", label: "ยอดเยี่ยม" }
+  if (score >= 60) return { text: "text-[#378ADD]", label: "ดี" }
+  if (score >= 40) return { text: "text-[#F59E0B]", label: "พอใช้" }
+  return { text: "text-[#D85A30]", label: "ต้องปรับปรุง" }
+}
 
 export default function Dashboard() {
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [cycles, setCycles] = useState<PayCycle[]>([])
+  const [assets, setAssets] = useState<Asset[]>([])
   const [chartMode, setChartMode] = useState<"bar" | "donut" | "column" | "table">("bar")
   const [loading, setLoading] = useState(true)
 
@@ -36,31 +110,29 @@ export default function Dashboard() {
     const fetchData = async () => {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
-
-      const [{ data: txData }, { data: cycleData }] = await Promise.all([
+      const [{ data: txData }, { data: cycleData }, { data: assetData }] = await Promise.all([
         supabase.from("transactions").select("*").eq("user_id", user.id).order("date", { ascending: false }),
         supabase.from("pay_cycles").select("*").eq("user_id", user.id),
+        supabase.from("assets").select("*").eq("user_id", user.id),
       ])
-
       setTransactions(txData || [])
       setCycles(cycleData || [])
+      setAssets(assetData || [])
       setLoading(false)
     }
     fetchData()
   }, [])
 
-  // --- คำนวณรอบเงินเดือนปัจจุบัน ---
   const today = new Date()
   const currentDay = today.getDate()
   const currentMonth = today.getMonth()
   const currentYear = today.getFullYear()
 
   const activeCycle = cycles.find(c => {
-  if (c.start_day > c.end_day) {
-    return currentDay >= c.start_day || currentDay <= c.end_day
-  }
-  return currentDay >= c.start_day && currentDay <= c.end_day
-}) || cycles[0] || null
+    if (c.start_day > c.end_day) return currentDay >= c.start_day || currentDay <= c.end_day
+    return currentDay >= c.start_day && currentDay <= c.end_day
+  }) || cycles[0] || null
+
   let daysLeft = 0
   let cycleStart: Date | null = null
   let cycleEnd: Date | null = null
@@ -68,9 +140,7 @@ export default function Dashboard() {
   if (activeCycle) {
     const s = activeCycle.start_day
     const e = activeCycle.end_day
-
     if (s > e) {
-      // รอบข้ามเดือน เช่น วันที่ 21 ถึง 5
       if (currentDay >= s) {
         cycleStart = new Date(currentYear, currentMonth, s)
         cycleEnd = new Date(currentYear, currentMonth + 1, e)
@@ -82,17 +152,12 @@ export default function Dashboard() {
       cycleStart = new Date(currentYear, currentMonth, s)
       cycleEnd = new Date(currentYear, currentMonth, e)
     }
-
     const diff = cycleEnd.getTime() - today.getTime()
     daysLeft = Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)))
   }
 
-  // --- รายการในรอบปัจจุบัน ---
   const cycleTransactions = cycleStart && cycleEnd
-    ? transactions.filter(t => {
-        const d = new Date(t.date)
-        return d >= cycleStart! && d <= cycleEnd!
-      })
+    ? transactions.filter(t => { const d = new Date(t.date); return d >= cycleStart! && d <= cycleEnd! })
     : transactions.filter(t => t.date?.startsWith(`${currentYear}-${String(currentMonth + 1).padStart(2, "0")}`))
 
   const cycleIncome = cycleTransactions.filter(t => t.type === "income").reduce((s, t) => s + Number(t.amount), 0)
@@ -100,7 +165,9 @@ export default function Dashboard() {
   const cycleBalance = cycleIncome - cycleExpense
   const dailyBudget = daysLeft > 0 ? cycleBalance / daysLeft : 0
 
-  // --- รอบก่อนหน้า (เพื่อเปรียบเทียบ %) ---
+  const { score: financialScore, details: scoreDetails } = calcFinancialScore(cycleIncome, cycleExpense, cycleBalance, assets, transactions)
+  const scoreColor = getScoreColor(financialScore)
+
   const prevMonth = currentMonth === 0 ? 11 : currentMonth - 1
   const prevYear = currentMonth === 0 ? currentYear - 1 : currentYear
   const prevTx = transactions.filter(t => t.date?.startsWith(`${prevYear}-${String(prevMonth + 1).padStart(2, "0")}`))
@@ -112,37 +179,29 @@ export default function Dashboard() {
     return ((current - prev) / prev * 100).toFixed(1)
   }
 
-  // --- กราฟรายจ่ายแบ่งหมวด ---
   const expenseByCategory = Object.entries(
-    cycleTransactions
-      .filter(t => t.type === "expense")
+    cycleTransactions.filter(t => t.type === "expense")
       .reduce((acc, t) => {
         const key = t.category || "อื่นๆ"
         acc[key] = (acc[key] || 0) + Number(t.amount)
         return acc
       }, {} as Record<string, number>)
-  )
-    .map(([name, value]) => ({ name, value }))
-    .sort((a, b) => b.value - a.value)
+  ).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value)
 
   const totalExpenseForPct = expenseByCategory.reduce((s, c) => s + c.value, 0)
 
-  // --- กราฟย้อนหลัง 6 เดือน ---
   const last6Months = Array.from({ length: 6 }, (_, i) => {
     const d = new Date(currentYear, currentMonth - 5 + i, 1)
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
     const label = d.toLocaleDateString(undefined, { month: "short" })
     const monthTx = transactions.filter(t => t.date?.startsWith(key))
     return {
-      label,
-      key,
+      label, key,
       income: monthTx.filter(t => t.type === "income").reduce((s, t) => s + Number(t.amount), 0),
       expense: monthTx.filter(t => t.type === "expense").reduce((s, t) => s + Number(t.amount), 0),
-      isCurrent: i === 5,
     }
   })
 
-  // --- 5 รายการล่าสุด ---
   const latest5 = transactions.slice(0, 5)
   let runningBalance = transactions.reduce((s, t) => t.type === "income" ? s + Number(t.amount) : s - Number(t.amount), 0)
   const latest5WithBalance = latest5.map((t) => {
@@ -160,23 +219,10 @@ export default function Dashboard() {
       {/* Summary Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         {[
-          {
-            label: "รายรับรอบนี้", value: cycleIncome, color: "text-[#1D9E75]",
-            pct: pctChange(cycleIncome, prevIncome)
-          },
-          {
-            label: "รายจ่ายรอบนี้", value: cycleExpense, color: "text-[#D85A30]",
-            pct: pctChange(cycleExpense, prevExpense)
-          },
-          {
-            label: "คงเหลือสุทธิ", value: cycleBalance,
-            color: cycleBalance >= 0 ? "text-[#1D9E75]" : "text-[#D85A30]",
-            pct: null
-          },
-          {
-            label: "ใช้ได้/วัน", value: dailyBudget,
-            color: "text-[#378ADD]", pct: null, suffix: "/วัน"
-          },
+          { label: "รายรับรอบนี้", value: cycleIncome, color: "text-[#1D9E75]", pct: pctChange(cycleIncome, prevIncome) },
+          { label: "รายจ่ายรอบนี้", value: cycleExpense, color: "text-[#D85A30]", pct: pctChange(cycleExpense, prevExpense) },
+          { label: "คงเหลือสุทธิ", value: cycleBalance, color: cycleBalance >= 0 ? "text-[#1D9E75]" : "text-[#D85A30]", pct: null },
+          { label: "ใช้ได้/วัน", value: dailyBudget, color: "text-[#378ADD]", pct: null, suffix: "/วัน" },
         ].map((card) => (
           <div key={card.label} className="bg-white rounded-xl p-4 shadow-sm">
             <p className="text-xs text-gray-500 mb-1">{card.label}</p>
@@ -193,6 +239,48 @@ export default function Dashboard() {
         ))}
       </div>
 
+      {/* Financial Score */}
+      <div className="bg-white rounded-xl shadow-sm p-5 mb-6">
+        <h2 className="text-sm font-semibold text-gray-700 mb-4">คะแนนสุขภาพการเงิน</h2>
+        <div className="flex items-center gap-6">
+          <div className="relative w-24 h-24 shrink-0">
+            <svg viewBox="0 0 36 36" className="w-24 h-24 -rotate-90">
+              <circle cx="18" cy="18" r="15.9" fill="none" stroke="#f3f4f6" strokeWidth="3" />
+              <circle cx="18" cy="18" r="15.9" fill="none" strokeWidth="3"
+                strokeDasharray={`${financialScore} 100`} strokeLinecap="round"
+                style={{ stroke: financialScore >= 80 ? "#1D9E75" : financialScore >= 60 ? "#378ADD" : financialScore >= 40 ? "#F59E0B" : "#D85A30" }}
+              />
+            </svg>
+            <div className="absolute inset-0 flex flex-col items-center justify-center">
+              <p className={`text-2xl font-bold ${scoreColor.text}`}>{financialScore}</p>
+              <p className="text-xs text-gray-400">/ 100</p>
+            </div>
+          </div>
+          <div className="flex-1">
+            <p className={`text-lg font-bold ${scoreColor.text} mb-2`}>{scoreColor.label}</p>
+            <div className="flex flex-col gap-2">
+              {scoreDetails.map(d => (
+                <div key={d.label}>
+                  <div className="flex justify-between text-xs text-gray-500 mb-0.5">
+                    <span>{d.label}</span>
+                    <span>{d.score}/{d.max}</span>
+                  </div>
+                  <div className="h-1.5 bg-gray-100 rounded-full">
+                    <div className="h-1.5 rounded-full transition-all"
+                      style={{
+                        width: `${(d.score / d.max) * 100}%`,
+                        backgroundColor: d.score === d.max ? "#1D9E75" : d.score >= d.max * 0.5 ? "#F59E0B" : "#D85A30"
+                      }}
+                    />
+                  </div>
+                  <p className="text-xs text-gray-400 mt-0.5">{d.tip}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
         {/* กราฟรายจ่ายแบ่งหมวด */}
         <div className="md:col-span-2 bg-white rounded-xl p-5 shadow-sm">
@@ -200,17 +288,13 @@ export default function Dashboard() {
             <h2 className="text-sm font-semibold text-gray-700">รายจ่ายแบ่งหมวด</h2>
             <div className="flex gap-1">
               {(["bar", "donut", "column", "table"] as const).map((mode) => (
-                <button
-                  key={mode}
-                  onClick={() => setChartMode(mode)}
-                  className={`px-2 py-1 text-xs rounded-lg transition-colors ${chartMode === mode ? "bg-[#1D9E75] text-white" : "text-gray-500 hover:bg-gray-100"}`}
-                >
+                <button key={mode} onClick={() => setChartMode(mode)}
+                  className={`px-2 py-1 text-xs rounded-lg transition-colors ${chartMode === mode ? "bg-[#1D9E75] text-white" : "text-gray-500 hover:bg-gray-100"}`}>
                   {mode === "bar" ? "≡" : mode === "donut" ? "◎" : mode === "column" ? "▐" : "⊞"}
                 </button>
               ))}
             </div>
           </div>
-
           {expenseByCategory.length === 0 ? (
             <p className="text-sm text-gray-400 text-center py-8">ยังไม่มีรายจ่าย</p>
           ) : (
@@ -220,8 +304,7 @@ export default function Dashboard() {
                   {expenseByCategory.map((c, i) => (
                     <div key={c.name}>
                       <div className="flex justify-between text-xs text-gray-600 mb-1">
-                        <span>{c.name}</span>
-                        <span>฿{c.value.toLocaleString()}</span>
+                        <span>{c.name}</span><span>฿{c.value.toLocaleString()}</span>
                       </div>
                       <div className="h-2 bg-gray-100 rounded-full">
                         <div className="h-2 rounded-full" style={{ width: `${(c.value / totalExpenseForPct) * 100}%`, backgroundColor: COLORS[i % COLORS.length] }} />
@@ -230,7 +313,6 @@ export default function Dashboard() {
                   ))}
                 </div>
               )}
-
               {chartMode === "donut" && (
                 <ResponsiveContainer width="100%" height={220}>
                   <PieChart>
@@ -242,7 +324,6 @@ export default function Dashboard() {
                   </PieChart>
                 </ResponsiveContainer>
               )}
-
               {chartMode === "column" && (
                 <ResponsiveContainer width="100%" height={220}>
                   <BarChart data={expenseByCategory}>
@@ -255,7 +336,6 @@ export default function Dashboard() {
                   </BarChart>
                 </ResponsiveContainer>
               )}
-
               {chartMode === "table" && (
                 <table className="w-full text-sm">
                   <thead>
