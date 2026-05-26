@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
 import ExportPDF from "@/app/components/ExportPDF"
+import ScanSlip from "@/app/components/ScanSlip"
 
 type Transaction = {
   id: string
@@ -202,6 +203,7 @@ const openAddModal = () => {
              Export CSV
           </button>
            <ExportPDF />
+           <ScanSlip onSuccess={fetchAll} />
           <button onClick={openAddModal} className="bg-[#1D9E75] text-white rounded-lg px-4 py-2 text-sm hover:bg-[#178a64]">
             + เพิ่มรายการ
           </button>
