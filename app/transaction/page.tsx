@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
+import ExportPDF from "@/app/components/ExportPDF"
 
 type Transaction = {
   id: string
@@ -197,9 +198,10 @@ const openAddModal = () => {
               📅 ปฏิทิน
             </button>
           </div>
-          <button onClick={exportCSV} className="border border-gray-300 text-gray-600 rounded-lg px-4 py-2 text-sm hover:bg-gray-100">
-            Export CSV
+          <button onClick={exportCSV} title="Export เป็นไฟล์ Excel/Spreadsheet" className="border border-gray-300 text-gray-600 rounded-lg px-4 py-2 text-sm hover:bg-gray-100">
+             Export CSV
           </button>
+           <ExportPDF />
           <button onClick={openAddModal} className="bg-[#1D9E75] text-white rounded-lg px-4 py-2 text-sm hover:bg-[#178a64]">
             + เพิ่มรายการ
           </button>
