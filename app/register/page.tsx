@@ -45,13 +45,28 @@ export default function Register() {
             <button onClick={() => setShowPassword(!showPassword)}>
                 {showPassword ? "ซ่อน" : "แสดง"}
             </button>
-            {message && <p className="mt-4 text-green-500">{message}</p>}
-            <button
-            onClick={handleRegister}
-            className="mt-6 w-full bg-blue-500 text-white rounded-lg p-2 hover:bg-blue-600"
-            >
-                Register
-            </button>
+            {message && (
+  <div className="mt-4">
+    <p className="text-green-500">{message}</p>
+    <a href="/login" className="block mt-2 text-center text-[#1D9E75] hover:underline font-medium text-sm">
+      เข้าสู่ระบบเลย →
+    </a>
+  </div>
+)}
+
+<button
+  onClick={handleRegister}
+  className="mt-6 w-full bg-blue-500 text-white rounded-lg p-2 hover:bg-blue-600"
+>
+  Register
+</button>
+
+<p className="mt-4 text-center text-sm text-gray-500">
+  มีบัญชีแล้ว?{" "}
+  <a href="/login" className="text-[#1D9E75] hover:underline font-medium">
+    เข้าสู่ระบบ
+  </a>
+</p>
         </main>
     )
 }
