@@ -31,6 +31,15 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     setMobileOpen(false)
   }, [pathname])
+  useEffect(() => {
+  const checkAuth = async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user && pathname !== "/login" && pathname !== "/register") {
+      window.location.href = "/login"
+    }
+  }
+  checkAuth()
+}, [pathname])
 
   const hideSidebar = pathname === "/login" || pathname === "/register"
   if (hideSidebar) return <>{children}</>
@@ -205,6 +214,19 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
 >
   +
       </button>
+      {/* Logout */}
+<div className="p-2 mb-2 border-t border-gray-100">
+  <button
+    onClick={async () => {
+      await supabase.auth.signOut()
+      window.location.href = "/login"
+    }}
+    className={`flex items-center gap-3 px-2 py-2.5 rounded-lg text-sm text-red-500 hover:bg-red-50 w-full transition-colors`}
+  >
+    <span className="text-base shrink-0">🚪</span>
+    {!collapsed && <span className="truncate">ออกจากระบบ</span>}
+  </button>
+</div>
     </div>
   )
 }
