@@ -320,7 +320,7 @@ export default function Dashboard() {
                       {expenseByCategory.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                     </Pie>
                     <Legend />
-                    <Tooltip formatter={(v: number) => `฿${v.toLocaleString()}`} />
+                    <Tooltip formatter={(v) => `฿${Number(v ?? 0).toLocaleString()}`} />
                   </PieChart>
                 </ResponsiveContainer>
               )}
@@ -329,7 +329,7 @@ export default function Dashboard() {
                   <BarChart data={expenseByCategory}>
                     <XAxis dataKey="name" tick={{ fontSize: 11 }} />
                     <YAxis tick={{ fontSize: 11 }} />
-                    <Tooltip formatter={(v: number) => `฿${v.toLocaleString()}`} />
+                    <Tooltip formatter={(v) => `฿${Number(v ?? 0).toLocaleString()}`} />
                     <Bar dataKey="value" radius={[4, 4, 0, 0]}>
                       {expenseByCategory.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                     </Bar>
@@ -400,7 +400,7 @@ export default function Dashboard() {
           <BarChart data={last6Months} barGap={4}>
             <XAxis dataKey="label" tick={{ fontSize: 11 }} />
             <YAxis tick={{ fontSize: 11 }} />
-            <Tooltip formatter={(v: number) => `฿${v.toLocaleString()}`} />
+            <Tooltip formatter={(v) => `฿${Number(v ?? 0).toLocaleString()}`} />
             <Bar dataKey="income" name="รายรับ" fill="#1D9E75" radius={[4, 4, 0, 0]} />
             <Bar dataKey="expense" name="รายจ่าย" fill="#D85A30" radius={[4, 4, 0, 0]} />
           </BarChart>
