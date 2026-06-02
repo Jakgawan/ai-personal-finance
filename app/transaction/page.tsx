@@ -183,40 +183,40 @@ const openAddModal = () => {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-gray-800">รายการ</h1>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap justify-end">
           {/* Toggle view */}
           <div className="flex bg-white border border-gray-200 rounded-lg overflow-hidden">
             <button
               onClick={() => setView("list")}
               className={`px-3 py-2 text-sm transition-colors ${view === "list" ? "bg-[#1D9E75] text-white" : "text-gray-500 hover:bg-gray-50"}`}
             >
-              ☰ รายการ
+              <span className="hidden sm:inline">☰ </span>รายการ
             </button>
             <button
               onClick={() => setView("calendar")}
               className={`px-3 py-2 text-sm transition-colors ${view === "calendar" ? "bg-[#1D9E75] text-white" : "text-gray-500 hover:bg-gray-50"}`}
             >
-              📅 ปฏิทิน
+              <span className="hidden sm:inline">📅 </span>ปฏิทิน
             </button>
           </div>
-          <button onClick={exportCSV} title="Export เป็นไฟล์ Excel/Spreadsheet" className="border border-gray-300 text-gray-600 rounded-lg px-4 py-2 text-sm hover:bg-gray-100">
-             Export CSV
+          <button onClick={exportCSV} title="Export CSV" className="border border-gray-300 text-gray-600 rounded-lg px-3 py-2 text-sm hover:bg-gray-100">
+            <span className="hidden sm:inline">Export </span>CSV
           </button>
-           <ExportPDF />
-           <ScanSlip onSuccess={fetchAll} />
-          <button onClick={openAddModal} className="bg-[#1D9E75] text-white rounded-lg px-4 py-2 text-sm hover:bg-[#178a64]">
-            + เพิ่มรายการ
+          <ExportPDF />
+          <ScanSlip onSuccess={fetchAll} />
+          <button onClick={openAddModal} className="bg-[#1D9E75] text-white rounded-lg px-3 py-2 text-sm hover:bg-[#178a64]">
+            +<span className="hidden sm:inline"> เพิ่มรายการ</span>
           </button>
         </div>
       </div>
 
-      {/* Summary Cards */}
+     {/* Summary Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         {[
           { label: "รายรับ", value: totalIncome, color: "text-[#1D9E75]" },
           { label: "รายจ่าย", value: totalExpense, color: "text-[#D85A30]" },
+          { label: "ยอดคงเหลือ", value: totalIncome - totalExpense, color: (totalIncome - totalExpense) >= 0 ? "text-[#1D9E75]" : "text-[#D85A30]" },
           { label: "รายการทั้งหมด", value: filtered.length, color: "text-gray-800", unit: "รายการ" },
-          { label: "เฉลี่ยต่อรายการ", value: avgAmount, color: "text-[#378ADD]" },
         ].map((card) => (
           <div key={card.label} className="bg-white rounded-xl p-4 shadow-sm">
             <p className="text-xs text-gray-500 mb-1">{card.label}</p>
@@ -265,7 +265,7 @@ const openAddModal = () => {
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 border-b border-gray-200">
                   <tr>
-                    {["#", "วันที่", "รายการ", "หมวด", "ประเภท", "จำนวน (฿)", "คงเหลือ (฿)", "จัดการ"].map(h => (
+                    {["#", "วันที่", "รายการ", "หมวด", "รายรับ (฿)", "รายจ่าย (฿)", "หมายเหตุ", "จัดการ"].map(h => (
                       <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-500">{h}</th>
                     ))}
                   </tr>
@@ -283,15 +283,13 @@ const openAddModal = () => {
                           <td className="px-4 py-3 text-gray-600">{t.date}</td>
                           <td className="px-4 py-3 font-medium text-gray-800">{t.name}</td>
                           <td className="px-4 py-3 text-gray-500">{t.category || "-"}</td>
-                          <td className="px-4 py-3">
-                            <span className={`text-xs px-2 py-1 rounded-full ${t.type === "income" ? "bg-green-100 text-[#1D9E75]" : "bg-red-100 text-[#D85A30]"}`}>
-                              {t.type === "income" ? "รายรับ" : "รายจ่าย"}
-                            </span>
+                          <td className="px-4 py-3 font-semibold text-[#1D9E75]">
+                            {t.type === "income" ? `฿${Number(t.amount).toLocaleString()}` : ""}
                           </td>
-                          <td className={`px-4 py-3 font-semibold ${t.type === "income" ? "text-[#1D9E75]" : "text-[#D85A30]"}`}>
-                            {t.type === "income" ? "+" : "-"}฿{Number(t.amount).toLocaleString()}
+                          <td className="px-4 py-3 font-semibold text-[#D85A30]">
+                            {t.type === "expense" ? `฿${Number(t.amount).toLocaleString()}` : ""}
                           </td>
-                          <td className="px-4 py-3 text-gray-700">฿{balance.toLocaleString()}</td>
+                          <td className="px-4 py-3 text-gray-400 text-xs">{t.note || "-"}</td>
                           <td className="px-4 py-3 flex gap-2">
                             <button onClick={() => openEditModal(t)} className="text-xs text-[#378ADD] hover:underline">แก้ไข</button>
                             <button onClick={() => handleDelete(t.id)} className="text-xs text-[#D85A30] hover:underline">ลบ</button>
@@ -303,10 +301,9 @@ const openAddModal = () => {
                 </tbody>
                 <tfoot className="bg-gray-50 border-t border-gray-200">
                   <tr>
-                    <td colSpan={5} className="px-4 py-3 text-xs font-semibold text-gray-500">รวม</td>
-                    <td className="px-4 py-3 text-xs font-semibold text-gray-800">
-                      +฿{totalIncome.toLocaleString()} / -฿{totalExpense.toLocaleString()}
-                    </td>
+                    <td colSpan={4} className="px-4 py-3 text-xs font-semibold text-gray-500">รวม</td>
+                    <td className="px-4 py-3 text-sm font-bold text-[#1D9E75]">฿{totalIncome.toLocaleString()}</td>
+                    <td className="px-4 py-3 text-sm font-bold text-[#D85A30]">฿{totalExpense.toLocaleString()}</td>
                     <td colSpan={2} />
                   </tr>
                 </tfoot>

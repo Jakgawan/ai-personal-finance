@@ -141,16 +141,17 @@ export default function PlanningPage() {
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-gray-800">วางแผนการเงิน</h1>
         <div className="flex items-center gap-2">
-          <button onClick={() => setYear(y => y - 1)} className="px-3 py-1 border rounded-lg text-sm hover:bg-gray-100">←</button>
+          <button onClick={() => setYear(y => y - 1)} className="px-2 py-1 border rounded-lg text-sm hover:bg-gray-100">←</button>
           <span className="text-sm font-semibold text-gray-700">พ.ศ. {year + 543}</span>
-          <button onClick={() => setYear(y => y + 1)} className="px-3 py-1 border rounded-lg text-sm hover:bg-gray-100">→</button>
+          <button onClick={() => setYear(y => y + 1)} className="px-2 py-1 border rounded-lg text-sm hover:bg-gray-100">→</button>
+          <button
+            onClick={loadTemplate}
+            title="โหลด template"
+            className="border border-dashed border-gray-300 text-gray-400 rounded-lg px-2 py-1 text-xs hover:bg-gray-50"
+          >
+            📋<span className="hidden sm:inline"> template</span>
+          </button>
         </div>
-         <button
-             onClick={loadTemplate}
-             className="border border-dashed border-gray-300 text-gray-500 rounded-lg px-3 py-1 text-sm hover:bg-gray-50"
-            >
-             📋 โหลด template
-        </button>
       </div>
 
       

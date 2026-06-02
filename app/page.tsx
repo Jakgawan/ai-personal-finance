@@ -206,29 +206,33 @@ export default function Dashboard() {
   let runningBalance = transactions.reduce((s, t) => t.type === "income" ? s + Number(t.amount) : s - Number(t.amount), 0)
   const latest5WithBalance = latest5.map((t) => {
     const bal = runningBalance
-    runningBalance -= t.type === "income" ? Number(t.amount) : -Number(t.amount)
+    if (t.type === "income") {
+      runningBalance -= Number(t.amount)
+    } else {
+      runningBalance += Number(t.amount)
+    }
     return { ...t, balance: bal }
   })
 
   if (loading) return <div className="p-8 text-gray-400">กำลังโหลด...</div>
 
   return (
-    <div className="p-6 bg-gray-50 min-h-screen">
+    <div className="p-4 md:p-6 bg-gray-50 min-h-screen">
       <h1 className="text-2xl font-bold text-gray-800 mb-6">ภาพรวม</h1>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6">
         {[
           { label: "รายรับรอบนี้", value: cycleIncome, color: "text-[#1D9E75]", pct: pctChange(cycleIncome, prevIncome) },
           { label: "รายจ่ายรอบนี้", value: cycleExpense, color: "text-[#D85A30]", pct: pctChange(cycleExpense, prevExpense) },
           { label: "คงเหลือสุทธิ", value: cycleBalance, color: cycleBalance >= 0 ? "text-[#1D9E75]" : "text-[#D85A30]", pct: null },
           { label: "ใช้ได้/วัน", value: dailyBudget, color: "text-[#378ADD]", pct: null, suffix: "/วัน" },
         ].map((card) => (
-          <div key={card.label} className="bg-white rounded-xl p-4 shadow-sm">
+          <div key={card.label} className="bg-white rounded-xl p-3 md:p-4 shadow-sm">
             <p className="text-xs text-gray-500 mb-1">{card.label}</p>
-            <p className={`text-xl font-bold ${card.color}`}>
+            <p className={`text-lg md:text-xl font-bold ${card.color}`}>
               ฿{Number(card.value).toLocaleString(undefined, { maximumFractionDigits: 0 })}
-              {card.suffix && <span className="text-sm font-normal">{card.suffix}</span>}
+              {card.suffix && <span className="text-xs font-normal">{card.suffix}</span>}
             </p>
             {card.pct !== null && (
               <p className={`text-xs mt-1 ${Number(card.pct) >= 0 ? "text-[#1D9E75]" : "text-[#D85A30]"}`}>
@@ -239,11 +243,13 @@ export default function Dashboard() {
         ))}
       </div>
 
-      {/* Financial Score */}
-      <div className="bg-white rounded-xl shadow-sm p-5 mb-6">
+      {/* Financial Score — แก้ให้ fit มือถือ */}
+      <div className="bg-white rounded-xl shadow-sm p-4 md:p-5 mb-6">
         <h2 className="text-sm font-semibold text-gray-700 mb-4">คะแนนสุขภาพการเงิน</h2>
-        <div className="flex items-center gap-6">
-          <div className="relative w-24 h-24 shrink-0">
+
+        {/* วงกลมคะแนน + label อยู่บนสุด กึ่งกลาง */}
+        <div className="flex flex-col items-center mb-4">
+          <div className="relative w-24 h-24">
             <svg viewBox="0 0 36 36" className="w-24 h-24 -rotate-90">
               <circle cx="18" cy="18" r="15.9" fill="none" stroke="#f3f4f6" strokeWidth="3" />
               <circle cx="18" cy="18" r="15.9" fill="none" strokeWidth="3"
@@ -256,34 +262,34 @@ export default function Dashboard() {
               <p className="text-xs text-gray-400">/ 100</p>
             </div>
           </div>
-          <div className="flex-1">
-            <p className={`text-lg font-bold ${scoreColor.text} mb-2`}>{scoreColor.label}</p>
-            <div className="flex flex-col gap-2">
-              {scoreDetails.map(d => (
-                <div key={d.label}>
-                  <div className="flex justify-between text-xs text-gray-500 mb-0.5">
-                    <span>{d.label}</span>
-                    <span>{d.score}/{d.max}</span>
-                  </div>
-                  <div className="h-1.5 bg-gray-100 rounded-full">
-                    <div className="h-1.5 rounded-full transition-all"
-                      style={{
-                        width: `${(d.score / d.max) * 100}%`,
-                        backgroundColor: d.score === d.max ? "#1D9E75" : d.score >= d.max * 0.5 ? "#F59E0B" : "#D85A30"
-                      }}
-                    />
-                  </div>
-                  <p className="text-xs text-gray-400 mt-0.5">{d.tip}</p>
-                </div>
-              ))}
+          <p className={`text-base font-bold ${scoreColor.text} mt-2`}>{scoreColor.label}</p>
+        </div>
+
+        {/* progress bars แต่ละด้าน */}
+        <div className="flex flex-col gap-3">
+          {scoreDetails.map(d => (
+            <div key={d.label}>
+              <div className="flex justify-between text-xs text-gray-500 mb-0.5">
+                <span>{d.label}</span>
+                <span>{d.score}/{d.max}</span>
+              </div>
+              <div className="h-1.5 bg-gray-100 rounded-full">
+                <div className="h-1.5 rounded-full transition-all"
+                  style={{
+                    width: `${(d.score / d.max) * 100}%`,
+                    backgroundColor: d.score === d.max ? "#1D9E75" : d.score >= d.max * 0.5 ? "#F59E0B" : "#D85A30"
+                  }}
+                />
+              </div>
+              <p className="text-xs text-gray-400 mt-0.5">{d.tip}</p>
             </div>
-          </div>
+          ))}
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
         {/* กราฟรายจ่ายแบ่งหมวด */}
-        <div className="md:col-span-2 bg-white rounded-xl p-5 shadow-sm">
+        <div className="md:col-span-2 bg-white rounded-xl p-4 md:p-5 shadow-sm">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-sm font-semibold text-gray-700">รายจ่ายแบ่งหมวด</h2>
             <div className="flex gap-1">
@@ -364,7 +370,7 @@ export default function Dashboard() {
         </div>
 
         {/* นับถอยหลังรอบเงินเดือน */}
-        <div className="bg-white rounded-xl p-5 shadow-sm flex flex-col justify-between">
+        <div className="bg-white rounded-xl p-4 md:p-5 shadow-sm flex flex-col justify-between">
           <h2 className="text-sm font-semibold text-gray-700 mb-3">รอบเงินเดือน</h2>
           {activeCycle ? (
             <>
@@ -394,7 +400,7 @@ export default function Dashboard() {
       </div>
 
       {/* กราฟย้อนหลัง 6 เดือน */}
-      <div className="bg-white rounded-xl p-5 shadow-sm mb-6">
+      <div className="bg-white rounded-xl p-4 md:p-5 shadow-sm mb-6">
         <h2 className="text-sm font-semibold text-gray-700 mb-4">รายรับ vs รายจ่าย ย้อนหลัง 6 เดือน</h2>
         <ResponsiveContainer width="100%" height={220}>
           <BarChart data={last6Months} barGap={4}>
@@ -407,43 +413,68 @@ export default function Dashboard() {
         </ResponsiveContainer>
       </div>
 
-      {/* ตารางรายการล่าสุด */}
+      {/* ตารางรายการล่าสุด — mobile แสดงแบบ card แทนตาราง */}
       <div className="bg-white rounded-xl shadow-sm overflow-hidden mb-6">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
           <h2 className="text-sm font-semibold text-gray-700">รายการล่าสุด</h2>
           <Link href="/transaction" className="text-xs text-[#378ADD] hover:underline">ดูทั้งหมด →</Link>
         </div>
-        <table className="w-full text-sm">
-          <thead className="bg-gray-50">
-            <tr>
-              {["วันที่", "รายการ", "ประเภท", "จำนวน", "คงเหลือ"].map(h => (
-                <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-500">{h}</th>
+
+        {latest5WithBalance.length === 0 ? (
+          <p className="text-center py-6 text-gray-400 text-sm">ยังไม่มีรายการ</p>
+        ) : (
+          <>
+            {/* Desktop — ตาราง */}
+            <div className="hidden md:block">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50">
+                  <tr>
+                    {["วันที่", "รายการ", "ประเภท", "จำนวน", "คงเหลือ"].map(h => (
+                      <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-500">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {latest5WithBalance.map((t) => (
+                    <tr key={t.id} className="border-t border-gray-100 hover:bg-gray-50">
+                      <td className="px-4 py-3 text-gray-500">{t.date}</td>
+                      <td className="px-4 py-3 font-medium text-gray-800">{t.name}</td>
+                      <td className="px-4 py-3">
+                        <span className={`text-xs px-2 py-1 rounded-full ${t.type === "income" ? "bg-green-100 text-[#1D9E75]" : "bg-red-100 text-[#D85A30]"}`}>
+                          {t.type === "income" ? "รายรับ" : "รายจ่าย"}
+                        </span>
+                      </td>
+                      <td className={`px-4 py-3 font-semibold ${t.type === "income" ? "text-[#1D9E75]" : "text-[#D85A30]"}`}>
+                        {t.type === "income" ? "+" : "-"}฿{Number(t.amount).toLocaleString()}
+                      </td>
+                      <td className="px-4 py-3 text-gray-700">฿{t.balance.toLocaleString()}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile — card list แทนตาราง */}
+            <div className="md:hidden divide-y divide-gray-100">
+              {latest5WithBalance.map((t) => (
+                <div key={t.id} className="flex items-center justify-between px-4 py-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-800 truncate">{t.name}</p>
+                    <p className="text-xs text-gray-400">{t.date}</p>
+                  </div>
+                  <div className="text-right ml-3">
+                    <p className={`text-sm font-semibold ${t.type === "income" ? "text-[#1D9E75]" : "text-[#D85A30]"}`}>
+                      {t.type === "income" ? "+" : "-"}฿{Number(t.amount).toLocaleString()}
+                    </p>
+                    <p className="text-xs text-gray-400">คงเหลือ ฿{t.balance.toLocaleString()}</p>
+                  </div>
+                </div>
               ))}
-            </tr>
-          </thead>
-          <tbody>
-            {latest5WithBalance.length === 0 ? (
-              <tr><td colSpan={5} className="text-center py-6 text-gray-400">ยังไม่มีรายการ</td></tr>
-            ) : (
-              latest5WithBalance.map((t) => (
-                <tr key={t.id} className="border-t border-gray-100 hover:bg-gray-50">
-                  <td className="px-4 py-3 text-gray-500">{t.date}</td>
-                  <td className="px-4 py-3 font-medium text-gray-800">{t.name}</td>
-                  <td className="px-4 py-3">
-                    <span className={`text-xs px-2 py-1 rounded-full ${t.type === "income" ? "bg-green-100 text-[#1D9E75]" : "bg-red-100 text-[#D85A30]"}`}>
-                      {t.type === "income" ? "รายรับ" : "รายจ่าย"}
-                    </span>
-                  </td>
-                  <td className={`px-4 py-3 font-semibold ${t.type === "income" ? "text-[#1D9E75]" : "text-[#D85A30]"}`}>
-                    {t.type === "income" ? "+" : "-"}฿{Number(t.amount).toLocaleString()}
-                  </td>
-                  <td className="px-4 py-3 text-gray-700">฿{t.balance.toLocaleString()}</td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+            </div>
+          </>
+        )}
       </div>
+
     </div>
   )
 }

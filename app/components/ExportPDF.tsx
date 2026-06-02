@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { supabase } from "@/lib/supabase"
 
 type Transaction = {
@@ -9,6 +9,7 @@ type Transaction = {
   date: string
   type: string
   category: string
+  note?: string
 }
 
 export default function ExportPDF() {
@@ -17,11 +18,8 @@ export default function ExportPDF() {
   const generatePDF = async () => {
     setLoading(true)
 
-    const { jsPDF } = await import("jspdf")
-    const autoTable = (await import("jspdf-autotable")).default
-
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
+    if (!user) { setLoading(false); return }
 
     const { data: tx } = await supabase
       .from("transactions")
@@ -31,68 +29,109 @@ export default function ExportPDF() {
 
     const transactions: Transaction[] = tx || []
 
-    const totalIncome = transactions.filter(t => t.type === "income").reduce((s, t) => s + Number(t.amount), 0)
-    const totalExpense = transactions.filter(t => t.type === "expense").reduce((s, t) => s + Number(t.amount), 0)
+    const totalIncome = transactions
+      .filter(t => t.type === "income")
+      .reduce((s, t) => s + Number(t.amount), 0)
+    const totalExpense = transactions
+      .filter(t => t.type === "expense")
+      .reduce((s, t) => s + Number(t.amount), 0)
     const balance = totalIncome - totalExpense
 
-    const doc = new jsPDF()
+    // สร้าง HTML string แล้วแปลงเป็น PDF
+    // html2pdf รองรับภาษาไทยได้เต็มที่ เพราะใช้ font จาก browser
+    const html = `
+      <html>
+      <head>
+        <meta charset="UTF-8" />
+        <style>
+          body { font-family: 'Sarabun', sans-serif; padding: 24px; color: #333; font-size: 13px; }
+          h1 { color: #1D9E75; font-size: 20px; margin-bottom: 4px; }
+          p { color: #888; font-size: 11px; margin-bottom: 20px; }
+          h2 { font-size: 14px; margin-bottom: 8px; color: #444; }
+          table { width: 100%; border-collapse: collapse; margin-bottom: 24px; }
+          th { background: #1D9E75; color: white; padding: 8px 10px; text-align: left; font-size: 12px; }
+          td { padding: 7px 10px; border-bottom: 1px solid #f0f0f0; font-size: 12px; }
+          tr:nth-child(even) { background: #f9f9f9; }
+          .income { color: #1D9E75; font-weight: bold; }
+          .expense { color: #D85A30; font-weight: bold; }
+          .summary-table th:last-child,
+          .summary-table td:last-child { text-align: right; }
+          .tx-income { color: #1D9E75; font-weight: 600; }
+          .tx-expense { color: #D85A30; font-weight: 600; }
+          .footer-row td { background: #f0f0f0; font-weight: bold; border-top: 2px solid #ddd; }
+        </style>
+      </head>
+      <body>
+        <h1>รายงานการเงินส่วนตัว</h1>
+        <p>สร้างเมื่อ: ${new Date().toLocaleDateString("th-TH", { year: "numeric", month: "long", day: "numeric" })}</p>
 
-    // Header
-    doc.setFontSize(18)
-    doc.setTextColor(29, 158, 117)
-    doc.text("Personal Finance Report", 14, 20)
+        <h2>สรุปภาพรวม</h2>
+        <table class="summary-table">
+          <thead>
+            <tr><th>รายการ</th><th>จำนวน (บาท)</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>รายรับทั้งหมด</td><td class="tx-income" style="text-align:right">฿${totalIncome.toLocaleString()}</td></tr>
+            <tr><td>รายจ่ายทั้งหมด</td><td class="tx-expense" style="text-align:right">฿${totalExpense.toLocaleString()}</td></tr>
+            <tr><td><b>ยอดคงเหลือ</b></td><td style="text-align:right; font-weight:bold; color:${balance >= 0 ? "#1D9E75" : "#D85A30"}">฿${balance.toLocaleString()}</td></tr>
+          </tbody>
+        </table>
 
-    doc.setFontSize(10)
-    doc.setTextColor(100)
-    doc.text(`Generated: ${new Date().toLocaleDateString()}`, 14, 28)
+        <h2>รายการทั้งหมด</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>วันที่</th>
+              <th>รายการ</th>
+              <th>หมวด</th>
+              <th>หมายเหตุ</th>
+              <th style="text-align:right">รายรับ (บาท)</th>
+              <th style="text-align:right">รายจ่าย (บาท)</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${transactions.map(t => `
+              <tr>
+                <td>${t.date}</td>
+                <td>${t.name}</td>
+                <td>${t.category || "-"}</td>
+                <td>${t.note || "-"}</td>
+                <td class="tx-income" style="text-align:right">${t.type === "income" ? "฿" + Number(t.amount).toLocaleString() : ""}</td>
+                <td class="tx-expense" style="text-align:right">${t.type === "expense" ? "฿" + Number(t.amount).toLocaleString() : ""}</td>
+              </tr>
+            `).join("")}
+          </tbody>
+          <tfoot>
+            <tr class="footer-row">
+              <td colspan="4">รวมทั้งหมด</td>
+              <td class="tx-income" style="text-align:right">฿${totalIncome.toLocaleString()}</td>
+              <td class="tx-expense" style="text-align:right">฿${totalExpense.toLocaleString()}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </body>
+      </html>
+    `
 
-    // Summary
-    doc.setFontSize(13)
-    doc.setTextColor(50)
-    doc.text("Summary", 14, 40)
+    // สร้าง element ชั่วคราวใน DOM แล้วแปลงเป็น PDF
+    const element = document.createElement("div")
+    element.innerHTML = html
 
-    autoTable(doc, {
-      startY: 44,
-      head: [["", "Amount"]],
-      body: [
-        ["Total Income", `฿${totalIncome.toLocaleString()}`],
-        ["Total Expense", `฿${totalExpense.toLocaleString()}`],
-        ["Balance", `฿${balance.toLocaleString()}`],
-      ],
-      styles: { fontSize: 10 },
-      headStyles: { fillColor: [29, 158, 117] },
-      columnStyles: {
-        0: { cellWidth: 80 },
-        1: { cellWidth: 60, halign: "right" },
-      },
-    })
+    // html2pdf ไม่มี type definition จึงต้องใช้ require แบบ dynamic
+    const html2pdf = (await import("html2pdf.js" as any)).default
 
-    // Transactions
-    const finalY = (doc as any).lastAutoTable.finalY + 10
+    await html2pdf()
+      .set({
+        margin: 10,
+        filename: `finance-report-${new Date().toISOString().split("T")[0]}.pdf`,
+        html2canvas: { scale: 2, useCORS: true },
+        // scale: 2 = ความละเอียด 2x ทำให้ข้อความคมชัดขึ้น
+        jsPDF: { unit: "mm", format: "a4", orientation: "landscape" },
+        // landscape = แนวนอน เพราะตารางมีหลายคอลัมน์
+      })
+      .from(element)
+      .save()
 
-    doc.setFontSize(13)
-    doc.setTextColor(50)
-    doc.text("Transactions", 14, finalY)
-
-    autoTable(doc, {
-      startY: finalY + 4,
-      head: [["Date", "Name", "Category", "Type", "Amount"]],
-      body: transactions.map(t => [
-        t.date,
-        t.name,
-        t.category || "-",
-        t.type === "income" ? "Income" : "Expense",
-        `${t.type === "income" ? "+" : "-"}฿${Number(t.amount).toLocaleString()}`,
-      ]),
-      styles: { fontSize: 9 },
-      headStyles: { fillColor: [55, 138, 221] },
-      alternateRowStyles: { fillColor: [245, 245, 245] },
-      columnStyles: {
-        4: { halign: "right" },
-      },
-    })
-
-    doc.save(`finance-report-${new Date().toISOString().split("T")[0]}.pdf`)
     setLoading(false)
   }
 
@@ -100,9 +139,9 @@ export default function ExportPDF() {
     <button
       onClick={generatePDF}
       disabled={loading}
-      className="flex items-center gap-2 border border-gray-300 text-gray-600 rounded-lg px-4 py-2 text-sm hover:bg-gray-100 disabled:opacity-50 transition-colors"
+      className="flex items-center gap-2 border border-gray-300 text-gray-600 rounded-lg px-3 py-2 text-sm hover:bg-gray-100 disabled:opacity-50 transition-colors"
     >
-      {loading ? "⏳ กำลัง Export..." : "📄 Export PDF"}
+      {loading ? "⏳..." : "📄 PDF"}
     </button>
   )
 }

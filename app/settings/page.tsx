@@ -7,53 +7,54 @@ import CategoriesSection from "./components/CategoriesSection"
 import RecurringSection from "./components/RecurringSection"
 
 const menuItems = [
-  { id: "profile", label: "บัญชีและโปรไฟล์", icon: "👤" },
+  { id: "profile", label: "โปรไฟล์", icon: "👤" },
   { id: "paycycles", label: "รอบเงินเดือน", icon: "📅" },
-  { id: "categories", label: "หมวดหมู่รายการ", icon: "🏷️" },
-    { id: "recurring", label: "รายการซ้ำ", icon: "🔄" },
-  { id: "goals", label: "เป้าหมายการเงิน", icon: "🎯" },
-  { id: "notifications", label: "การแจ้งเตือน", icon: "🔔" },
-  { id: "display", label: "ภาษาและการแสดงผล", icon: "🌐" },
+  { id: "categories", label: "หมวดหมู่", icon: "🏷️" },
+  { id: "recurring", label: "รายการซ้ำ", icon: "🔄" },
+  { id: "goals", label: "เป้าหมาย", icon: "🎯" },
+  { id: "notifications", label: "แจ้งเตือน", icon: "🔔" },
+  { id: "display", label: "การแสดงผล", icon: "🌐" },
 ]
 
 export default function SettingsPage() {
   const [active, setActive] = useState("profile")
 
   return (
-    <div className="flex h-full min-h-screen">
-      {/* Settings Sidebar */}
-      <aside className="w-56 bg-white border-r border-gray-200 p-4">
-        <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4">
-          Settings
-        </h2>
-        <nav className="flex flex-col gap-1">
-          {menuItems.map((item) => (
-            <button
-              key={item.id}
-              onClick={() => setActive(item.id)}
-              className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-left transition-colors ${
-                active === item.id
-                  ? "bg-[#1D9E75] text-white"
-                  : "text-gray-600 hover:bg-gray-100"
-              }`}
-            >
-              <span>{item.icon}</span>
-              <span>{item.label}</span>
-            </button>
-          ))}
-        </nav>
-      </aside>
+    <div className="min-h-screen bg-gray-50">
+
+      {/* Tabs แนวนอน — ทั้ง mobile และ desktop */}
+      <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
+        <div className="overflow-x-auto scrollbar-hide">
+          <div className="flex min-w-max px-4">
+            {menuItems.map((item) => (
+              <button
+                key={item.id}
+                onClick={() => setActive(item.id)}
+                className={`flex items-center gap-2 px-4 py-3 text-sm whitespace-nowrap border-b-2 transition-colors ${
+                  active === item.id
+                    ? "border-[#1D9E75] text-[#1D9E75] font-semibold"
+                    : "border-transparent text-gray-500 hover:text-gray-700"
+                }`}
+              >
+                <span>{item.icon}</span>
+                <span>{item.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
 
       {/* Content */}
-      <main className="flex-1 p-8 bg-gray-50">
+      <main className="p-4 md:p-8">
         {active === "profile" && <ProfileSection />}
         {active === "paycycles" && <PayCyclesSection />}
         {active === "categories" && <CategoriesSection />}
         {active === "recurring" && <RecurringSection />}
-        {!["profile", "paycycles", "categories"].includes(active) && (
+        {["goals", "notifications", "display"].includes(active) && (
           <div className="text-gray-400 text-sm">🚧 Coming soon...</div>
         )}
       </main>
+
     </div>
   )
 }

@@ -31,15 +31,16 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     setMobileOpen(false)
   }, [pathname])
+
   useEffect(() => {
-  const checkAuth = async () => {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user && pathname !== "/login" && pathname !== "/register") {
-      window.location.href = "/login"
+    const checkAuth = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user && pathname !== "/login" && pathname !== "/register") {
+        window.location.href = "/login"
+      }
     }
-  }
-  checkAuth()
-}, [pathname])
+    checkAuth()
+  }, [pathname])
 
   const hideSidebar = pathname === "/login" || pathname === "/register"
   if (hideSidebar) return <>{children}</>
@@ -49,7 +50,6 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
     setLoading(true)
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
-
     await supabase.from("transactions").insert({
       user_id: user.id,
       name,
@@ -57,13 +57,20 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
       date,
       type,
     })
-
     setName("")
     setAmount("")
     setDate(new Date().toISOString().split("T")[0])
     setType("expense")
     setLoading(false)
     setShowQuickAdd(false)
+  }
+
+  const handleFAB = () => {
+    if (pathname === "/business") {
+      window.dispatchEvent(new CustomEvent("openBusinessTxModal"))
+    } else {
+      setShowQuickAdd(true)
+    }
   }
 
   const SidebarContent = () => (
@@ -98,6 +105,20 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
           )
         })}
       </nav>
+
+      {/* Logout */}
+      <div className="p-2 mb-2 border-t border-gray-100">
+        <button
+          onClick={async () => {
+            await supabase.auth.signOut()
+            window.location.href = "/login"
+          }}
+          className="flex items-center gap-3 px-2 py-2.5 rounded-lg text-sm text-red-500 hover:bg-red-50 w-full transition-colors"
+        >
+          <span className="text-base shrink-0">🚪</span>
+          {!collapsed && <span className="truncate">ออกจากระบบ</span>}
+        </button>
+      </div>
     </div>
   )
 
@@ -136,14 +157,14 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
           <div className="w-8" />
         </div>
 
-        <main className="flex-1 overflow-auto">
+        <main className="flex-1 overflow-auto pb-6">
           {children}
         </main>
       </div>
 
-      {/* FAB ปุ่ม + ลอย */}
+      {/* FAB ปุ่ม + (อันเดียว) */}
       <button
-        onClick={() => setShowQuickAdd(true)}
+        onClick={handleFAB}
         className="fixed bottom-6 right-6 w-14 h-14 bg-[#1D9E75] text-white rounded-full shadow-lg text-2xl hover:bg-[#178a64] transition-colors z-30 flex items-center justify-center"
       >
         +
@@ -157,7 +178,6 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
               <h2 className="text-lg font-semibold text-gray-800">บันทึกรายการ</h2>
               <button onClick={() => setShowQuickAdd(false)} className="text-gray-400 hover:text-gray-600 text-xl">✕</button>
             </div>
-
             <div className="px-6 pb-6 flex flex-col gap-3">
               <div className="flex gap-3">
                 <button onClick={() => setType("expense")}
@@ -169,7 +189,6 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
                   รายรับ
                 </button>
               </div>
-
               <input
                 placeholder="ชื่อรายการ เช่น ข้าวเที่ยง"
                 value={name}
@@ -189,7 +208,6 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
                 onChange={e => setDate(e.target.value)}
                 className="border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
               />
-
               <button
                 onClick={handleQuickAdd}
                 disabled={loading || !name || !amount}
@@ -201,32 +219,7 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
           </div>
         </div>
       )}
-      <button
-         onClick={() => {
-        if (pathname === "/business") {
-          // dispatch event ให้หน้า business รับรู้
-           window.dispatchEvent(new CustomEvent("openBusinessTxModal"))
-          } else {
-           setShowQuickAdd(true)
-          }
-  }}
-          className="fixed bottom-6 right-6 w-14 h-14 bg-[#1D9E75] text-white rounded-full shadow-lg text-2xl hover:bg-[#178a64] transition-colors z-30 flex items-center justify-center"
->
-  +
-      </button>
-      {/* Logout */}
-<div className="p-2 mb-2 border-t border-gray-100">
-  <button
-    onClick={async () => {
-      await supabase.auth.signOut()
-      window.location.href = "/login"
-    }}
-    className={`flex items-center gap-3 px-2 py-2.5 rounded-lg text-sm text-red-500 hover:bg-red-50 w-full transition-colors`}
-  >
-    <span className="text-base shrink-0">🚪</span>
-    {!collapsed && <span className="truncate">ออกจากระบบ</span>}
-  </button>
-</div>
+
     </div>
   )
 }
