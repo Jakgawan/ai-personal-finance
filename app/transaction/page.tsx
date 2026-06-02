@@ -58,7 +58,6 @@ export default function TransactionPage() {
   const [note, setNote] = useState("")
   const [loading, setLoading] = useState(false)
 
-  // Calendar state
   const [calendarDate, setCalendarDate] = useState(new Date())
   const [selectedDay, setSelectedDay] = useState<string | null>(null)
 
@@ -88,7 +87,6 @@ export default function TransactionPage() {
 
   const totalIncome = filtered.filter(t => t.type === "income").reduce((s, t) => s + Number(t.amount), 0)
   const totalExpense = filtered.filter(t => t.type === "expense").reduce((s, t) => s + Number(t.amount), 0)
-  const avgAmount = filtered.length ? (totalIncome + totalExpense) / filtered.length : 0
 
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE)
   const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
@@ -102,14 +100,14 @@ export default function TransactionPage() {
     return balance
   }
 
-const openAddModal = () => {
-  setEditId(null)
-  setName(""); setAmount("")
-  setDate(new Date().toISOString().split("T")[0])
-  setType("expense")
-  setCategory(""); setCycleId(""); setNote("")
-  setShowModal(true)
-}
+  const openAddModal = () => {
+    setEditId(null)
+    setName(""); setAmount("")
+    setDate(new Date().toISOString().split("T")[0])
+    setType("expense")
+    setCategory(""); setCycleId(""); setNote("")
+    setShowModal(true)
+  }
 
   const openEditModal = (t: Transaction) => {
     setEditId(t.id)
@@ -143,15 +141,112 @@ const openAddModal = () => {
     fetchAll()
   }
 
-  const exportCSV = () => {
-    const header = ["วันที่", "รายการ", "หมวด", "ประเภท", "จำนวน", "หมายเหตุ"]
-    const rows = filtered.map(t => [t.date, t.name, t.category, t.type, t.amount, t.note || ""])
-    const csv = [header, ...rows].map(r => r.join(",")).join("\n")
-    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement("a"); a.href = url; a.download = "transactions.csv"; a.click()
-  }
+const exportExcel = async () => {
+    // import xlsx แบบ dynamic โหลดเฉพาะตอนกดปุ่ม
+    const XLSX = await import("xlsx")
 
+    // เรียงจากเก่าสุด → ใหม่สุด
+    const sorted = [...filtered].sort((a, b) => a.date.localeCompare(b.date))
+
+    // คำนวณ running balance สะสม
+    let running = 0
+    const rows = sorted.map(t => {
+      running += t.type === "income" ? Number(t.amount) : -Number(t.amount)
+      return {
+        วันที่: t.date,
+        รายการ: t.name,
+        หมวด: t.category || "-",
+        รายรับ: t.type === "income" ? Number(t.amount) : "",
+        รายจ่าย: t.type === "expense" ? Number(t.amount) : "",
+        คงเหลือ: running,
+        หมายเหตุ: t.note || "-",
+      }
+    })
+
+    // แถว total
+    const totalRow = {
+      วันที่: "",
+      รายการ: "รวมทั้งหมด",
+      หมวด: "",
+      รายรับ: totalIncome,
+      รายจ่าย: totalExpense,
+      คงเหลือ: totalIncome - totalExpense,
+      หมายเหตุ: "",
+    }
+
+    // สร้าง worksheet จาก array of objects
+    // XLSX.utils.json_to_sheet แปลง array of objects → sheet โดยอัตโนมัติ
+    // key ของ object = หัวคอลัมน์
+    const ws = XLSX.utils.json_to_sheet([...rows, {}, totalRow])
+
+    // กำหนดความกว้างแต่ละคอลัมน์ wch = width in characters
+    ws["!cols"] = [
+      { wch: 14 }, // วันที่
+      { wch: 25 }, // รายการ
+      { wch: 15 }, // หมวด
+      { wch: 14 }, // รายรับ
+      { wch: 14 }, // รายจ่าย
+      { wch: 14 }, // คงเหลือ
+      { wch: 20 }, // หมายเหตุ
+    ]
+
+    // ใส่สีแต่ละ cell
+    // cell address format = "A1", "B2" ตามปกติของ Excel
+    // s = style object
+    rows.forEach((row, i) => {
+      // row index เริ่มจาก 2 เพราะแถว 1 = header
+      const rowIndex = i + 2
+
+      // สีรายรับ = เขียว (column D = index 3)
+      if (row.รายรับ !== "") {
+        const cellRef = XLSX.utils.encode_cell({ r: rowIndex - 1, c: 3 })
+        // r = row (0-based), c = column (0-based)
+        // encode_cell แปลง {r,c} → "D2", "D3" ฯลฯ
+        ws[cellRef] = {
+          v: row.รายรับ,        // v = value
+          t: "n",               // t = type, "n" = number
+          s: {
+            font: { color: { rgb: "1D9E75" }, bold: true },
+            // rgb ไม่ใส่ # นำหน้า
+          }
+        }
+      }
+
+      // สีรายจ่าย = แดง (column E = index 4)
+      if (row.รายจ่าย !== "") {
+        const cellRef = XLSX.utils.encode_cell({ r: rowIndex - 1, c: 4 })
+        ws[cellRef] = {
+          v: row.รายจ่าย,
+          t: "n",
+          s: {
+            font: { color: { rgb: "D85A30" }, bold: true },
+          }
+        }
+      }
+
+      // สีคงเหลือ — เขียวถ้าบวก แดงถ้าลบ (column F = index 5)
+      const balanceCellRef = XLSX.utils.encode_cell({ r: rowIndex - 1, c: 5 })
+      ws[balanceCellRef] = {
+        v: row.คงเหลือ,
+        t: "n",
+        s: {
+          font: {
+            color: { rgb: row.คงเหลือ >= 0 ? "1D9E75" : "D85A30" },
+            bold: true,
+          }
+        }
+      }
+    })
+
+    // สร้าง workbook แล้วใส่ worksheet เข้าไป
+    // workbook = ไฟล์ Excel ทั้งไฟล์
+    // worksheet = แต่ละ sheet ใน workbook
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, "รายการ")
+
+    // writeFile = บันทึกไฟล์ลงเครื่อง
+    XLSX.writeFile(wb, `transactions-${new Date().toISOString().split("T")[0]}.xlsx`)
+  }
   const currentYear = new Date().getFullYear()
   const months = Array.from({ length: 12 }, (_, i) => {
     const m = String(i + 1).padStart(2, "0")
@@ -160,7 +255,6 @@ const openAddModal = () => {
     return { value: `${currentYear}-${m}`, label }
   })
 
-  // Calendar logic
   const calYear = calendarDate.getFullYear()
   const calMonth = calendarDate.getMonth()
   const firstDay = new Date(calYear, calMonth, 1).getDay()
@@ -184,7 +278,6 @@ const openAddModal = () => {
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-gray-800">รายการ</h1>
         <div className="flex gap-2 flex-wrap justify-end">
-          {/* Toggle view */}
           <div className="flex bg-white border border-gray-200 rounded-lg overflow-hidden">
             <button
               onClick={() => setView("list")}
@@ -199,8 +292,8 @@ const openAddModal = () => {
               <span className="hidden sm:inline">📅 </span>ปฏิทิน
             </button>
           </div>
-          <button onClick={exportCSV} title="Export CSV" className="border border-gray-300 text-gray-600 rounded-lg px-3 py-2 text-sm hover:bg-gray-100">
-            <span className="hidden sm:inline">Export </span>CSV
+          <button onClick={exportExcel} title="Export Excel" className="border border-gray-300 text-gray-600 rounded-lg px-3 py-2 text-sm hover:bg-gray-100">
+            <span className="hidden sm:inline">Export </span>Excel
           </button>
           <ExportPDF />
           <ScanSlip onSuccess={fetchAll} />
@@ -210,7 +303,7 @@ const openAddModal = () => {
         </div>
       </div>
 
-     {/* Summary Cards */}
+      {/* Summary Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         {[
           { label: "รายรับ", value: totalIncome, color: "text-[#1D9E75]" },
@@ -327,7 +420,6 @@ const openAddModal = () => {
       {view === "calendar" && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="md:col-span-2 bg-white rounded-xl shadow-sm p-5">
-            {/* Calendar Header */}
             <div className="flex items-center justify-between mb-4">
               <button onClick={prevMonth} className="px-3 py-1 border rounded-lg text-sm hover:bg-gray-100">←</button>
               <h2 className="text-sm font-semibold text-gray-700">
@@ -335,15 +427,11 @@ const openAddModal = () => {
               </h2>
               <button onClick={nextMonth} className="px-3 py-1 border rounded-lg text-sm hover:bg-gray-100">→</button>
             </div>
-
-            {/* Day headers */}
             <div className="grid grid-cols-7 mb-2">
               {["อา", "จ", "อ", "พ", "พฤ", "ศ", "ส"].map(d => (
                 <div key={d} className="text-center text-xs text-gray-400 py-1">{d}</div>
               ))}
             </div>
-
-            {/* Calendar Grid */}
             <div className="grid grid-cols-7 gap-1">
               {Array.from({ length: firstDay }).map((_, i) => (
                 <div key={`empty-${i}`} />
@@ -356,7 +444,6 @@ const openAddModal = () => {
                 const dayExpense = dayTx.filter(t => t.type === "expense").reduce((s, t) => s + Number(t.amount), 0)
                 const isToday = dateStr === new Date().toISOString().split("T")[0]
                 const isSelected = selectedDay === dateStr
-
                 return (
                   <button
                     key={day}
@@ -364,19 +451,14 @@ const openAddModal = () => {
                     className={`rounded-xl p-1.5 text-center transition-colors min-h-14 ${isSelected ? "bg-[#1D9E75] text-white" : isToday ? "bg-green-50 border border-[#1D9E75]" : "hover:bg-gray-50"}`}
                   >
                     <p className={`text-xs font-semibold ${isSelected ? "text-white" : isToday ? "text-[#1D9E75]" : "text-gray-700"}`}>{day}</p>
-                    {dayIncome > 0 && (
-                      <p className={`text-xs ${isSelected ? "text-white" : "text-[#1D9E75]"}`}>+{dayIncome.toLocaleString()}</p>
-                    )}
-                    {dayExpense > 0 && (
-                      <p className={`text-xs ${isSelected ? "text-white" : "text-[#D85A30]"}`}>-{dayExpense.toLocaleString()}</p>
-                    )}
+                    {dayIncome > 0 && <p className={`text-xs ${isSelected ? "text-white" : "text-[#1D9E75]"}`}>+{dayIncome.toLocaleString()}</p>}
+                    {dayExpense > 0 && <p className={`text-xs ${isSelected ? "text-white" : "text-[#D85A30]"}`}>-{dayExpense.toLocaleString()}</p>}
                   </button>
                 )
               })}
             </div>
           </div>
 
-          {/* Selected Day Detail */}
           <div className="bg-white rounded-xl shadow-sm p-5">
             <h2 className="text-sm font-semibold text-gray-700 mb-4">
               {selectedDay ? `รายการ ${selectedDay}` : "กดวันเพื่อดูรายการ"}
@@ -418,14 +500,14 @@ const openAddModal = () => {
                   </div>
                 )}
                 <button
-                         onClick={() => {
-                 setEditId(null)
-                 setName(""); setAmount("")
-                setDate(selectedDay!)
-                setType("expense")
-                setCategory(""); setCycleId(""); setNote("")
-                setShowModal(true)
-                 }}
+                  onClick={() => {
+                    setEditId(null)
+                    setName(""); setAmount("")
+                    setDate(selectedDay!)
+                    setType("expense")
+                    setCategory(""); setCycleId(""); setNote("")
+                    setShowModal(true)
+                  }}
                   className="w-full mt-4 border border-dashed border-gray-300 text-gray-500 rounded-lg py-2 text-sm hover:border-[#1D9E75] hover:text-[#1D9E75] transition-colors"
                 >
                   + เพิ่มรายการวันนี้
