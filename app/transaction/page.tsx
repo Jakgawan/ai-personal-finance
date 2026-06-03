@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
 import ExportPDF from "@/app/components/ExportPDF"
+import { formatDate } from "@/lib/utils"
 import ScanSlip from "@/app/components/ScanSlip"
 
 type Transaction = {
@@ -141,14 +142,9 @@ export default function TransactionPage() {
     fetchAll()
   }
 
-const exportExcel = async () => {
-    // import xlsx แบบ dynamic โหลดเฉพาะตอนกดปุ่ม
+  const exportExcel = async () => {
     const XLSX = await import("xlsx")
-
-    // เรียงจากเก่าสุด → ใหม่สุด
     const sorted = [...filtered].sort((a, b) => a.date.localeCompare(b.date))
-
-    // คำนวณ running balance สะสม
     let running = 0
     const rows = sorted.map(t => {
       running += t.type === "income" ? Number(t.amount) : -Number(t.amount)
@@ -162,91 +158,37 @@ const exportExcel = async () => {
         หมายเหตุ: t.note || "-",
       }
     })
-
-    // แถว total
     const totalRow = {
-      วันที่: "",
-      รายการ: "รวมทั้งหมด",
-      หมวด: "",
-      รายรับ: totalIncome,
-      รายจ่าย: totalExpense,
-      คงเหลือ: totalIncome - totalExpense,
-      หมายเหตุ: "",
+      วันที่: "", รายการ: "รวมทั้งหมด", หมวด: "",
+      รายรับ: totalIncome, รายจ่าย: totalExpense,
+      คงเหลือ: totalIncome - totalExpense, หมายเหตุ: "",
     }
-
-    // สร้าง worksheet จาก array of objects
-    // XLSX.utils.json_to_sheet แปลง array of objects → sheet โดยอัตโนมัติ
-    // key ของ object = หัวคอลัมน์
     const ws = XLSX.utils.json_to_sheet([...rows, {}, totalRow])
-
-    // กำหนดความกว้างแต่ละคอลัมน์ wch = width in characters
     ws["!cols"] = [
-      { wch: 14 }, // วันที่
-      { wch: 25 }, // รายการ
-      { wch: 15 }, // หมวด
-      { wch: 14 }, // รายรับ
-      { wch: 14 }, // รายจ่าย
-      { wch: 14 }, // คงเหลือ
-      { wch: 20 }, // หมายเหตุ
+      { wch: 14 }, { wch: 25 }, { wch: 15 },
+      { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 20 },
     ]
-
-    // ใส่สีแต่ละ cell
-    // cell address format = "A1", "B2" ตามปกติของ Excel
-    // s = style object
     rows.forEach((row, i) => {
-      // row index เริ่มจาก 2 เพราะแถว 1 = header
       const rowIndex = i + 2
-
-      // สีรายรับ = เขียว (column D = index 3)
       if (row.รายรับ !== "") {
         const cellRef = XLSX.utils.encode_cell({ r: rowIndex - 1, c: 3 })
-        // r = row (0-based), c = column (0-based)
-        // encode_cell แปลง {r,c} → "D2", "D3" ฯลฯ
-        ws[cellRef] = {
-          v: row.รายรับ,        // v = value
-          t: "n",               // t = type, "n" = number
-          s: {
-            font: { color: { rgb: "1D9E75" }, bold: true },
-            // rgb ไม่ใส่ # นำหน้า
-          }
-        }
+        ws[cellRef] = { v: row.รายรับ, t: "n", s: { font: { color: { rgb: "1D9E75" }, bold: true } } }
       }
-
-      // สีรายจ่าย = แดง (column E = index 4)
       if (row.รายจ่าย !== "") {
         const cellRef = XLSX.utils.encode_cell({ r: rowIndex - 1, c: 4 })
-        ws[cellRef] = {
-          v: row.รายจ่าย,
-          t: "n",
-          s: {
-            font: { color: { rgb: "D85A30" }, bold: true },
-          }
-        }
+        ws[cellRef] = { v: row.รายจ่าย, t: "n", s: { font: { color: { rgb: "D85A30" }, bold: true } } }
       }
-
-      // สีคงเหลือ — เขียวถ้าบวก แดงถ้าลบ (column F = index 5)
       const balanceCellRef = XLSX.utils.encode_cell({ r: rowIndex - 1, c: 5 })
       ws[balanceCellRef] = {
-        v: row.คงเหลือ,
-        t: "n",
-        s: {
-          font: {
-            color: { rgb: row.คงเหลือ >= 0 ? "1D9E75" : "D85A30" },
-            bold: true,
-          }
-        }
+        v: row.คงเหลือ, t: "n",
+        s: { font: { color: { rgb: row.คงเหลือ >= 0 ? "1D9E75" : "D85A30" }, bold: true } }
       }
     })
-
-    // สร้าง workbook แล้วใส่ worksheet เข้าไป
-    // workbook = ไฟล์ Excel ทั้งไฟล์
-    // worksheet = แต่ละ sheet ใน workbook
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, "รายการ")
-
-    // writeFile = บันทึกไฟล์ลงเครื่อง
     XLSX.writeFile(wb, `transactions-${new Date().toISOString().split("T")[0]}.xlsx`)
   }
+
   const currentYear = new Date().getFullYear()
   const months = Array.from({ length: 12 }, (_, i) => {
     const m = String(i + 1).padStart(2, "0")
@@ -273,38 +215,56 @@ const exportExcel = async () => {
   const nextMonth = () => setCalendarDate(new Date(calYear, calMonth + 1, 1))
 
   return (
-    <div className="p-6 bg-gray-50 min-h-screen">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-gray-800">รายการ</h1>
-        <div className="flex gap-2 flex-wrap justify-end">
+    <div className="p-4 md:p-6 bg-gray-50 min-h-screen">
+
+      {/* Header — แยกเป็น 2 แถวบน mobile */}
+      <div className="mb-6">
+
+        {/* แถว 1 — ชื่อหน้า + ปุ่มเพิ่มรายการ */}
+        <div className="flex items-center justify-between mb-3">
+          <h1 className="text-2xl font-bold text-gray-800">รายการ</h1>
+          <button
+            onClick={openAddModal}
+            className="bg-[#1D9E75] text-white rounded-lg px-4 py-2 text-sm hover:bg-[#178a64] flex items-center gap-1"
+          >
+            + เพิ่มรายการ
+          </button>
+        </div>
+
+        {/* แถว 2 — ปุ่ม toggle + export */}
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Toggle รายการ / ปฏิทิน */}
           <div className="flex bg-white border border-gray-200 rounded-lg overflow-hidden">
             <button
               onClick={() => setView("list")}
               className={`px-3 py-2 text-sm transition-colors ${view === "list" ? "bg-[#1D9E75] text-white" : "text-gray-500 hover:bg-gray-50"}`}
             >
-              <span className="hidden sm:inline">☰ </span>รายการ
+              ☰ รายการ
             </button>
             <button
               onClick={() => setView("calendar")}
               className={`px-3 py-2 text-sm transition-colors ${view === "calendar" ? "bg-[#1D9E75] text-white" : "text-gray-500 hover:bg-gray-50"}`}
             >
-              <span className="hidden sm:inline">📅 </span>ปฏิทิน
+              📅 ปฏิทิน
             </button>
           </div>
-          <button onClick={exportExcel} title="Export Excel" className="border border-gray-300 text-gray-600 rounded-lg px-3 py-2 text-sm hover:bg-gray-100">
-            <span className="hidden sm:inline">Export </span>Excel
-          </button>
-          <ExportPDF />
-          <ScanSlip onSuccess={fetchAll} />
-          <button onClick={openAddModal} className="bg-[#1D9E75] text-white rounded-lg px-3 py-2 text-sm hover:bg-[#178a64]">
-            +<span className="hidden sm:inline"> เพิ่มรายการ</span>
-          </button>
+
+          {/* Export buttons — รวมกันเป็นกลุ่ม */}
+          <div className="flex bg-white border border-gray-200 rounded-lg overflow-hidden">
+            <button
+              onClick={exportExcel}
+              className="px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 border-r border-gray-200 flex items-center gap-1"
+            >
+              📊 Excel
+            </button>
+            <ExportPDF />
+            <ScanSlip onSuccess={fetchAll} />
+          </div>
         </div>
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6">
         {[
           { label: "รายรับ", value: totalIncome, color: "text-[#1D9E75]" },
           { label: "รายจ่าย", value: totalExpense, color: "text-[#D85A30]" },
@@ -373,7 +333,7 @@ const exportExcel = async () => {
                       return (
                         <tr key={t.id} className="border-b border-gray-100 hover:bg-gray-50">
                           <td className="px-4 py-3 text-gray-400">{(page - 1) * PAGE_SIZE + i + 1}</td>
-                          <td className="px-4 py-3 text-gray-600">{t.date}</td>
+                          <td className="px-4 py-3 text-gray-600">{formatDate(t.date)}</td>
                           <td className="px-4 py-3 font-medium text-gray-800">{t.name}</td>
                           <td className="px-4 py-3 text-gray-500">{t.category || "-"}</td>
                           <td className="px-4 py-3 font-semibold text-[#1D9E75]">
@@ -461,7 +421,7 @@ const exportExcel = async () => {
 
           <div className="bg-white rounded-xl shadow-sm p-5">
             <h2 className="text-sm font-semibold text-gray-700 mb-4">
-              {selectedDay ? `รายการ ${selectedDay}` : "กดวันเพื่อดูรายการ"}
+              {selectedDay ? `รายการ ${formatDate(selectedDay)}` : "กดวันเพื่อดูรายการ"}
             </h2>
             {selectedDay && (
               <>

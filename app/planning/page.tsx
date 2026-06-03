@@ -3,12 +3,14 @@
 import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
 import React from "react"
+
 type PlanItem = {
   id: string
   section: "income" | "saving" | "fixed" | "variable"
   name: string
-  monthly_amount: Record<string, number> // { "1": 5000, "2": 5000, ... }
+  monthly_amount: Record<string, number>
 }
+
 const SECTIONS = [
   { key: "income", label: "รายรับ", color: "bg-green-50 text-[#1D9E75]" },
   { key: "saving", label: "ออมเงิน", color: "bg-blue-50 text-[#378ADD]" },
@@ -17,9 +19,8 @@ const SECTIONS = [
 ] as const
 
 const MONTHS = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."]
+const CURRENT_YEAR = new Date().getFullYear()
 
-const CURRENT_YEAR = new Date().getFullYear() // ค.ศ.
-const BUDDHIST_YEAR = CURRENT_YEAR + 543
 const TEMPLATE_ITEMS = [
   { section: "income", name: "เงินเดือน" },
   { section: "income", name: "รายได้เสริม" },
@@ -38,6 +39,14 @@ const TEMPLATE_ITEMS = [
   { section: "variable", name: "สุขภาพ/ยา" },
   { section: "variable", name: "ค่าสาธารณูปโภค" },
 ]
+
+// สี RGB ของแต่ละ section สำหรับ Excel
+const SECTION_COLORS: Record<string, string> = {
+  income: "D1FAE5",   // เขียวอ่อน
+  saving: "DBEAFE",   // น้ำเงินอ่อน
+  fixed: "FFEDD5",    // ส้มอ่อน
+  variable: "F3F4F6", // เทาอ่อน
+}
 
 export default function PlanningPage() {
   const [items, setItems] = useState<PlanItem[]>([])
@@ -65,11 +74,8 @@ export default function PlanningPage() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
     await supabase.from("planning_items").insert({
-      user_id: user.id,
-      year,
-      section,
-      name: "รายการใหม่",
-      monthly_amount: {},
+      user_id: user.id, year, section,
+      name: "รายการใหม่", monthly_amount: {},
     })
     fetchItems()
   }
@@ -93,6 +99,32 @@ export default function PlanningPage() {
     fetchItems()
   }
 
+  const loadTemplate = async () => {
+    if (!confirm("โหลด template Money Coach? รายการที่มีอยู่จะยังคงอยู่")) return
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+    await supabase.from("planning_items").insert(
+      TEMPLATE_ITEMS.map(item => ({
+        user_id: user.id, year,
+        section: item.section, name: item.name, monthly_amount: {},
+      }))
+    )
+    fetchItems()
+  }
+
+  const fillRow = async (item: PlanItem) => {
+    const firstMonth = Object.keys(item.monthly_amount).sort()[0]
+    if (!firstMonth) return
+    const firstValue = item.monthly_amount[firstMonth]
+    if (!confirm(`fill ฿${firstValue.toLocaleString()} ไปทุกเดือนที่ยังว่างอยู่?`)) return
+    const updated = { ...item.monthly_amount }
+    for (let m = 1; m <= 12; m++) {
+      if (!updated[String(m)]) updated[String(m)] = firstValue
+    }
+    await supabase.from("planning_items").update({ monthly_amount: updated }).eq("id", item.id)
+    fetchItems()
+  }
+
   const rowTotal = (item: PlanItem) =>
     Object.values(item.monthly_amount).reduce((s, v) => s + v, 0)
 
@@ -105,56 +137,146 @@ export default function PlanningPage() {
     return inc - out
   }
 
-  if (loading) return <div className="p-8 text-gray-400">กำลังโหลด...</div>
-  const loadTemplate = async () => {
-  if (!confirm("โหลด template Money Coach? รายการที่มีอยู่จะยังคงอยู่")) return
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return
-  await supabase.from("planning_items").insert(
-    TEMPLATE_ITEMS.map(item => ({
-      user_id: user.id,
-      year,
-      section: item.section,
-      name: item.name,
-      monthly_amount: {},
-    }))
-  )
-  fetchItems()
-}
-  const fillRow = async (item: PlanItem) => {
-  const firstMonth = Object.keys(item.monthly_amount).sort()[0]
-  if (!firstMonth) return
-  const firstValue = item.monthly_amount[firstMonth]
-  if (!confirm(`fill ฿${firstValue.toLocaleString()} ไปทุกเดือนที่ยังว่างอยู่?`)) return
+  const exportExcel = async () => {
+    const XLSX = await import("xlsx")
 
-  const updated = { ...item.monthly_amount }
-  for (let m = 1; m <= 12; m++) {
-    if (!updated[String(m)]) {
-      updated[String(m)] = firstValue
+    // สร้าง array of arrays สำหรับ worksheet
+    // แต่ละ array = 1 แถว มี 14 column (รายการ + 12 เดือน + รวม)
+    const wsData: any[][] = []
+
+    // แถว title
+    wsData.push([`แผนการเงิน พ.ศ. ${year + 543}`, ...Array(13).fill("")])
+    wsData.push([]) // แถวว่าง
+
+    // แถว header (รายการ + ม.ค. ถึง ธ.ค. + รวม)
+    wsData.push(["รายการ", ...MONTHS, "รวม (฿)"])
+
+    // วนแต่ละ section
+    SECTIONS.forEach(sec => {
+      const secItems = items.filter(i => i.section === sec.key)
+
+      // แถวชื่อ section เช่น "รายรับ", "ออมเงิน"
+      wsData.push([sec.label, ...Array(13).fill("")])
+
+      // แถวข้อมูลแต่ละรายการ
+      secItems.forEach(item => {
+        const row = [item.name]
+        let total = 0
+        for (let m = 1; m <= 12; m++) {
+          const val = item.monthly_amount[String(m)] || 0
+          row.push(val || "")  // ถ้า 0 ให้เว้นว่าง ดูสะอาดกว่า
+          total += val
+        }
+        row.push(total || "")
+        wsData.push(row)
+      })
+
+      // แถวรวมของ section
+      const totalRow = [`รวม${sec.label}`]
+      let sectionTotal = 0
+      for (let m = 1; m <= 12; m++) {
+        const t = colTotal(secItems, m)
+        totalRow.push(t || "")
+        sectionTotal += t
+      }
+      totalRow.push(sectionTotal || "")
+      wsData.push(totalRow)
+
+      wsData.push([]) // แถวว่างคั่น section
+    })
+
+    // แถวเงินเหลือสุทธิ
+    const netRow = ["เงินเหลือสุทธิ"]
+    let netTotal = 0
+    for (let m = 1; m <= 12; m++) {
+      const net = netByMonth(m)
+      netRow.push(net || "")
+      netTotal += net
     }
+    netRow.push(netTotal || "")
+    wsData.push(netRow)
+
+    // สร้าง worksheet จาก array of arrays
+    // aoa_to_sheet = array of arrays to sheet
+    const ws = XLSX.utils.aoa_to_sheet(wsData)
+
+    // กำหนดความกว้าง column
+    ws["!cols"] = [
+      { wch: 22 }, // รายการ
+      ...Array(12).fill({ wch: 10 }), // 12 เดือน
+      { wch: 12 }, // รวม
+    ]
+
+    // ใส่สีแถว section header และแถวรวม
+    // วน wsData หาแถวที่ตรงกับ section label
+    wsData.forEach((row, rowIdx) => {
+      const label = row[0]
+
+      // ถ้าเป็น section header ใส่พื้นหลังตามสี section
+      const sec = SECTIONS.find(s => s.label === label)
+      if (sec) {
+        for (let c = 0; c < 14; c++) {
+          const cellRef = XLSX.utils.encode_cell({ r: rowIdx, c })
+          if (!ws[cellRef]) ws[cellRef] = { v: c === 0 ? label : "", t: "s" }
+          ws[cellRef].s = {
+            fill: { fgColor: { rgb: SECTION_COLORS[sec.key] } },
+            font: { bold: true },
+          }
+        }
+      }
+
+      // ถ้าเป็นแถวเงินเหลือสุทธิ ใส่สีเขียวอ่อน + ตัวหนา
+      if (label === "เงินเหลือสุทธิ") {
+        for (let c = 0; c < 14; c++) {
+          const cellRef = XLSX.utils.encode_cell({ r: rowIdx, c })
+          if (!ws[cellRef]) ws[cellRef] = { v: "", t: "s" }
+          ws[cellRef].s = {
+            fill: { fgColor: { rgb: "D1FAE5" } },
+            font: { bold: true, color: { rgb: "1D9E75" } },
+          }
+        }
+      }
+    })
+
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, `แผน ${year + 543}`)
+    XLSX.writeFile(wb, `planning-${year + 543}.xlsx`)
   }
-  await supabase.from("planning_items").update({ monthly_amount: updated }).eq("id", item.id)
-  fetchItems()
-}
+
+  if (loading) return <div className="p-8 text-gray-400">กำลังโหลด...</div>
+
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
+
+      {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-gray-800">วางแผนการเงิน</h1>
         <div className="flex items-center gap-2">
           <button onClick={() => setYear(y => y - 1)} className="px-2 py-1 border rounded-lg text-sm hover:bg-gray-100">←</button>
           <span className="text-sm font-semibold text-gray-700">พ.ศ. {year + 543}</span>
           <button onClick={() => setYear(y => y + 1)} className="px-2 py-1 border rounded-lg text-sm hover:bg-gray-100">→</button>
-          <button
-            onClick={loadTemplate}
-            title="โหลด template"
-            className="border border-dashed border-gray-300 text-gray-400 rounded-lg px-2 py-1 text-xs hover:bg-gray-50"
-          >
-            📋<span className="hidden sm:inline"> template</span>
-          </button>
+
+          {/* รวม template และ export เป็นกลุ่มเดียว */}
+          <div className="flex bg-white border border-gray-200 rounded-lg overflow-hidden">
+            <button
+              onClick={loadTemplate}
+              title="โหลด template"
+              className="px-2 py-1 text-xs text-gray-400 hover:bg-gray-50 border-r border-gray-200"
+            >
+              📋<span className="hidden sm:inline"> template</span>
+            </button>
+            <button
+              onClick={exportExcel}
+              title="Export Excel"
+              className="px-2 py-1 text-xs text-gray-500 hover:bg-gray-50"
+            >
+              📊<span className="hidden sm:inline"> Excel</span>
+            </button>
+          </div>
         </div>
       </div>
 
-      
+      {/* Summary Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         {SECTIONS.map(sec => {
           const secItems = items.filter(i => i.section === sec.key)
@@ -169,7 +291,7 @@ export default function PlanningPage() {
         })}
       </div>
 
-      
+      {/* Table */}
       <div className="bg-white rounded-xl shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-xs min-w-[900px]">
@@ -186,18 +308,14 @@ export default function PlanningPage() {
               {SECTIONS.map(sec => {
                 const secItems = items.filter(i => i.section === sec.key)
                 return (
-                    <React.Fragment key={sec.key}>
-                    
-                    <tr key={`header-${sec.key}`} className="border-t border-gray-200">
+                  <React.Fragment key={sec.key}>
+                    <tr className="border-t border-gray-200">
                       <td colSpan={14} className={`px-4 py-2 text-xs font-semibold ${sec.color}`}>
                         {sec.label}
                       </td>
                     </tr>
-
-                    
                     {secItems.map(item => (
                       <tr key={item.id} className="border-t border-gray-100 hover:bg-gray-50">
-                        
                         <td className="px-4 py-2">
                           {editingName === item.id ? (
                             <input
@@ -220,13 +338,10 @@ export default function PlanningPage() {
                             </div>
                           )}
                         </td>
-
-                        
                         {Array.from({ length: 12 }, (_, i) => i + 1).map(month => {
                           const cellKey = `${item.id}-${month}`
                           const val = item.monthly_amount[String(month)] || 0
                           return (
-                            
                             <td key={month} className="px-1 py-2 text-center">
                               {editingCell === cellKey ? (
                                 <input
@@ -248,26 +363,21 @@ export default function PlanningPage() {
                             </td>
                           )
                         })}
-
-                        
-                      
-                      <td className="px-4 py-2 text-right font-semibold text-gray-700">
-                         {rowTotal(item).toLocaleString()}
-                      </td>
-                      <td className="px-2 py-2">
-                     <button
-                         onClick={() => fillRow(item)}
-                         className="text-xs text-gray-400 hover:text-[#1D9E75] px-2 py-1 rounded hover:bg-green-50 transition-colors whitespace-nowrap"
-                         title="copy ค่าเดือนแรกไปทุกเดือน"
-                       >
-                        fill →
-                     </button>
-                      </td>
+                        <td className="px-4 py-2 text-right font-semibold text-gray-700">
+                          {rowTotal(item).toLocaleString()}
+                        </td>
+                        <td className="px-2 py-2">
+                          <button
+                            onClick={() => fillRow(item)}
+                            className="text-xs text-gray-400 hover:text-[#1D9E75] px-2 py-1 rounded hover:bg-green-50 transition-colors whitespace-nowrap"
+                            title="copy ค่าเดือนแรกไปทุกเดือน"
+                          >
+                            fill →
+                          </button>
+                        </td>
                       </tr>
                     ))}
-
-                    
-                    <tr key={`add-${sec.key}`} className="border-t border-dashed border-gray-200">
+                    <tr className="border-t border-dashed border-gray-200">
                       <td colSpan={14} className="px-4 py-2">
                         <button
                           onClick={() => addItem(sec.key)}
@@ -277,9 +387,7 @@ export default function PlanningPage() {
                         </button>
                       </td>
                     </tr>
-
-                    
-                    <tr key={`total-${sec.key}`} className="border-t border-gray-200 bg-gray-50">
+                    <tr className="border-t border-gray-200 bg-gray-50">
                       <td className="px-4 py-2 text-xs font-semibold text-gray-500">รวม{sec.label}</td>
                       {Array.from({ length: 12 }, (_, i) => i + 1).map(month => (
                         <td key={month} className="px-1 py-2 text-center text-xs font-semibold text-gray-700">
@@ -293,8 +401,6 @@ export default function PlanningPage() {
                   </React.Fragment>
                 )
               })}
-
-            
               <tr className="border-t-2 border-gray-300 bg-green-50">
                 <td className="px-4 py-3 text-xs font-bold text-[#1D9E75]">เงินเหลือสุทธิ</td>
                 {Array.from({ length: 12 }, (_, i) => i + 1).map(month => {
@@ -313,7 +419,7 @@ export default function PlanningPage() {
           </table>
         </div>
       </div>
+
     </div>
-        
   )
 }

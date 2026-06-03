@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
 import Link from "next/link"
+import { formatDate } from "@/lib/utils"
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend
@@ -437,7 +438,7 @@ export default function Dashboard() {
                 <tbody>
                   {latest5WithBalance.map((t) => (
                     <tr key={t.id} className="border-t border-gray-100 hover:bg-gray-50">
-                      <td className="px-4 py-3 text-gray-500">{t.date}</td>
+                      <td className="px-4 py-3 text-gray-500">{formatDate(t.date)}</td>
                       <td className="px-4 py-3 font-medium text-gray-800">{t.name}</td>
                       <td className="px-4 py-3">
                         <span className={`text-xs px-2 py-1 rounded-full ${t.type === "income" ? "bg-green-100 text-[#1D9E75]" : "bg-red-100 text-[#D85A30]"}`}>
@@ -460,7 +461,7 @@ export default function Dashboard() {
                 <div key={t.id} className="flex items-center justify-between px-4 py-3">
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-gray-800 truncate">{t.name}</p>
-                    <p className="text-xs text-gray-400">{t.date}</p>
+                    <p className="text-xs text-gray-400">{formatDate(t.date)}</p>
                   </div>
                   <div className="text-right ml-3">
                     <p className={`text-sm font-semibold ${t.type === "income" ? "text-[#1D9E75]" : "text-[#D85A30]"}`}>
