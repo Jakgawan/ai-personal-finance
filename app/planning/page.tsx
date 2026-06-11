@@ -174,7 +174,7 @@ export default function PlanningPage() {
       })
 
       // แถวรวมของ section
-      const totalRow = [`รวม${sec.label}`]
+      const totalRow: (string | number)[] = [`รวม${sec.label}`]
       let sectionTotal = 0
       for (let m = 1; m <= 12; m++) {
         const t = colTotal(secItems, m)
@@ -188,7 +188,7 @@ export default function PlanningPage() {
     })
 
     // แถวเงินเหลือสุทธิ
-    const netRow = ["เงินเหลือสุทธิ"]
+    const netRow: (string | number)[] = ["เงินเหลือสุทธิ"]
     let netTotal = 0
     for (let m = 1; m <= 12; m++) {
       const net = netByMonth(m)
