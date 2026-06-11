@@ -142,7 +142,7 @@ export default function PlanningPage() {
 
     // สร้าง array of arrays สำหรับ worksheet
     // แต่ละ array = 1 แถว มี 14 column (รายการ + 12 เดือน + รวม)
-    const wsData: any[][] = []
+    const wsData: (string | number)[][] = []
 
     // แถว title
     wsData.push([`แผนการเงิน พ.ศ. ${year + 543}`, ...Array(13).fill("")])
