@@ -160,7 +160,7 @@ export default function PlanningPage() {
 
       // แถวข้อมูลแต่ละรายการ
       secItems.forEach(item => {
-        const row = [item.name]
+        const row: (string | number)[] = [item.name]
         let total = 0
         for (let m = 1; m <= 12; m++) {
           const val = item.monthly_amount[String(m)] || 0
