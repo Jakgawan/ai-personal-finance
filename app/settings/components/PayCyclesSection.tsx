@@ -68,9 +68,44 @@ export default function PayCyclesSection() {
     fetchCycles()
   }
 
+  // สร้างคำอธิบาย preview จากวันที่กรอก
+  // ใช้ useMemo ไม่ได้เพราะเป็น derived value ธรรมดา คำนวณตรงๆ ได้เลย
+  const getPreview = () => {
+    if (!startDay || !endDay) return null
+    const s = Number(startDay)
+    const e = Number(endDay)
+    if (isNaN(s) || isNaN(e)) return null
+
+    if (s > e) {
+      // รอบข้ามเดือน เช่น วันที่ 26 ถึง 25 ของเดือนถัดไป
+      return `รับเงินวันที่ ${s} แล้วรอบสิ้นสุดวันที่ ${e} ของเดือนถัดไป`
+    } else {
+      // รอบปกติ เช่น วันที่ 1 ถึง 30
+      return `รับเงินวันที่ ${s} แล้วรอบสิ้นสุดวันที่ ${e} ของเดือนเดียวกัน`
+    }
+  }
+
+  const preview = getPreview()
+
   return (
     <div className="max-w-lg">
-      <h2 className="text-xl font-semibold text-gray-800 mb-6">รอบเงินเดือน</h2>
+      <h2 className="text-xl font-semibold text-gray-800 mb-2">รอบเงินเดือน</h2>
+
+      {/* คำอธิบาย — บอกว่ารอบเงินเดือนคืออะไร */}
+      <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 mb-6">
+        <p className="text-sm font-medium text-blue-700 mb-1">💡 รอบเงินเดือนคืออะไร?</p>
+        <p className="text-xs text-blue-600 leading-relaxed">
+          คือช่วงเวลาที่ใช้ติดตามรายรับ-รายจ่าย เช่น ถ้ารับเงินเดือนวันที่ 25
+          ให้ตั้งวันเริ่ม 25 วันสิ้นสุด 24 แอพจะนับรายการตั้งแต่วันที่ 25 ถึง 24 ของเดือนถัดไป
+        </p>
+        <div className="mt-2 flex flex-col gap-1">
+          {/* ตัวอย่างรอบที่พบบ่อย */}
+          <p className="text-xs text-blue-500">ตัวอย่างที่พบบ่อย:</p>
+          <p className="text-xs text-blue-600">• รับวันที่ 25 → วันเริ่ม 25, วันสิ้นสุด 24</p>
+          <p className="text-xs text-blue-600">• รับวันที่ 1 → วันเริ่ม 1, วันสิ้นสุด 30</p>
+          <p className="text-xs text-blue-600">• รับวันที่ 5 → วันเริ่ม 5, วันสิ้นสุด 4</p>
+        </div>
+      </div>
 
       {/* Form */}
       <div className="bg-white rounded-xl p-6 shadow-sm mb-6">
@@ -79,27 +114,45 @@ export default function PayCyclesSection() {
         </h3>
         <div className="flex flex-col gap-3">
           <input
-            placeholder="ชื่อรอบ เช่น รอบ 5, รอบ 20"
+            placeholder="ชื่อรอบ เช่น รอบ 5, รอบ 25"
             value={name}
             onChange={(e) => setName(e.target.value)}
             className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
           />
           <div className="flex gap-3">
-            <input
-              placeholder="วันเริ่ม เช่น 21"
-              type="number"
-              value={startDay}
-              onChange={(e) => setStartDay(e.target.value)}
-              className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
-            />
-            <input
-              placeholder="วันสิ้นสุด เช่น 5"
-              type="number"
-              value={endDay}
-              onChange={(e) => setEndDay(e.target.value)}
-              className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
-            />
+            <div className="flex-1">
+              <label className="text-xs text-gray-500 mb-1 block">วันที่รับเงิน (วันเริ่ม)</label>
+              <input
+                placeholder="เช่น 25"
+                type="number"
+                min={1}
+                max={31}
+                value={startDay}
+                onChange={(e) => setStartDay(e.target.value)}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
+              />
+            </div>
+            <div className="flex-1">
+              <label className="text-xs text-gray-500 mb-1 block">วันสิ้นสุดรอบ</label>
+              <input
+                placeholder="เช่น 24"
+                type="number"
+                min={1}
+                max={31}
+                value={endDay}
+                onChange={(e) => setEndDay(e.target.value)}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
+              />
+            </div>
           </div>
+
+          {/* Preview — แสดงทันทีเมื่อกรอกวันที่ */}
+          {preview && (
+            <div className="bg-green-50 border border-green-100 rounded-lg px-3 py-2">
+              <p className="text-xs text-[#1D9E75]">✓ {preview}</p>
+            </div>
+          )}
+
           <div className="flex gap-2">
             <button
               onClick={handleSave}
@@ -123,13 +176,24 @@ export default function PayCyclesSection() {
       {/* List */}
       <div className="bg-white rounded-xl shadow-sm overflow-hidden">
         {cycles.length === 0 ? (
-          <p className="text-sm text-gray-400 p-6">ยังไม่มีรอบเงินเดือน</p>
+          <p className="text-sm text-gray-400 p-6">ยังไม่มีรอบเงินเดือน กดเพิ่มได้เลย</p>
         ) : (
           cycles.map((cycle) => (
-            <div key={cycle.id} className="flex items-center justify-between px-6 py-3 border-b border-gray-100 last:border-0">
+            <div key={cycle.id} className="flex items-center justify-between px-6 py-4 border-b border-gray-100 last:border-0">
               <div>
                 <p className="text-sm font-medium text-gray-800">{cycle.name}</p>
-                <p className="text-xs text-gray-400">วันที่ {cycle.start_day} — {cycle.end_day}</p>
+                {/* แสดงคำอธิบายแต่ละรอบที่บันทึกไว้ */}
+                <p className="text-xs text-gray-400 mt-0.5">
+                  วันที่ {cycle.start_day} — {cycle.end_day}
+                  {cycle.start_day > cycle.end_day
+                    ? ` (ข้ามเดือน)`
+                    : ` (เดือนเดียวกัน)`
+                  }
+                </p>
+                <p className="text-xs text-[#1D9E75] mt-0.5">
+                  {/* อธิบายง่ายๆ ว่ารอบนี้คือช่วงไหน */}
+                  รับเงินวันที่ {cycle.start_day} ของทุกเดือน
+                </p>
               </div>
               <div className="flex gap-2">
                 <button onClick={() => handleEdit(cycle)} className="text-xs text-[#378ADD] hover:underline">แก้ไข</button>

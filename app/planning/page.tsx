@@ -249,30 +249,33 @@ export default function PlanningPage() {
     <div className="p-6 bg-gray-50 min-h-screen">
 
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-gray-800">วางแผนการเงิน</h1>
-        <div className="flex items-center gap-2">
-          <button onClick={() => setYear(y => y - 1)} className="px-2 py-1 border rounded-lg text-sm hover:bg-gray-100">←</button>
-          <span className="text-sm font-semibold text-gray-700">พ.ศ. {year + 543}</span>
-          <button onClick={() => setYear(y => y + 1)} className="px-2 py-1 border rounded-lg text-sm hover:bg-gray-100">→</button>
-
-          {/* รวม template และ export เป็นกลุ่มเดียว */}
+      {/* Header — แยก 2 แถวบน mobile */}
+      <div className="mb-6">
+        <div className="flex items-center justify-between mb-3">
+          <h1 className="text-2xl font-bold text-gray-800">วางแผนการเงิน</h1>
+          {/* ปุ่ม template + export รวมกลุ่ม */}
           <div className="flex bg-white border border-gray-200 rounded-lg overflow-hidden">
             <button
               onClick={loadTemplate}
               title="โหลด template"
-              className="px-2 py-1 text-xs text-gray-400 hover:bg-gray-50 border-r border-gray-200"
+              className="px-3 py-2 text-xs text-gray-400 hover:bg-gray-50 border-r border-gray-200"
             >
               📋<span className="hidden sm:inline"> template</span>
             </button>
             <button
               onClick={exportExcel}
               title="Export Excel"
-              className="px-2 py-1 text-xs text-gray-500 hover:bg-gray-50"
+              className="px-3 py-2 text-xs text-gray-500 hover:bg-gray-50"
             >
               📊<span className="hidden sm:inline"> Excel</span>
             </button>
           </div>
+        </div>
+        {/* ปุ่มเลือกปี อยู่แถวล่าง ไม่เบียดกัน */}
+        <div className="flex items-center gap-2">
+          <button onClick={() => setYear(y => y - 1)} className="px-3 py-1.5 border rounded-lg text-sm hover:bg-gray-100">←</button>
+          <span className="text-sm font-semibold text-gray-700">พ.ศ. {year + 543}</span>
+          <button onClick={() => setYear(y => y + 1)} className="px-3 py-1.5 border rounded-lg text-sm hover:bg-gray-100">→</button>
         </div>
       </div>
 
