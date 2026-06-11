@@ -164,10 +164,12 @@ export default function PlanningPage() {
         let total = 0
         for (let m = 1; m <= 12; m++) {
           const val = item.monthly_amount[String(m)] || 0
-          row.push(val || "")  // ถ้า 0 ให้เว้นว่าง ดูสะอาดกว่า
+          // val > 0 ใส่ตัวเลข ถ้า 0 ใส่ string ว่าง
+          // ต้องบอก TypeScript ชัดๆ ว่าเป็น string หรือ number
+          row.push(val > 0 ? val : "")
           total += val
         }
-        row.push(total || "")
+        row.push(total > 0 ? total : "")
         wsData.push(row)
       })
 
