@@ -26,11 +26,31 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
   const [amount, setAmount] = useState("")
   const [date, setDate] = useState(new Date().toISOString().split("T")[0])
   const [type, setType] = useState("expense")
+  const [category, setCategory] = useState("")
+  const [cycleId, setCycleId] = useState("")
   const [loading, setLoading] = useState(false)
+
+  // เก็บรายการหมวดหมู่ + รอบเงินเดือน สำหรับ dropdown ในฟอร์ม Quick Add
+  const [categories, setCategories] = useState<{ id: string; name: string; type: string; icon: string }[]>([])
+  const [cycles, setCycles] = useState<{ id: string; name: string }[]>([])
 
   useEffect(() => {
     setMobileOpen(false)
   }, [pathname])
+  // ดึงหมวดหมู่ + รอบเงินเดือน มาเก็บไว้ใช้ใน dropdown
+  useEffect(() => {
+    const fetchData = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+      const [{ data: catData }, { data: cycleData }] = await Promise.all([
+        supabase.from("categories").select("*").eq("user_id", user.id),
+        supabase.from("pay_cycles").select("*").eq("user_id", user.id),
+      ])
+      setCategories(catData || [])
+      setCycles(cycleData || [])
+    }
+    fetchData()
+  }, [])
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -44,23 +64,35 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
 
   const hideSidebar = pathname === "/login" || pathname === "/register"
   if (hideSidebar) return <>{children}</>
+  // หน้าที่จะแสดง FAB — มีแค่ Dashboard, รายการ, ธุรกิจ
+  const fabPages = ["/", "/transaction", "/business"]
+  const showFAB = fabPages.includes(pathname)
 
-  const handleQuickAdd = async () => {
-    if (!name || !amount) return
+const handleQuickAdd = async () => {
+    if (!amount) return
     setLoading(true)
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
+    if (!user) {
+      setLoading(false)
+      return
+    }
     await supabase.from("transactions").insert({
       user_id: user.id,
       name,
       amount: Number(amount),
       date,
       type,
+      category: category || null,
+      cycle_id: cycleId || null,
     })
+    // ยิง event บอกหน้า transaction ว่า "เพิ่มรายการแล้ว" → ให้มันโหลดใหม่ทันที
+    window.dispatchEvent(new CustomEvent("transactionAdded"))
     setName("")
     setAmount("")
     setDate(new Date().toISOString().split("T")[0])
     setType("expense")
+    setCategory("")
+    setCycleId("")
     setLoading(false)
     setShowQuickAdd(false)
   }
@@ -162,13 +194,15 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
         </main>
       </div>
 
-      {/* FAB ปุ่ม + (อันเดียว) */}
-      <button
-        onClick={handleFAB}
-        className="fixed bottom-6 right-6 w-14 h-14 bg-[#1D9E75] text-white rounded-full shadow-lg text-2xl hover:bg-[#178a64] transition-colors z-30 flex items-center justify-center"
-      >
-        +
-      </button>
+{/* FAB ปุ่ม + (แสดงเฉพาะบางหน้า) */}
+      {showFAB && (
+        <button
+          onClick={handleFAB}
+          className="fixed bottom-6 right-6 w-14 h-14 bg-[#1D9E75] text-white rounded-full shadow-lg text-2xl hover:bg-[#178a64] transition-colors z-30 flex items-center justify-center"
+        >
+          +
+        </button>
+      )}
 
       {/* Quick Add Modal */}
       {showQuickAdd && (
@@ -190,27 +224,47 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
                 </button>
               </div>
               <input
+                type="date"
+                value={date}
+                onChange={e => setDate(e.target.value)}
+                className="border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75] text-gray-800"
+              />
+              <input
                 placeholder="ชื่อรายการ เช่น ข้าวเที่ยง"
                 value={name}
                 onChange={e => setName(e.target.value)}
-                className="border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
+                className="border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75] text-gray-800"
               />
               <input
                 placeholder="จำนวน (฿)"
                 type="number"
                 value={amount}
                 onChange={e => setAmount(e.target.value)}
-                className="border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
+                className="border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75] text-gray-800"
               />
-              <input
-                type="date"
-                value={date}
-                onChange={e => setDate(e.target.value)}
-                className="border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
-              />
+              <select
+                value={category}
+                onChange={e => setCategory(e.target.value)}
+                className="border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75] text-gray-800"
+              >
+                <option value="">-- หมวดหมู่ --</option>
+                {categories.filter(c => !c.type || c.type === type).map(c => (
+                  <option key={c.id} value={c.name}>{c.icon} {c.name}</option>
+                ))}
+              </select>
+              <select
+                value={cycleId}
+                onChange={e => setCycleId(e.target.value)}
+                className="border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75] text-gray-800"
+              >
+                <option value="">-- รอบเงินเดือน --</option>
+                {cycles.map(c => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
               <button
                 onClick={handleQuickAdd}
-                disabled={loading || !name || !amount}
+                disabled={loading || !amount}
                 className="w-full bg-[#1D9E75] text-white rounded-lg py-3 text-sm font-medium hover:bg-[#178a64] disabled:opacity-50 transition-colors"
               >
                 {loading ? "กำลังบันทึก..." : "บันทึก"}

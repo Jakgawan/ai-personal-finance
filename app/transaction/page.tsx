@@ -62,20 +62,39 @@ export default function TransactionPage() {
   const [calendarDate, setCalendarDate] = useState(new Date())
   const [selectedDay, setSelectedDay] = useState<string | null>(null)
 
+  // ดึงข้อมูลจาก Supabase ทั้งหมด
+  // สำคัญ: order by date DESC แล้วตามด้วย created_at DESC
+  // เพื่อให้รายการล่าสุดอยู่บนสุดเสมอ แม้วันที่เดียวกัน
   const fetchAll = async () => {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
+
     const [{ data: txData }, { data: catData }, { data: cycleData }] = await Promise.all([
-      supabase.from("transactions").select("*").eq("user_id", user.id).order("date", { ascending: false }),
+      supabase
+        .from("transactions")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("date", { ascending: false })
+        .order("created_at", { ascending: false }),
       supabase.from("categories").select("*").eq("user_id", user.id),
       supabase.from("pay_cycles").select("*").eq("user_id", user.id),
     ])
+
+    // setTransactions trigger re-render ทันทีที่ได้ข้อมูลใหม่
+    console.log("จำนวนที่ดึงมาได้:", txData?.length, txData)
     setTransactions(txData || [])
     setCategories(catData || [])
     setCycles(cycleData || [])
   }
 
   useEffect(() => { fetchAll() }, [])
+  // ดักฟัง event "transactionAdded" จากปุ่ม FAB ใน Sidebar
+  // เมื่อ FAB เพิ่มรายการเสร็จ → เรียก fetchAll เพื่อโหลดข้อมูลใหม่ทันที (real-time)
+  useEffect(() => {
+    const handler = () => fetchAll()
+    window.addEventListener("transactionAdded", handler)
+    return () => window.removeEventListener("transactionAdded", handler)
+  }, [])
 
   const filtered = transactions.filter((t) => {
     const matchSearch = t.name.toLowerCase().includes(search.toLowerCase())
@@ -90,16 +109,22 @@ export default function TransactionPage() {
   const totalExpense = filtered.filter(t => t.type === "expense").reduce((s, t) => s + Number(t.amount), 0)
 
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE)
-  const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
-  const getBalance = (index: number) => {
-    const all = [...filtered].reverse()
-    let balance = 0
-    for (let i = 0; i <= index; i++) {
-      balance += all[i].type === "income" ? Number(all[i].amount) : -Number(all[i].amount)
-    }
-    return balance
-  }
+  // คำนวณ running balance โดยเริ่มจากรายการเก่าสุด → ใหม่สุด
+  // เก็บเป็น { [id]: balance } เพื่อ lookup ตอน render ได้ถูกต้องเสมอ
+  // ไม่ว่าจะ filter หรือเปลี่ยน page ก็ตาม
+  const balanceMap = (() => {
+    const sorted = [...filtered].sort((a, b) => a.date.localeCompare(b.date))
+    let running = 0
+    const map: Record<string, number> = {}
+    sorted.forEach(t => {
+      running += t.type === "income" ? Number(t.amount) : -Number(t.amount)
+      map[t.id] = running
+    })
+    return map
+  })()
+
+  const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
   const openAddModal = () => {
     setEditId(null)
@@ -117,29 +142,43 @@ export default function TransactionPage() {
     setShowModal(true)
   }
 
+  // แก้ไข: await fetchAll() ก่อนปิด modal
+  // ทำให้ข้อมูลใหม่โหลดเสร็จก่อนที่ modal จะปิด
+  // ผู้ใช้เห็นรายการใหม่ทันทีโดยไม่ต้องรีเพจ
   const handleSubmit = async () => {
+    console.log("กดบันทึกแล้ว!")
     if (!name || !amount || !date) return
     setLoading(true)
+
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
+    if (!user) {
+      setLoading(false)
+      return
+    }
+
     const payload = {
       name, amount: Number(amount), date, type, category,
       cycle_id: cycleId || null, note: note || null, user_id: user.id
     }
-    if (editId) {
-      await supabase.from("transactions").update(payload).eq("id", editId)
+
+   if (editId) {
+      const { error } = await supabase.from("transactions").update(payload).eq("id", editId)
+      if (error) console.log("update error:", error)
     } else {
-      await supabase.from("transactions").insert(payload)
+      const { data, error } = await supabase.from("transactions").insert(payload).select()
+      if (error) console.log("insert error:", error)
+      else console.log("insert สำเร็จ:", data)
     }
+
+    await fetchAll()
     setShowModal(false)
     setLoading(false)
-    fetchAll()
   }
 
   const handleDelete = async (id: string) => {
     if (!confirm("ลบรายการนี้?")) return
     await supabase.from("transactions").delete().eq("id", id)
-    fetchAll()
+    await fetchAll()
   }
 
   const exportExcel = async () => {
@@ -220,20 +259,13 @@ export default function TransactionPage() {
       {/* Header — แยกเป็น 2 แถวบน mobile */}
       <div className="mb-6">
 
-        {/* แถว 1 — ชื่อหน้า + ปุ่มเพิ่มรายการ */}
+        {/* แถว 1 — ชื่อหน้า */}
         <div className="flex items-center justify-between mb-3">
           <h1 className="text-2xl font-bold text-gray-800">รายการ</h1>
-          <button
-            onClick={openAddModal}
-            className="bg-[#1D9E75] text-white rounded-lg px-4 py-2 text-sm hover:bg-[#178a64] flex items-center gap-1"
-          >
-            + เพิ่มรายการ
-          </button>
         </div>
 
         {/* แถว 2 — ปุ่ม toggle + export */}
         <div className="flex items-center gap-2 flex-wrap">
-          {/* Toggle รายการ / ปฏิทิน */}
           <div className="flex bg-white border border-gray-200 rounded-lg overflow-hidden">
             <button
               onClick={() => setView("list")}
@@ -249,7 +281,6 @@ export default function TransactionPage() {
             </button>
           </div>
 
-          {/* Export buttons — รวมกันเป็นกลุ่ม */}
           <div className="flex bg-white border border-gray-200 rounded-lg overflow-hidden">
             <button
               onClick={exportExcel}
@@ -288,26 +319,26 @@ export default function TransactionPage() {
               placeholder="ค้นหารายการ..."
               value={search}
               onChange={(e) => { setSearch(e.target.value); setPage(1) }}
-              className="border border-gray-200 rounded-lg px-3 py-2 text-sm flex-1 min-w-40 focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
+              className="border border-gray-200 rounded-lg px-3 py-2 text-sm flex-1 min-w-40 focus:outline-none focus:ring-2 focus:ring-[#1D9E75] text-gray-800"
             />
             <select value={filterMonth} onChange={(e) => { setFilterMonth(e.target.value); setPage(1) }}
-              className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none">
+              className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none text-gray-800">
               <option value="">ทุกเดือน</option>
               {months.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
             </select>
             <select value={filterCycle} onChange={(e) => { setFilterCycle(e.target.value); setPage(1) }}
-              className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none">
+              className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none text-gray-800">
               <option value="">ทุกรอบ</option>
               {cycles.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
             <select value={filterType} onChange={(e) => { setFilterType(e.target.value); setPage(1) }}
-              className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none">
+              className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none text-gray-800">
               <option value="">ทุกประเภท</option>
               <option value="income">รายรับ</option>
               <option value="expense">รายจ่าย</option>
             </select>
             <select value={filterCategory} onChange={(e) => { setFilterCategory(e.target.value); setPage(1) }}
-              className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none">
+              className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none text-gray-800">
               <option value="">ทุกหมวด</option>
               {categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
             </select>
@@ -327,29 +358,25 @@ export default function TransactionPage() {
                   {paginated.length === 0 ? (
                     <tr><td colSpan={8} className="text-center py-8 text-gray-400">ไม่มีรายการ</td></tr>
                   ) : (
-                    paginated.map((t, i) => {
-                      const realIndex = filtered.length - 1 - ((page - 1) * PAGE_SIZE + i)
-                      const balance = getBalance(realIndex)
-                      return (
-                        <tr key={t.id} className="border-b border-gray-100 hover:bg-gray-50">
-                          <td className="px-4 py-3 text-gray-400">{(page - 1) * PAGE_SIZE + i + 1}</td>
-                          <td className="px-4 py-3 text-gray-600">{formatDate(t.date)}</td>
-                          <td className="px-4 py-3 font-medium text-gray-800">{t.name}</td>
-                          <td className="px-4 py-3 text-gray-500">{t.category || "-"}</td>
-                          <td className="px-4 py-3 font-semibold text-[#1D9E75]">
-                            {t.type === "income" ? `฿${Number(t.amount).toLocaleString()}` : ""}
-                          </td>
-                          <td className="px-4 py-3 font-semibold text-[#D85A30]">
-                            {t.type === "expense" ? `฿${Number(t.amount).toLocaleString()}` : ""}
-                          </td>
-                          <td className="px-4 py-3 text-gray-400 text-xs">{t.note || "-"}</td>
-                          <td className="px-4 py-3 flex gap-2">
-                            <button onClick={() => openEditModal(t)} className="text-xs text-[#378ADD] hover:underline">แก้ไข</button>
-                            <button onClick={() => handleDelete(t.id)} className="text-xs text-[#D85A30] hover:underline">ลบ</button>
-                          </td>
-                        </tr>
-                      )
-                    })
+                    paginated.map((t, i) => (
+                      <tr key={t.id} className="border-b border-gray-100 hover:bg-gray-50">
+                        <td className="px-4 py-3 text-gray-400">{(page - 1) * PAGE_SIZE + i + 1}</td>
+                        <td className="px-4 py-3 text-gray-600">{formatDate(t.date)}</td>
+                        <td className="px-4 py-3 font-medium text-gray-800">{t.name}</td>
+                        <td className="px-4 py-3 text-gray-500">{t.category || "-"}</td>
+                        <td className="px-4 py-3 font-semibold text-[#1D9E75]">
+                          {t.type === "income" ? `฿${Number(t.amount).toLocaleString()}` : ""}
+                        </td>
+                        <td className="px-4 py-3 font-semibold text-[#D85A30]">
+                          {t.type === "expense" ? `฿${Number(t.amount).toLocaleString()}` : ""}
+                        </td>
+                        <td className="px-4 py-3 text-gray-400 text-xs">{t.note || "-"}</td>
+                        <td className="px-4 py-3 flex gap-2">
+                          <button onClick={() => openEditModal(t)} className="text-xs text-[#378ADD] hover:underline">แก้ไข</button>
+                          <button onClick={() => handleDelete(t.id)} className="text-xs text-[#D85A30] hover:underline">ลบ</button>
+                        </td>
+                      </tr>
+                    ))
                   )}
                 </tbody>
                 <tfoot className="bg-gray-50 border-t border-gray-200">
@@ -497,29 +524,29 @@ export default function TransactionPage() {
                 </button>
               </div>
               <input placeholder="วันที่" type="date" value={date} onChange={(e) => setDate(e.target.value)}
-                className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75]" />
+                className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75] text-gray-800" />
               <input placeholder="ชื่อรายการ" value={name} onChange={(e) => setName(e.target.value)}
-                className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75]" />
+                className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75] text-gray-800" />
               <input placeholder="จำนวน (฿)" type="number" value={amount} onChange={(e) => setAmount(e.target.value)}
-                className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75]" />
+                className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75] text-gray-800" />
               <select value={category} onChange={(e) => setCategory(e.target.value)}
-                className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none">
+                className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none text-gray-800">
                 <option value="">-- หมวดหมู่ --</option>
                 {categories.filter(c => !c.type || c.type === type).map(c => (
                   <option key={c.id} value={c.name}>{c.icon} {c.name}</option>
                 ))}
               </select>
               <select value={cycleId} onChange={(e) => setCycleId(e.target.value)}
-                className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none">
+                className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none text-gray-800">
                 <option value="">-- รอบเงินเดือน --</option>
                 {cycles.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
               <input placeholder="หมายเหตุ (optional)" value={note} onChange={(e) => setNote(e.target.value)}
-                className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75]" />
+                className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75] text-gray-800" />
             </div>
             <div className="flex gap-3 mt-5">
               <button onClick={() => setShowModal(false)}
-                className="flex-1 border border-gray-200 rounded-lg py-2 text-sm hover:bg-gray-50">ยกเลิก</button>
+                className="flex-1 border border-gray-200 rounded-lg py-2 text-sm hover:bg-gray-50 text-gray-700">ยกเลิก</button>
               <button onClick={handleSubmit} disabled={loading}
                 className="flex-1 bg-[#1D9E75] text-white rounded-lg py-2 text-sm hover:bg-[#178a64] disabled:opacity-50">
                 {loading ? "กำลังบันทึก..." : "บันทึก"}
