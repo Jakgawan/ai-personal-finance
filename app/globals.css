@@ -28,3 +28,16 @@ body {
 .bg-yellow-50 { background-color: #FEFCE8 !important; }
 .bg-gray-50 { background-color: #F9FAFB !important; }
 .bg-gray-100 { background-color: #F3F4F6 !important; }
+
+/* Input text color — ป้องกันตัวอักษรหายเมื่อพิมพ์ */
+input,
+textarea,
+select {
+  color: #171717 !important;
+  background-color: #ffffff !important;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #9CA3AF !important;
+}

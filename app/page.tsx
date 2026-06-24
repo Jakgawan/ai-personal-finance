@@ -39,7 +39,8 @@ function calcFinancialScore(
   cycleExpense: number,
   cycleBalance: number,
   assets: Asset[],
-  transactions: Transaction[]
+  transactions: Transaction[],
+  liabilities: number
 ) {
   let score = 0
   const details: { label: string; score: number; max: number; tip: string }[] = []
@@ -52,12 +53,13 @@ function calcFinancialScore(
   })
   score += savingScore
 
-  const debtRate = cycleIncome > 0 ? (cycleExpense / cycleIncome) * 100 : 100
+  const annualIncome = cycleIncome * 12
+  const debtRate = annualIncome > 0 ? (liabilities / annualIncome) * 100 : 0
   const debtScore = debtRate <= 35 ? 25 : debtRate <= 50 ? 15 : debtRate <= 70 ? 8 : 0
   details.push({
-    label: "ภาระรายจ่าย", score: debtScore, max: 25,
-    tip: debtRate <= 35 ? "ภาระรายจ่ายอยู่ในเกณฑ์ดี" : `รายจ่าย ${debtRate.toFixed(1)}% ของรายรับ เป้า < 35%`
-  })
+  label: "ภาระหนี้สิน", score: debtScore, max: 25,
+  tip: debtRate <= 35 ? "ภาระหนี้อยู่ในเกณฑ์ดี" : `หนี้ ${debtRate.toFixed(1)}% ของรายได้ทั้งปี เป้า < 35%`
+})
   score += debtScore
 
   const liquidAssets = assets.filter(a => a.asset_group === "liquid").reduce((s, a) => s + Number(a.value), 0)
@@ -99,11 +101,11 @@ const getScoreColor = (score: number) => {
   if (score >= 40) return { text: "text-[#F59E0B]", label: "พอใช้" }
   return { text: "text-[#D85A30]", label: "ต้องปรับปรุง" }
 }
-
 export default function Dashboard() {
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [cycles, setCycles] = useState<PayCycle[]>([])
   const [assets, setAssets] = useState<Asset[]>([])
+  const [liabilities, setLiabilities] = useState<{balance: number}[]>([])  // เพิ่มบรรทัดนี้
   const [chartMode, setChartMode] = useState<"bar" | "donut" | "column" | "table">("bar")
   const [loading, setLoading] = useState(true)
 
@@ -111,14 +113,16 @@ export default function Dashboard() {
     const fetchData = async () => {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
-      const [{ data: txData }, { data: cycleData }, { data: assetData }] = await Promise.all([
-        supabase.from("transactions").select("*").eq("user_id", user.id).order("date", { ascending: false }),
-        supabase.from("pay_cycles").select("*").eq("user_id", user.id),
-        supabase.from("assets").select("*").eq("user_id", user.id),
-      ])
+      const [{ data: txData }, { data: cycleData }, { data: assetData }, { data: liabData }] = await Promise.all([
+  supabase.from("transactions").select("*").eq("user_id", user.id).order("date", { ascending: false }),
+  supabase.from("pay_cycles").select("*").eq("user_id", user.id),
+  supabase.from("assets").select("*").eq("user_id", user.id),
+  supabase.from("liabilities_long").select("balance").eq("user_id", user.id),  // เพิ่มบรรทัดนี้
+])
       setTransactions(txData || [])
-      setCycles(cycleData || [])
-      setAssets(assetData || [])
+setCycles(cycleData || [])
+setAssets(assetData || [])
+setLiabilities(liabData || [])
       setLoading(false)
     }
     fetchData()
@@ -166,7 +170,8 @@ export default function Dashboard() {
   const cycleBalance = cycleIncome - cycleExpense
   const dailyBudget = daysLeft > 0 ? cycleBalance / daysLeft : 0
 
-  const { score: financialScore, details: scoreDetails } = calcFinancialScore(cycleIncome, cycleExpense, cycleBalance, assets, transactions)
+  const totalLiabilities = liabilities.reduce((s, l) => s + Number(l.balance), 0)
+  const { score: financialScore, details: scoreDetails } = calcFinancialScore(cycleIncome, cycleExpense, cycleBalance, assets, transactions, totalLiabilities)
   const scoreColor = getScoreColor(financialScore)
 
   const prevMonth = currentMonth === 0 ? 11 : currentMonth - 1
