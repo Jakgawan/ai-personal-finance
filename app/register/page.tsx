@@ -112,7 +112,7 @@ export default function Register() {
                 {(() => {
   const hasUpper = /[A-Z]/.test(password)
   const hasNumber = /[0-9]/.test(password)
-  const hasSpecial = /[!@#$%^&*]/.test(password)
+  const hasSpecial = /[!@#$%^&*\-]/.test(password)
   const hasLength = password.length >= 8
   const strength = [hasLength, hasUpper, hasNumber, hasSpecial].filter(Boolean).length
   return [1, 2, 3, 4].map(level => (
@@ -138,7 +138,7 @@ export default function Register() {
       { label: "อย่างน้อย 8 ตัวอักษร", pass: password.length >= 8 },
       { label: "ตัวพิมพ์ใหญ่ (A-Z)", pass: /[A-Z]/.test(password) },
       { label: "ตัวเลข (0-9)", pass: /[0-9]/.test(password) },
-      { label: "อักขระพิเศษ (!@#$%)", pass: /[!@#$%^&*]/.test(password) },
+      { label: "อักขระพิเศษ (!@#$%)", pass: /[!@#$%^&*\-]/.test(password) },
     ].map(({ label, pass }) => (
       <p key={label} className={`text-xs flex items-center gap-1 ${pass ? "text-[#1D9E75]" : "text-gray-400"}`}>
         {pass ? "✓" : "○"} {label}
