@@ -2,6 +2,7 @@
 import { useState } from "react"
 import { supabase } from "@/lib/supabase"
 import { useRouter } from "next/navigation"
+import { Wallet, AlertTriangle } from "lucide-react"
 
 export default function Login() {
   const [email, setEmail] = useState("")
@@ -32,7 +33,7 @@ export default function Login() {
       <div className="bg-white rounded-2xl shadow-sm p-8 w-full max-w-md">
 
         <div className="text-center mb-8">
-          <p className="text-3xl mb-2">💰</p>
+          <Wallet size={40} className="text-[#1D9E75] mx-auto mb-2" />
           <h1 className="text-2xl font-bold text-gray-800">เข้าสู่ระบบ</h1>
           <p className="text-sm text-gray-500 mt-1">ยินดีต้อนรับกลับมา</p>
         </div>
@@ -79,7 +80,10 @@ export default function Login() {
           {/* Error */}
           {message && (
             <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2.5">
-              <p className="text-sm text-red-600">⚠️ {message}</p>
+              <p className="text-sm text-red-600 flex items-center gap-1.5">
+  <AlertTriangle size={14} />
+  {message}
+</p>
             </div>
           )}
 

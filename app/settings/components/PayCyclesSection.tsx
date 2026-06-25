@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
+import { Lightbulb } from "lucide-react"
 
 type PayCycle = {
   id: string
@@ -93,7 +94,10 @@ export default function PayCyclesSection() {
 
       {/* คำอธิบาย — บอกว่ารอบเงินเดือนคืออะไร */}
       <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 mb-6">
-        <p className="text-sm font-medium text-blue-700 mb-1">💡 รอบเงินเดือนคืออะไร?</p>
+        <p className="text-sm font-medium text-blue-700 mb-1 flex items-center gap-1.5">
+  <Lightbulb size={14} />
+  รอบเงินเดือนคืออะไร?
+</p>
         <p className="text-xs text-blue-600 leading-relaxed">
           คือช่วงเวลาที่ใช้ติดตามรายรับ-รายจ่าย เช่น ถ้ารับเงินเดือนวันที่ 25
           ให้ตั้งวันเริ่ม 25 วันสิ้นสุด 24 แอพจะนับรายการตั้งแต่วันที่ 25 ถึง 24 ของเดือนถัดไป

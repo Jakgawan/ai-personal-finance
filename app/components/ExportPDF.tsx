@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { supabase } from "@/lib/supabase"
+import { FileText, Loader2 } from "lucide-react"
 
 type Transaction = {
   name: string
@@ -141,7 +142,17 @@ export default function ExportPDF() {
       disabled={loading}
       className="flex items-center gap-2 border border-gray-300 text-gray-600 rounded-lg px-3 py-2 text-sm hover:bg-gray-100 disabled:opacity-50 transition-colors"
     >
-      {loading ? "⏳..." : "📄 PDF"}
+      {loading ? (
+  <span className="flex items-center gap-1.5">
+    <Loader2 size={14} className="animate-spin" />
+    PDF...
+  </span>
+) : (
+  <span className="flex items-center gap-1.5">
+    <FileText size={14} />
+    PDF
+  </span>
+)}
     </button>
   )
 }

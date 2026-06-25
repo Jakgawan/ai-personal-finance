@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
 import { useRouter } from "next/navigation"
+import { LockKeyhole, CheckCircle2 , AlertTriangle } from "lucide-react"
 
 export default function ResetPassword() {
   const [password, setPassword] = useState("")
@@ -70,7 +71,7 @@ export default function ResetPassword() {
       <div className="bg-white rounded-2xl shadow-sm p-8 w-full max-w-md">
 
         <div className="text-center mb-8">
-          <p className="text-3xl mb-2">🔒</p>
+          <LockKeyhole size={40} className="text-[#1D9E75] mx-auto mb-2" />
           <h1 className="text-2xl font-bold text-gray-800">ตั้งรหัสผ่านใหม่</h1>
           <p className="text-sm text-gray-500 mt-1">กรอกรหัสผ่านใหม่ของคุณ</p>
         </div>
@@ -128,14 +129,20 @@ export default function ResetPassword() {
               }`}
             />
             {confirmPassword && confirmPassword === password && (
-              <p className="text-xs text-[#1D9E75] mt-1">✓ รหัสผ่านตรงกัน</p>
+              <p className="text-xs text-[#1D9E75] mt-1 flex items-center gap-1">
+  <CheckCircle2 size={12} />
+  รหัสผ่านตรงกัน
+</p>
             )}
           </div>
 
           {/* Error */}
           {error && (
             <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2.5">
-              <p className="text-sm text-red-600">⚠️ {error}</p>
+              <p className="text-sm text-red-600 flex items-center gap-1.5">
+  <AlertTriangle size={14} />
+  {error}
+</p>
             </div>
           )}
 

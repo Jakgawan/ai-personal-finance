@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabase"
 import ExportPDF from "@/app/components/ExportPDF"
 import { formatDate } from "@/lib/utils"
 import ScanSlip from "@/app/components/ScanSlip"
+import { BarChart2, CalendarDays } from "lucide-react"
 
 type Transaction = {
   id: string
@@ -277,7 +278,7 @@ export default function TransactionPage() {
               onClick={() => setView("calendar")}
               className={`px-3 py-2 text-sm transition-colors ${view === "calendar" ? "bg-[#1D9E75] text-white" : "text-gray-500 hover:bg-gray-50"}`}
             >
-              📅 ปฏิทิน
+              <CalendarDays size={14} className="inline mr-1" /> ปฏิทิน
             </button>
           </div>
 
@@ -286,7 +287,7 @@ export default function TransactionPage() {
               onClick={exportExcel}
               className="px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 border-r border-gray-200 flex items-center gap-1"
             >
-              📊 Excel
+              <BarChart2 size={14} className="inline mr-1" /> Excel
             </button>
             <ExportPDF />
             <ScanSlip onSuccess={fetchAll} />

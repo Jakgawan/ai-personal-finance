@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
-
+import { Building2 } from "lucide-react"
 
 type Business = {
   id: string
@@ -163,7 +163,7 @@ export default function BusinessPage() {
       {/* Business Tabs */}
       {businesses.length === 0 ? (
         <div className="bg-white rounded-xl p-12 shadow-sm text-center mb-6">
-          <p className="text-4xl mb-3">🏢</p>
+          <Building2 size={48} className="text-gray-300 mx-auto mb-3" />
           <p className="text-gray-500 text-sm mb-4">ยังไม่มีธุรกิจ เพิ่มธุรกิจแรกได้เลย</p>
           <button onClick={() => setShowBizModal(true)}
             className="bg-[#1D9E75] text-white rounded-lg px-4 py-2 text-sm hover:bg-[#178a64]">
@@ -177,7 +177,10 @@ export default function BusinessPage() {
               <button
                 onClick={() => { setSelected(biz); setPage(1) }}
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${selected?.id === biz.id ? "bg-[#1D9E75] text-white" : "bg-white text-gray-600 hover:bg-gray-100 shadow-sm"}`}>
-                🏢 {biz.name}
+                <span className="flex items-center gap-1.5">
+  <Building2 size={14} />
+  {biz.name}
+</span>
               </button>
               {selected?.id === biz.id && (
                 <button onClick={() => deleteBusiness(biz.id)}

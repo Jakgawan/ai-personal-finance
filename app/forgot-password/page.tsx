@@ -1,7 +1,7 @@
 "use client"
 import { useState } from "react"
 import { supabase } from "@/lib/supabase"
-
+import { KeyRound, AlertTriangle } from "lucide-react"
 export default function ForgotPassword() {
   const [email, setEmail] = useState("")
   const [loading, setLoading] = useState(false)
@@ -53,7 +53,7 @@ export default function ForgotPassword() {
       <div className="bg-white rounded-2xl shadow-sm p-8 w-full max-w-md">
 
         <div className="text-center mb-8">
-          <p className="text-3xl mb-2">🔑</p>
+          <KeyRound size={40} className="text-[#1D9E75] mx-auto mb-2" />
           <h1 className="text-2xl font-bold text-gray-800">ลืมรหัสผ่าน?</h1>
           <p className="text-sm text-gray-500 mt-1">กรอกอีเมลเพื่อรับลิงก์รีเซ็ตรหัสผ่าน</p>
         </div>
@@ -73,7 +73,10 @@ export default function ForgotPassword() {
 
           {error && (
             <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2.5">
-              <p className="text-sm text-red-600">⚠️ {error}</p>
+              <p className="text-sm text-red-600 flex items-center gap-1.5">
+  <AlertTriangle size={14} />
+  {message}
+</p>
             </div>
           )}
 

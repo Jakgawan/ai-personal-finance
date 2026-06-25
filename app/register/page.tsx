@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { supabase } from "@/lib/supabase"
+import { Wallet, PartyPopper, AlertTriangle, CheckCircle2 } from "lucide-react"
 
 export default function Register() {
   const [email, setEmail] = useState("")
@@ -52,7 +53,7 @@ export default function Register() {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl shadow-sm p-8 w-full max-w-md text-center">
-          <div className="text-5xl mb-4">🎉</div>
+          <PartyPopper size={48} className="text-[#1D9E75] mx-auto mb-4" />
           <h2 className="text-xl font-bold text-gray-800 mb-2">สมัครสมาชิกสำเร็จ!</h2>
           <p className="text-sm text-gray-500 mb-6">ยินดีต้อนรับสู่ Finance App</p>
           <a href="/login" className="block w-full bg-[#1D9E75] text-white rounded-lg py-3 text-sm font-medium hover:bg-[#178a64] transition-colors text-center">
@@ -68,7 +69,7 @@ export default function Register() {
       <div className="bg-white rounded-2xl shadow-sm p-8 w-full max-w-md">
 
         <div className="text-center mb-8">
-          <p className="text-3xl mb-2">💰</p>
+          <Wallet size={40} className="text-[#1D9E75] mx-auto mb-2" />
           <h1 className="text-2xl font-bold text-gray-800">สร้างบัญชีใหม่</h1>
           <p className="text-sm text-gray-500 mt-1">เริ่มวางแผนการเงินของคุณ</p>
         </div>
@@ -162,14 +163,20 @@ export default function Register() {
               }`}
             />
             {confirmPassword && confirmPassword === password && (
-              <p className="text-xs text-[#1D9E75] mt-1">✓ รหัสผ่านตรงกัน</p>
+              <p className="text-xs text-[#1D9E75] mt-1 flex items-center gap-1">
+  <CheckCircle2 size={12} />
+  รหัสผ่านตรงกัน
+</p>
             )}
           </div>
 
           {/* Error message */}
           {error && (
             <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2.5">
-              <p className="text-sm text-red-600">⚠️ {error}</p>
+              <p className="text-sm text-red-600 flex items-center gap-1.5">
+  <AlertTriangle size={14} />
+  {error}
+</p>
             </div>
           )}
 

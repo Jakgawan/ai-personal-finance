@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
 import React from "react"
+import { ClipboardList, BarChart2 } from "lucide-react"
 
 type PlanItem = {
   id: string
@@ -262,14 +263,14 @@ export default function PlanningPage() {
               title="โหลด template"
               className="px-3 py-2 text-xs text-gray-400 hover:bg-gray-50 border-r border-gray-200"
             >
-              📋<span className="hidden sm:inline"> template</span>
+              <ClipboardList size={14} /><span className="hidden sm:inline"> template</span>
             </button>
             <button
               onClick={exportExcel}
               title="Export Excel"
               className="px-3 py-2 text-xs text-gray-500 hover:bg-gray-50"
             >
-              📊<span className="hidden sm:inline"> Excel</span>
+              <BarChart2 size={14} /><span className="hidden sm:inline"> Excel</span>
             </button>
           </div>
         </div>

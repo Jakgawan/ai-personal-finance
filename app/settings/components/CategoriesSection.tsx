@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
+import { Lightbulb, ClipboardList } from "lucide-react"
 
 type Category = {
   id: string
@@ -163,7 +164,10 @@ const handleLoadTemplate = async () => {
   onClick={handleLoadTemplate}
   className="w-full border border-dashed border-gray-300 text-gray-500 rounded-lg px-4 py-2 text-sm hover:bg-gray-50 mb-4"
 >
-  📋 โหลด template หมวดหมู่เริ่มต้น
+  <span className="flex items-center justify-center gap-1.5">
+  <ClipboardList size={14} />
+  โหลด template หมวดหมู่เริ่มต้น
+</span>
 </button>
 
       {/* Lists */}

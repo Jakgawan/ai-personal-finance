@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
-
+import { Camera, ScanLine, CheckCircle2 } from "lucide-react"
 
 type ScannedData = {
   name: string
@@ -94,7 +94,10 @@ useEffect(() => {
         onClick={() => setShowModal(true)}
         className="border border-gray-300 text-gray-600 rounded-lg px-4 py-2 text-sm hover:bg-gray-100 transition-colors"
       >
-        📷 สแกนสลิป
+        <span className="flex items-center gap-1.5">
+  <Camera size={14} />
+  สแกนสลิป
+</span>
       </button>
 
       {showModal && (
@@ -116,7 +119,7 @@ useEffect(() => {
                   <img src={preview} alt="slip" className="max-h-48 mx-auto rounded-lg object-contain" />
                 ) : (
                   <>
-                    <p className="text-3xl mb-2">📷</p>
+                    <Camera size={32} className="text-gray-400 mx-auto mb-2" />
                     <p className="text-sm text-gray-500">กดเพื่ออัปโหลดรูปสลิป</p>
                     <p className="text-xs text-gray-400 mt-1">รองรับ JPG, PNG</p>
                   </>
@@ -133,13 +136,19 @@ useEffect(() => {
 
               {scanning && (
                 <div className="text-center py-4">
-                  <p className="text-sm text-gray-500 animate-pulse">🔍 AI กำลังอ่านสลิป...</p>
+                  <p className="text-sm text-gray-500 animate-pulse flex items-center justify-center gap-1.5">
+  <ScanLine size={14} />
+  AI กำลังอ่านสลิป...
+</p>
                 </div>
               )}
 
               {scanned && (
                 <div className="flex flex-col gap-3 mt-2">
-                  <p className="text-xs font-semibold text-[#1D9E75] mb-1">✅ อ่านข้อมูลได้แล้ว ตรวจสอบก่อนบันทึก</p>
+                 <p className="text-xs font-semibold text-[#1D9E75] mb-1 flex items-center gap-1">
+  <CheckCircle2 size={12} />
+  อ่านข้อมูลได้แล้ว ตรวจสอบก่อนบันทึก
+</p>
 
                   <div className="flex gap-2">
                     <button onClick={() => setScanned({ ...scanned, type: "expense" })}

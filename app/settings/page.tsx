@@ -5,15 +5,16 @@ import ProfileSection from "./components/ProfileSection"
 import PayCyclesSection from "./components/PayCyclesSection"
 import CategoriesSection from "./components/CategoriesSection"
 import RecurringSection from "./components/RecurringSection"
+import { User, CalendarDays, Tag, RefreshCw, Target, Bell, Globe } from "lucide-react"
 
 const menuItems = [
-  { id: "profile", label: "โปรไฟล์", icon: "👤" },
-  { id: "paycycles", label: "รอบเงินเดือน", icon: "📅" },
-  { id: "categories", label: "หมวดหมู่", icon: "🏷️" },
-  { id: "recurring", label: "รายการซ้ำ", icon: "🔄" },
-  { id: "goals", label: "เป้าหมาย", icon: "🎯" },
-  { id: "notifications", label: "แจ้งเตือน", icon: "🔔" },
-  { id: "display", label: "การแสดงผล", icon: "🌐" },
+  { id: "profile", label: "โปรไฟล์", icon: User },
+  { id: "paycycles", label: "รอบเงินเดือน", icon: CalendarDays },
+  { id: "categories", label: "หมวดหมู่", icon: Tag },
+  { id: "recurring", label: "รายการซ้ำ", icon: RefreshCw },
+  { id: "goals", label: "เป้าหมาย", icon: Target },
+  { id: "notifications", label: "แจ้งเตือน", icon: Bell },
+  { id: "display", label: "การแสดงผล", icon: Globe },
 ]
 
 export default function SettingsPage() {
@@ -36,7 +37,7 @@ export default function SettingsPage() {
                     : "border-transparent text-gray-500 hover:text-gray-700"
                 }`}
               >
-                <span>{item.icon}</span>
+                <item.icon size={15} />
                 <span>{item.label}</span>
               </button>
             ))}
@@ -51,7 +52,7 @@ export default function SettingsPage() {
         {active === "categories" && <CategoriesSection />}
         {active === "recurring" && <RecurringSection />}
         {["goals", "notifications", "display"].includes(active) && (
-          <div className="text-gray-400 text-sm">🚧 Coming soon...</div>
+          <div className="text-gray-400 text-sm">Coming soon...</div>
         )}
       </main>
 

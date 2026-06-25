@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
+import { GraduationCap, Megaphone } from "lucide-react"
 
 type Course = {
   id: string
@@ -55,9 +56,9 @@ export default function CoursesPage() {
               <a key={course.id} href={course.url}
                 className="bg-gradient-to-r from-[#1D9E75] to-[#378ADD] rounded-2xl p-5 text-white relative overflow-hidden hover:opacity-95 transition-opacity">
                 <span className="absolute top-3 right-3 bg-white/20 text-white text-xs px-2 py-0.5 rounded-full">Sponsored</span>
-                <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center text-lg mb-3">
-                  🎓
-                </div>
+                <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center mb-3">
+  <GraduationCap size={20} className="text-white" />
+</div>
                 <p className="text-xs opacity-80 mb-1">{course.creator_name}</p>
                 <p className="font-bold text-lg mb-1">{course.title}</p>
                 <p className="text-sm opacity-80 mb-3">{course.description}</p>
@@ -106,9 +107,9 @@ export default function CoursesPage() {
         {filtered.map(course => (
           <a key={course.id} href={course.url}
             className="bg-white rounded-xl shadow-sm overflow-hidden hover:shadow-md transition-shadow">
-            <div className="h-24 bg-gradient-to-r from-gray-100 to-gray-200 flex items-center justify-center text-4xl">
-              🎓
-            </div>
+            <div className="h-24 bg-gradient-to-r from-gray-100 to-gray-200 flex items-center justify-center">
+  <GraduationCap size={40} className="text-gray-400" />
+</div>
             <div className="p-4">
               <div className="flex items-center gap-2 mb-2">
                 {course.is_free ? (
@@ -135,7 +136,7 @@ export default function CoursesPage() {
 
         {/* ลงโฆษณา card */}
         <div className="bg-white rounded-xl shadow-sm border-2 border-dashed border-gray-200 flex flex-col items-center justify-center p-6 text-center hover:border-[#1D9E75] transition-colors cursor-pointer">
-          <p className="text-3xl mb-2">📢</p>
+          <Megaphone size={32} className="text-gray-400 mb-2" />
           <p className="text-sm font-semibold text-gray-700 mb-1">ลงโฆษณาคอร์สของคุณ</p>
           <p className="text-xs text-gray-400">เข้าถึงผู้ใช้ที่สนใจการเงิน</p>
         </div>

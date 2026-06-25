@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
+import { User, Building2, AlertTriangle } from "lucide-react"
 
 type Recurring = {
   id: string
@@ -248,13 +249,19 @@ export default function RecurringSection() {
         <button
           onClick={() => setActiveTab("personal")}
           className={`px-4 py-2 rounded-lg text-sm font-medium shrink-0 transition-colors ${activeTab === "personal" ? "bg-[#1D9E75] text-white" : "bg-white text-gray-600 shadow-sm hover:bg-gray-100"}`}>
-          👤 ส่วนตัว
+          <span className="flex items-center gap-1.5">
+  <User size={14} />
+  ส่วนตัว
+</span>
         </button>
         {businesses.map(biz => (
           <button key={biz.id}
             onClick={() => setActiveTab(biz.id)}
             className={`px-4 py-2 rounded-lg text-sm font-medium shrink-0 transition-colors ${activeTab === biz.id ? "bg-[#1D9E75] text-white" : "bg-white text-gray-600 shadow-sm hover:bg-gray-100"}`}>
-            🏢 {biz.name}
+            <span className="flex items-center gap-1.5">
+  <Building2 size={14} />
+  {biz.name}
+</span>
           </button>
         ))}
       </div>
@@ -370,13 +377,16 @@ export default function RecurringSection() {
               </select>
               <select value={businessId} onChange={e => setBusinessId(e.target.value)}
                 className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none">
-                <option value="">👤 ส่วนตัว</option>
-                {businesses.map(b => <option key={b.id} value={b.id}>🏢 {b.name}</option>)}
+                <option value="">ส่วนตัว</option>
+{businesses.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
               </select>
               <div>
                 <label className="text-xs text-gray-500 mb-1 block">
                                             วันเริ่มต้น 
-                 <span className="text-yellow-500 ml-1">⚠️ ควรเป็นวันในอนาคต</span>
+                 <span className="text-yellow-500 ml-1 flex items-center gap-1 inline-flex">
+  <AlertTriangle size={12} />
+  ควรเป็นวันในอนาคต
+</span>
                 </label>
                 <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)}
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75]" />

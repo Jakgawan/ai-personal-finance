@@ -4,16 +4,17 @@ import { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { supabase } from "@/lib/supabase"
+import { LayoutDashboard, ListOrdered, CalendarDays, Scale, Briefcase, MessageCircle, GraduationCap, Settings, LogOut, Menu, Wallet } from "lucide-react"
 
 const menuItems = [
-  { href: "/", label: "ภาพรวม", icon: "🏠" },
-  { href: "/transaction", label: "รายการ", icon: "📋" },
-  { href: "/planning", label: "วางแผน", icon: "📅" },
-  { href: "/balance-sheet", label: "งบการเงิน", icon: "⚖️" },
-  { href: "/business", label: "ธุรกิจ", icon: "🏢" },
-  { href: "/ai", label: "ปรึกษาการเงิน", icon: "💬" },
-  { href: "/courses", label: "คอร์สการเงิน", icon: "🎓" },
-  { href: "/settings", label: "Settings", icon: "⚙️" },
+  { href: "/", label: "ภาพรวม", icon: LayoutDashboard },
+  { href: "/transaction", label: "รายการ", icon: ListOrdered },
+  { href: "/planning", label: "วางแผน", icon: CalendarDays },
+  { href: "/balance-sheet", label: "งบการเงิน", icon: Scale },
+  { href: "/business", label: "ธุรกิจ", icon: Briefcase },
+  { href: "/ai", label: "ปรึกษาการเงิน", icon: MessageCircle },
+  { href: "/courses", label: "คอร์สการเงิน", icon: GraduationCap },
+  { href: "/settings", label: "Settings", icon: Settings },
 ]
 
 export default function Sidebar({ children }: { children: React.ReactNode }) {
@@ -109,7 +110,9 @@ const handleQuickAdd = async () => {
     <div className="flex flex-col h-full">
       {/* Logo + hamburger */}
       <div className="flex items-center justify-between p-3 border-b border-gray-100">
-        {!collapsed && <span className="text-sm font-bold text-[#1D9E75]">💰 Finance</span>}
+        {!collapsed && <span className="flex items-center gap-1.5 text-sm font-bold text-[#1D9E75]">
+  <Wallet size={18} /> Finance
+</span>}
         <button
           onClick={() => {
             if (window.innerWidth < 768) {
@@ -120,7 +123,7 @@ const handleQuickAdd = async () => {
           }}
           className="p-1.5 text-gray-500 hover:text-gray-800 hover:bg-gray-100 rounded-lg"
         >
-          ☰
+          <Menu size={18} />
         </button>
       </div>
 
@@ -131,7 +134,7 @@ const handleQuickAdd = async () => {
           return (
             <Link key={item.href} href={item.href}
               className={`flex items-center gap-3 px-2 py-2.5 rounded-lg text-sm transition-colors ${isActive ? "bg-[#1D9E75] text-white" : "text-gray-600 hover:bg-gray-100"}`}>
-              <span className="text-base shrink-0">{item.icon}</span>
+              <item.icon size={18} className="shrink-0" />
               {!collapsed && <span className="truncate">{item.label}</span>}
             </Link>
           )
@@ -147,7 +150,7 @@ const handleQuickAdd = async () => {
           }}
           className="flex items-center gap-3 px-2 py-2.5 rounded-lg text-sm text-red-500 hover:bg-red-50 w-full transition-colors"
         >
-          <span className="text-base shrink-0">🚪</span>
+          <LogOut size={18} className="shrink-0" />
           {!collapsed && <span className="truncate">ออกจากระบบ</span>}
         </button>
       </div>
@@ -183,7 +186,7 @@ const handleQuickAdd = async () => {
             onClick={() => setMobileOpen(true)}
             className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-lg"
           >
-            ☰
+            <Menu size={18} />
           </button>
           <span className="text-sm font-bold text-[#1D9E75]">💰 Finance</span>
           <div className="w-8" />
