@@ -16,7 +16,10 @@ export default function Register() {
     if (!email.trim()) return "กรุณากรอกอีเมล"
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return "รูปแบบอีเมลไม่ถูกต้อง"
     if (!password) return "กรุณากรอกรหัสผ่าน"
-    if (password.length < 6) return "รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร"
+    if (password.length < 8) return "รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร"
+    if (!/[A-Z]/.test(password)) return "รหัสผ่านต้องมีตัวพิมพ์ใหญ่อย่างน้อย 1 ตัว"
+    if (!/[0-9]/.test(password)) return "รหัสผ่านต้องมีตัวเลขอย่างน้อย 1 ตัว"
+    if (!/[!@#$%^&*]/.test(password)) return "รหัสผ่านต้องมีอักขระพิเศษ เช่น !@#$%"
     if (!confirmPassword) return "กรุณายืนยันรหัสผ่าน"
     if (password !== confirmPassword) return "รหัสผ่านไม่ตรงกัน"
     return ""
@@ -92,7 +95,7 @@ export default function Register() {
             <div className="relative">
               <input
                 type={showPassword ? "text" : "password"}
-                placeholder="อย่างน้อย 6 ตัวอักษร"
+                placeholder="อย่างน้อย 8 ตัวอักษร"
                 value={password}
                 onChange={(e) => { setPassword(e.target.value); setError("") }}
                 className="w-full border border-gray-200 rounded-lg px-3 py-2.5 pr-16 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
@@ -106,21 +109,43 @@ export default function Register() {
             </div>
             {password && (
               <div className="mt-1.5 flex gap-1">
-                {[1, 2, 3].map(level => (
-                  <div
-                    key={level}
-                    className={`h-1 flex-1 rounded-full transition-colors ${
-                      password.length >= level * 3
-                        ? level === 1 ? "bg-red-400"
-                          : level === 2 ? "bg-yellow-400"
-                          : "bg-[#1D9E75]"
-                        : "bg-gray-100"
-                    }`}
-                  />
-                ))}
+                {(() => {
+  const hasUpper = /[A-Z]/.test(password)
+  const hasNumber = /[0-9]/.test(password)
+  const hasSpecial = /[!@#$%^&*]/.test(password)
+  const hasLength = password.length >= 8
+  const strength = [hasLength, hasUpper, hasNumber, hasSpecial].filter(Boolean).length
+  return [1, 2, 3, 4].map(level => (
+    <div
+      key={level}
+      className={`h-1 flex-1 rounded-full transition-colors ${
+        strength >= level
+          ? level <= 1 ? "bg-red-400"
+            : level <= 2 ? "bg-yellow-400"
+            : level <= 3 ? "bg-blue-400"
+            : "bg-[#1D9E75]"
+          : "bg-gray-100"
+      }`}
+    />
+  ))
+})()}
               </div>
             )}
           </div>
+          {password && (
+  <div className="mt-2 flex flex-col gap-1">
+    {[
+      { label: "อย่างน้อย 8 ตัวอักษร", pass: password.length >= 8 },
+      { label: "ตัวพิมพ์ใหญ่ (A-Z)", pass: /[A-Z]/.test(password) },
+      { label: "ตัวเลข (0-9)", pass: /[0-9]/.test(password) },
+      { label: "อักขระพิเศษ (!@#$%)", pass: /[!@#$%^&*]/.test(password) },
+    ].map(({ label, pass }) => (
+      <p key={label} className={`text-xs flex items-center gap-1 ${pass ? "text-[#1D9E75]" : "text-gray-400"}`}>
+        {pass ? "✓" : "○"} {label}
+      </p>
+    ))}
+  </div>
+)}
 
           {/* Confirm Password */}
           <div>
