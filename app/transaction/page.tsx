@@ -435,7 +435,7 @@ export default function TransactionPage() {
                   <button
                     key={day}
                     onClick={() => setSelectedDay(isSelected ? null : dateStr)}
-                    className={`rounded-xl p-1.5 text-center transition-colors min-h-14 ${isSelected ? "bg-[#1D9E75] text-white" : isToday ? "bg-green-50 border border-[#1D9E75]" : "hover:bg-gray-50"}`}
+                    className={`rounded-xl p-1.5 text-center transition-colors min-h-14 flex flex-col items-center justify-start gap-0.5 ${isSelected ? "bg-[#1D9E75] text-white" : isToday ? "bg-green-50 border border-[#1D9E75]" : "hover:bg-gray-50"}`}
                   >
                     <p className={`text-xs font-semibold ${isSelected ? "text-white" : isToday ? "text-[#1D9E75]" : "text-gray-700"}`}>{day}</p>
                     {dayIncome > 0 && <p className={`text-xs ${isSelected ? "text-white" : "text-[#1D9E75]"}`}>+{dayIncome.toLocaleString()}</p>}
