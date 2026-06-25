@@ -46,10 +46,10 @@ function calcFinancialScore(
   const details: { label: string; score: number; max: number; tip: string }[] = []
 
   const savingRate = cycleIncome > 0 ? ((cycleIncome - cycleExpense) / cycleIncome) * 100 : 0
-  const savingScore = Math.min(25, Math.round((savingRate / 20) * 25))
+  const savingScore = Math.max(0, Math.min(25, Math.round((savingRate / 20) * 25)))
   details.push({
     label: "อัตราออม", score: savingScore, max: 25,
-    tip: savingRate >= 20 ? "ออมเงินได้ดีมาก!" : `ออมอยู่ ${savingRate.toFixed(1)}% เป้า 20%`
+    tip: savingRate >= 20 ? "ออมเงินได้ดีมาก!" : savingRate <= 0 ? "รายจ่ายมากกว่ารายรับ ควรปรับแผน" : `ออมอยู่ ${savingRate.toFixed(1)}% เป้า 20%`
   })
   score += savingScore
 
@@ -92,7 +92,7 @@ function calcFinancialScore(
   })
   score += consistencyScore
 
-  return { score, details }
+  return { score: Math.max(0, Math.min(100, score)), details }
 }
 
 const getScoreColor = (score: number) => {
@@ -282,7 +282,7 @@ setLiabilities(liabData || [])
               <div className="h-1.5 bg-gray-100 rounded-full">
                 <div className="h-1.5 rounded-full transition-all"
                   style={{
-                    width: `${(d.score / d.max) * 100}%`,
+  width: `${Math.max(0, Math.min(100, (d.score / d.max) * 100))}%`,
                     backgroundColor: d.score === d.max ? "#1D9E75" : d.score >= d.max * 0.5 ? "#F59E0B" : "#D85A30"
                   }}
                 />
