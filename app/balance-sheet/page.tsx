@@ -52,9 +52,11 @@ export default function BalanceSheetPage() {
   // รายได้/รายจ่ายต่อเดือน (กรอกเอง) สำหรับคำนวณตัวเลขสุขภาพการเงิน
   const [monthlyIncome, setMonthlyIncome] = useState(0)
   const [monthlyExpense, setMonthlyExpense] = useState(0)
+  const [monthlySaving, setMonthlySaving] = useState(0)
   const [showProfileModal, setShowProfileModal] = useState(false)
   const [incomeInput, setIncomeInput] = useState("")
   const [expenseInput, setExpenseInput] = useState("")
+  const [savingInput, setSavingInput] = useState("")
 
   // activeTab ใช้สลับระหว่าง สินทรัพย์ และ หนี้สิน บนมือถือ
   const [activeTab, setActiveTab] = useState<"assets" | "liabilities">("assets")
@@ -72,9 +74,10 @@ export default function BalanceSheetPage() {
     setLiabilities((l || []) as Liability[])
     setTransactions((t || []) as Transaction[])
     if (p) {
-      setMonthlyIncome(Number(p.monthly_income) || 0)
-      setMonthlyExpense(Number(p.monthly_expense) || 0)
-    }
+  setMonthlyIncome(Number(p.monthly_income) || 0)
+  setMonthlyExpense(Number(p.monthly_expense) || 0)
+  setMonthlySaving(Number(p.monthly_saving) || 0)
+}
   }
 
   useEffect(() => { fetchAll() }, [])
@@ -91,7 +94,7 @@ export default function BalanceSheetPage() {
   const netWorth = totalAssets - totalLiabilities
   const debtRatio = totalAssets > 0 ? (totalLiabilities / totalAssets) * 100 : 0
 
-  const savingRate = monthlyIncome > 0 ? ((monthlyIncome - monthlyExpense) / monthlyIncome) * 100 : 0
+ const savingRate = monthlyIncome > 0 ? (monthlySaving / monthlyIncome) * 100 : 0
   // สัดส่วนหนี้ต่อรายได้ทั้งปี (หนี้สินรวม เทียบ รายได้ทั้งปี)
   const debtToIncome = monthlyIncome > 0 ? (totalLiabilities / (monthlyIncome * 12)) * 100 : 0
   const emergencyMonths = monthlyExpense > 0
@@ -213,24 +216,26 @@ export default function BalanceSheetPage() {
 
   // เปิด modal กรอกรายได้/รายจ่ายต่อเดือน — เอาค่าปัจจุบันมาใส่ช่องกรอก
   const openProfileModal = () => {
-    setIncomeInput(monthlyIncome > 0 ? String(monthlyIncome) : "")
-    setExpenseInput(monthlyExpense > 0 ? String(monthlyExpense) : "")
-    setShowProfileModal(true)
-  }
+  setIncomeInput(monthlyIncome > 0 ? String(monthlyIncome) : "")
+  setExpenseInput(monthlyExpense > 0 ? String(monthlyExpense) : "")
+  setSavingInput(monthlySaving > 0 ? String(monthlySaving) : "")
+  setShowProfileModal(true)
+}
 
   // บันทึกรายได้/รายจ่ายต่อเดือนลง financial_profile
   const saveProfile = async () => {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
-    await supabase.from("financial_profile").upsert({
-      user_id: user.id,
-      monthly_income: Number(incomeInput) || 0,
-      monthly_expense: Number(expenseInput) || 0,
-      updated_at: new Date().toISOString(),
-    })
-    setShowProfileModal(false)
-    await fetchAll()
-  }
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return
+  await supabase.from("financial_profile").upsert({
+    user_id: user.id,
+    monthly_income: Number(incomeInput) || 0,
+    monthly_expense: Number(expenseInput) || 0,
+    monthly_saving: Number(savingInput) || 0,
+    updated_at: new Date().toISOString(),
+  })
+  setShowProfileModal(false)
+  await fetchAll()
+}
 
   // Section สินทรัพย์ — แยกออกมาเป็น component เพื่อใช้ซ้ำใน desktop และ mobile tab
   const AssetsSection = () => (
@@ -402,30 +407,27 @@ export default function BalanceSheetPage() {
           </button>
         </div>
 
-        {/* คำอธิบายว่าทำไมต้องกรอก */}
-        <div className="bg-blue-50 rounded-lg p-3 text-xs text-gray-600 leading-relaxed mb-4">
-          <p className="font-semibold text-[#378ADD] mb-1">💡 ทำไมต้องกรอก?</p>
-          <p>ตัวเลขนี้ใช้คำนวณ <span className="font-medium">อัตราการออม</span>, <span className="font-medium">เงินสำรองฉุกเฉิน</span> และ <span className="font-medium">ภาระหนี้</span> ด้านบน — กรอกค่าเฉลี่ยที่รับ-จ่ายจริงในแต่ละเดือน</p>
-        </div>
-
-        <div className="grid grid-cols-3 gap-3">
-          <div className="bg-green-50 rounded-xl p-3 text-center">
-            <p className="text-xs text-gray-500 mb-1">รายได้/เดือน</p>
-            <p className="text-sm md:text-base font-bold text-[#1D9E75] truncate">฿{monthlyIncome.toLocaleString()}</p>
-          </div>
-          <div className="bg-red-50 rounded-xl p-3 text-center">
-            <p className="text-xs text-gray-500 mb-1">รายจ่าย/เดือน</p>
-            <p className="text-sm md:text-base font-bold text-[#D85A30] truncate">฿{monthlyExpense.toLocaleString()}</p>
-          </div>
-          <div className="bg-gray-50 rounded-xl p-3 text-center">
-            <p className="text-xs text-gray-500 mb-1">เหลือ/เดือน</p>
-            <p className={`text-sm md:text-base font-bold truncate ${(monthlyIncome - monthlyExpense) >= 0 ? "text-[#1D9E75]" : "text-[#D85A30]"}`}>
-              ฿{(monthlyIncome - monthlyExpense).toLocaleString()}
-            </p>
-          </div>
-        </div>
-      </div>
-
+        <div className="grid grid-cols-2 gap-3">
+  <div className="bg-green-50 rounded-xl p-3 text-center">
+    <p className="text-xs text-gray-500 mb-1">รายได้/เดือน</p>
+    <p className="text-sm md:text-base font-bold text-[#1D9E75]">฿{monthlyIncome.toLocaleString()}</p>
+  </div>
+  <div className="bg-red-50 rounded-xl p-3 text-center">
+    <p className="text-xs text-gray-500 mb-1">รายจ่าย/เดือน</p>
+    <p className="text-sm md:text-base font-bold text-[#D85A30]">฿{monthlyExpense.toLocaleString()}</p>
+  </div>
+  <div className="bg-gray-50 rounded-xl p-3 text-center">
+    <p className="text-xs text-gray-500 mb-1">เหลือ/เดือน</p>
+    <p className={`text-sm md:text-base font-bold ${(monthlyIncome - monthlyExpense) >= 0 ? "text-[#1D9E75]" : "text-[#D85A30]"}`}>
+      ฿{(monthlyIncome - monthlyExpense).toLocaleString()}
+    </p>
+  </div>
+  <div className="bg-blue-50 rounded-xl p-3 text-center">
+    <p className="text-xs text-gray-500 mb-1">ออม/เดือน</p>
+    <p className="text-sm md:text-base font-bold text-[#378ADD]">฿{monthlySaving.toLocaleString()}</p>
+  </div>
+</div>
+</div>
       {/* Mobile — Tab สลับสินทรัพย์/หนี้สิน */}
       <div className="md:hidden mb-4">
         <div className="flex bg-white border border-gray-200 rounded-lg overflow-hidden">
@@ -531,11 +533,29 @@ export default function BalanceSheetPage() {
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75] text-gray-800" />
               </div>
               <div>
-                <label className="text-xs text-gray-500 mb-1 block">รายจ่ายเฉลี่ยต่อเดือน (฿)</label>
-                <input type="number" value={expenseInput} onChange={e => setExpenseInput(e.target.value)}
-                  placeholder="เช่น 20000"
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75] text-gray-800" />
-              </div>
+  <label className="text-xs text-gray-500 mb-1 block">รายจ่ายเฉลี่ยต่อเดือน (฿)</label>
+  <input type="number" value={expenseInput} onChange={e => setExpenseInput(e.target.value)}
+    placeholder="เช่น 20000"
+    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75] text-gray-800" />
+</div>
+              <div>
+  <label className="text-xs text-gray-500 mb-1 block">เงินออมต่อเดือน (฿)</label>
+  <input type="number" value={savingInput} onChange={e => setSavingInput(e.target.value)}
+    placeholder="เช่น 5000"
+    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75] text-gray-800" />
+  {incomeInput && Number(incomeInput) > 0 && (
+    <div className="bg-green-50 rounded-lg p-2 mt-2 text-xs text-gray-600">
+      <p className="font-semibold text-[#1D9E75] mb-1">💡 แนะนำเป้าออม</p>
+      <p>ขั้นต่ำ 10% = ฿{(Number(incomeInput) * 0.1).toLocaleString()}/เดือน</p>
+      <p>เหมาะสม 20% = ฿{(Number(incomeInput) * 0.2).toLocaleString()}/เดือน</p>
+      {savingInput && Number(savingInput) > 0 && (
+        <p className="mt-1 font-semibold text-[#1D9E75]">
+          ออมอยู่ {((Number(savingInput) / Number(incomeInput)) * 100).toFixed(1)}% ของรายได้
+        </p>
+      )}
+    </div>
+  )}
+</div>
             </div>
             <div className="flex gap-3 mt-5">
               <button onClick={() => setShowProfileModal(false)} className="flex-1 border border-gray-200 rounded-lg py-2 text-sm hover:bg-gray-50 text-gray-700">ยกเลิก</button>
