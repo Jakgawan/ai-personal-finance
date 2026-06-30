@@ -53,10 +53,12 @@ export default function BalanceSheetPage() {
   const [monthlyIncome, setMonthlyIncome] = useState(0)
   const [monthlyExpense, setMonthlyExpense] = useState(0)
   const [monthlySaving, setMonthlySaving] = useState(0)
+  const [occupation, setOccupation] = useState("salaried")
   const [showProfileModal, setShowProfileModal] = useState(false)
   const [incomeInput, setIncomeInput] = useState("")
   const [expenseInput, setExpenseInput] = useState("")
   const [savingInput, setSavingInput] = useState("")
+  const [occupationInput, setOccupationInput] = useState("salaried")
 
   // activeTab ใช้สลับระหว่าง สินทรัพย์ และ หนี้สิน บนมือถือ
   const [activeTab, setActiveTab] = useState<"assets" | "liabilities">("assets")
@@ -77,6 +79,7 @@ export default function BalanceSheetPage() {
   setMonthlyIncome(Number(p.monthly_income) || 0)
   setMonthlyExpense(Number(p.monthly_expense) || 0)
   setMonthlySaving(Number(p.monthly_saving) || 0)
+  setOccupation(p.occupation || "salaried")
 }
   }
 
@@ -115,11 +118,15 @@ export default function BalanceSheetPage() {
       tip: debtToIncome < 35 ? "ภาระหนี้อยู่ในระดับที่จัดการได้" : "ภาระหนี้สูงเกินไป ควรเร่งปิดหนี้",
     },
     {
-      label: "ถ้าขาดรายได้จะอยู่ได้นานแค่ไหน?",
-      sub: "เงินสำรองฉุกเฉิน (เป้า ≥ 6 เดือน)",
-      value: emergencyMonths, target: 6, unit: " เดือน", higherIsBetter: true,
-      tip: emergencyMonths >= 6 ? "มีเงินสำรองเพียงพอแล้ว" : "ควรสะสมเงินสำรองให้ถึง 6 เดือน",
-    },
+  label: "ถ้าขาดรายได้จะอยู่ได้นานแค่ไหน?",
+  sub: `เงินสำรองฉุกเฉิน (เป้า ≥ ${occupation === "freelance" ? "8" : "6"} เดือน)`,
+  value: emergencyMonths,
+  target: occupation === "freelance" ? 8 : 6,
+  unit: " เดือน", higherIsBetter: true,
+  tip: emergencyMonths >= (occupation === "freelance" ? 8 : 6)
+    ? "มีเงินสำรองเพียงพอแล้ว"
+    : `ควรสะสมเงินสำรองให้ถึง ${occupation === "freelance" ? "8-12" : "6-10"} เดือน`,
+},
     {
       label: "โดยรวมแล้วรวยขึ้นไหม?",
       sub: "ความมั่งคั่งสุทธิ",
@@ -219,6 +226,7 @@ export default function BalanceSheetPage() {
   setIncomeInput(monthlyIncome > 0 ? String(monthlyIncome) : "")
   setExpenseInput(monthlyExpense > 0 ? String(monthlyExpense) : "")
   setSavingInput(monthlySaving > 0 ? String(monthlySaving) : "")
+  setOccupationInput(occupation)
   setShowProfileModal(true)
 }
 
@@ -231,6 +239,7 @@ export default function BalanceSheetPage() {
     monthly_income: Number(incomeInput) || 0,
     monthly_expense: Number(expenseInput) || 0,
     monthly_saving: Number(savingInput) || 0,
+    occupation: occupationInput,
     updated_at: new Date().toISOString(),
   })
   setShowProfileModal(false)
@@ -428,6 +437,33 @@ export default function BalanceSheetPage() {
   </div>
 </div>
 </div>
+      {/* เลือกอาชีพ — เลือกครั้งเดียว save ทันที */}
+<div className="bg-white rounded-xl shadow-sm p-5 mb-6">
+  <h2 className="text-sm font-semibold text-gray-700 mb-3">ประเภทอาชีพ</h2>
+  <div className="flex gap-3">
+    <button onClick={async () => {
+      setOccupation("salaried")
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) await supabase.from("financial_profile").upsert({ user_id: user.id, occupation: "salaried", updated_at: new Date().toISOString() })
+    }}
+      className={`flex-1 py-2.5 rounded-lg text-sm font-medium border transition-colors ${occupation === "salaried" ? "bg-[#1D9E75] text-white border-[#1D9E75]" : "border-gray-200 text-gray-600"}`}>
+      งานประจำ
+    </button>
+    <button onClick={async () => {
+      setOccupation("freelance")
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) await supabase.from("financial_profile").upsert({ user_id: user.id, occupation: "freelance", updated_at: new Date().toISOString() })
+    }}
+      className={`flex-1 py-2.5 rounded-lg text-sm font-medium border transition-colors ${occupation === "freelance" ? "bg-[#378ADD] text-white border-[#378ADD]" : "border-gray-200 text-gray-600"}`}>
+      ฟรีแลนซ์
+    </button>
+  </div>
+  <p className="text-xs text-gray-400 mt-2">
+    {occupation === "salaried"
+      ? "งานประจำ: แนะนำเงินสำรองฉุกเฉิน 6-10 เดือน"
+      : "ฟรีแลนซ์: แนะนำเงินสำรองฉุกเฉิน 8-12 เดือน"}
+  </p>
+</div>
       {/* Mobile — Tab สลับสินทรัพย์/หนี้สิน */}
       <div className="md:hidden mb-4">
         <div className="flex bg-white border border-gray-200 rounded-lg overflow-hidden">
@@ -538,6 +574,7 @@ export default function BalanceSheetPage() {
     placeholder="เช่น 20000"
     className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75] text-gray-800" />
 </div>
+
               <div>
   <label className="text-xs text-gray-500 mb-1 block">เงินออมต่อเดือน (฿)</label>
   <input type="number" value={savingInput} onChange={e => setSavingInput(e.target.value)}
@@ -556,6 +593,7 @@ export default function BalanceSheetPage() {
     </div>
   )}
 </div>
+
             </div>
             <div className="flex gap-3 mt-5">
               <button onClick={() => setShowProfileModal(false)} className="flex-1 border border-gray-200 rounded-lg py-2 text-sm hover:bg-gray-50 text-gray-700">ยกเลิก</button>
