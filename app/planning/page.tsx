@@ -9,6 +9,7 @@ type PlanItem = {
   id: string
   section: "income" | "saving" | "fixed" | "variable"
   name: string
+  category: string | null
   monthly_amount: Record<string, number>
 }
 
@@ -23,22 +24,22 @@ const MONTHS = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค."
 const CURRENT_YEAR = new Date().getFullYear()
 
 const TEMPLATE_ITEMS = [
-  { section: "income", name: "เงินเดือน" },
-  { section: "income", name: "รายได้เสริม" },
-  { section: "saving", name: "เงินออมฉุกเฉิน" },
-  { section: "saving", name: "เงินออมลงทุน" },
-  { section: "saving", name: "เงินออมเป้าหมาย" },
-  { section: "fixed", name: "ค่าเช่า/ผ่อนบ้าน" },
-  { section: "fixed", name: "ค่าผ่อนรถ" },
-  { section: "fixed", name: "ค่าประกันชีวิต" },
-  { section: "fixed", name: "ชำระหนี้" },
-  { section: "fixed", name: "ค่าโทรศัพท์/อินเทอร์เน็ต" },
-  { section: "variable", name: "อาหาร" },
-  { section: "variable", name: "เดินทาง/น้ำมัน" },
-  { section: "variable", name: "ช้อปปิ้ง" },
-  { section: "variable", name: "บันเทิง" },
-  { section: "variable", name: "สุขภาพ/ยา" },
-  { section: "variable", name: "ค่าสาธารณูปโภค" },
+  { section: "income", name: "เงินเดือน", category: "เงินเดือน" },
+  { section: "income", name: "รายได้เสริม", category: "รายได้เสริม" },
+  { section: "saving", name: "เงินออมฉุกเฉิน", category: "ออมเงิน" },
+  { section: "saving", name: "เงินออมลงทุน", category: "ออมเงิน" },
+  { section: "saving", name: "เงินออมเป้าหมาย", category: "ออมเงิน" },
+  { section: "fixed", name: "ค่าเช่า/ผ่อนบ้าน", category: "ที่พัก" },
+  { section: "fixed", name: "ค่าผ่อนรถ", category: "เดินทาง" },
+  { section: "fixed", name: "ค่าประกันชีวิต", category: "ประกัน" },
+  { section: "fixed", name: "ชำระหนี้", category: "ชำระหนี้" },
+  { section: "fixed", name: "ค่าโทรศัพท์/อินเทอร์เน็ต", category: "สาธารณูปโภค" },
+  { section: "variable", name: "อาหาร", category: "อาหาร" },
+  { section: "variable", name: "เดินทาง/น้ำมัน", category: "เดินทาง" },
+  { section: "variable", name: "ช้อปปิ้ง", category: "ช้อปปิ้ง" },
+  { section: "variable", name: "บันเทิง", category: "บันเทิง" },
+  { section: "variable", name: "สุขภาพ/ยา", category: "สุขภาพ" },
+  { section: "variable", name: "ค่าสาธารณูปโภค", category: "สาธารณูปโภค" },
 ]
 
 // สี RGB ของแต่ละ section สำหรับ Excel
@@ -55,31 +56,43 @@ export default function PlanningPage() {
   const [loading, setLoading] = useState(true)
   const [editingCell, setEditingCell] = useState<string | null>(null)
   const [editingName, setEditingName] = useState<string | null>(null)
+  const [categories, setCategories] = useState<{id: string, name: string, type: string}[]>([])
+  const [showAddModal, setShowAddModal] = useState(false)
+  const [addSection, setAddSection] = useState<PlanItem["section"]>("income")
+  const [addName, setAddName] = useState("")
+  const [addCategory, setAddCategory] = useState("")
 
   const fetchItems = async () => {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
-    const { data } = await supabase
-      .from("planning_items")
-      .select("*")
-      .eq("user_id", user.id)
-      .eq("year", year)
-      .order("section")
-    setItems((data || []) as PlanItem[])
-    setLoading(false)
-  }
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return
+  const [{ data }, { data: catData }] = await Promise.all([
+    supabase.from("planning_items").select("*").eq("user_id", user.id).eq("year", year).order("section"),
+    supabase.from("categories").select("*").eq("user_id", user.id),
+  ])
+  setItems((data || []) as PlanItem[])
+  setCategories(catData || [])
+  setLoading(false)
+}
 
   useEffect(() => { fetchItems() }, [year])
 
-  const addItem = async (section: PlanItem["section"]) => {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
-    await supabase.from("planning_items").insert({
-      user_id: user.id, year, section,
-      name: "รายการใหม่", monthly_amount: {},
-    })
-    fetchItems()
-  }
+  const addItem = (section: PlanItem["section"]) => {
+  setAddSection(section)
+  setAddName("")
+  setAddCategory("")
+  setShowAddModal(true)
+}
+  const saveNewItem = async () => {
+  if (!addName) return
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return
+  await supabase.from("planning_items").insert({
+    user_id: user.id, year, section: addSection,
+    name: addName, category: addCategory || null, monthly_amount: {},
+  })
+  setShowAddModal(false)
+  fetchItems()
+}
 
   const deleteItem = async (id: string) => {
     if (!confirm("ลบรายการนี้?")) return
@@ -105,11 +118,11 @@ export default function PlanningPage() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
     await supabase.from("planning_items").insert(
-      TEMPLATE_ITEMS.map(item => ({
-        user_id: user.id, year,
-        section: item.section, name: item.name, monthly_amount: {},
-      }))
-    )
+  TEMPLATE_ITEMS.map(item => ({
+    user_id: user.id, year,
+    section: item.section, name: item.name, category: item.category, monthly_amount: {},
+  }))
+)
     fetchItems()
   }
 
@@ -333,10 +346,10 @@ export default function PlanningPage() {
                             />
                           ) : (
                             <div className="flex items-center gap-1 group">
-                              <span
-                                onClick={() => setEditingName(item.id)}
-                                className="cursor-pointer hover:text-[#1D9E75] truncate max-w-28"
-                              >{item.name}</span>
+                              <div onClick={() => setEditingName(item.id)} className="cursor-pointer hover:text-[#1D9E75] truncate max-w-28">
+  <span>{item.name}</span>
+  {item.category && item.category !== item.name && <p className="text-xs text-gray-400">{item.category}</p>}
+</div>
                               <button
                                 onClick={() => deleteItem(item.id)}
                                 className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 text-xs ml-1"
@@ -425,6 +438,43 @@ export default function PlanningPage() {
           </table>
         </div>
       </div>
+      {/* Add Item Modal */}
+{showAddModal && (
+  <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+    <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl">
+      <h2 className="text-lg font-semibold text-gray-800 mb-4">เพิ่มรายการ</h2>
+      <div className="flex flex-col gap-3">
+        <input
+          placeholder="ชื่อรายการ"
+          value={addName}
+          onChange={e => setAddName(e.target.value)}
+          className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75] text-gray-800"
+        />
+        <select
+          value={addCategory}
+          onChange={e => setAddCategory(e.target.value)}
+          className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none text-gray-800"
+        >
+          <option value="">-- เลือกหมวดหมู่ --</option>
+          {categories.map(c => (
+            <option key={c.id} value={c.name}>{c.name}</option>
+          ))}
+        </select>
+      </div>
+      <div className="flex gap-3 mt-5">
+        <button onClick={() => setShowAddModal(false)}
+          className="flex-1 border border-gray-200 rounded-lg py-2 text-sm hover:bg-gray-50 text-gray-700">
+          ยกเลิก
+        </button>
+        <button onClick={saveNewItem}
+          className="flex-1 bg-[#1D9E75] text-white rounded-lg py-2 text-sm hover:bg-[#178a64] disabled:opacity-50"
+          disabled={!addName}>
+          บันทึก
+        </button>
+      </div>
+    </div>
+  </div>
+)}
 
     </div>
   )

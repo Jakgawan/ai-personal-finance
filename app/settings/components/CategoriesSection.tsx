@@ -23,16 +23,19 @@ export default function CategoriesSection() {
   const [editId, setEditId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const DEFAULT_CATEGORIES = [
-  { name: "อาหาร", type: "expense", color: "#D85A30", icon: "🍔" },
-  { name: "น้ำมัน", type: "expense", color: "#F59E0B", icon: "⛽" },
-  { name: "ที่พัก", type: "expense", color: "#8B5CF6", icon: "🏠" },
-  { name: "สุขภาพ", type: "expense", color: "#EC4899", icon: "💊" },
-  { name: "บันเทิง", type: "expense", color: "#378ADD", icon: "🎮" },
-  { name: "เสื้อผ้า", type: "expense", color: "#6B7280", icon: "👕" },
-  { name: "ชำระหนี้", type: "expense", color: "#D85A30", icon: "💳" },
-  { name: "อื่นๆ", type: "expense", color: "#6B7280", icon: "📦" },
-  { name: "เงินเดือน", type: "income", color: "#1D9E75", icon: "💰" },
-  { name: "รายได้เสริม", type: "income", color: "#1D9E75", icon: "💵" },
+  { name: "อาหาร", type: "expense", color: "#D85A30", icon: "" },
+  { name: "เดินทาง", type: "expense", color: "#F59E0B", icon: "" },
+  { name: "ที่พัก", type: "expense", color: "#8B5CF6", icon: "" },
+  { name: "สุขภาพ", type: "expense", color: "#EC4899", icon: "" },
+  { name: "บันเทิง", type: "expense", color: "#378ADD", icon: "" },
+  { name: "ช้อปปิ้ง", type: "expense", color: "#6B7280", icon: "" },
+  { name: "ชำระหนี้", type: "expense", color: "#D85A30", icon: "" },
+  { name: "สาธารณูปโภค", type: "expense", color: "#F59E0B", icon: "" },
+  { name: "ประกัน", type: "expense", color: "#8B5CF6", icon: "" },
+  { name: "ออมเงิน", type: "expense", color: "#1D9E75", icon: "" },
+  { name: "อื่นๆ", type: "expense", color: "#6B7280", icon: "" },
+  { name: "เงินเดือน", type: "income", color: "#1D9E75", icon: "" },
+  { name: "รายได้เสริม", type: "income", color: "#1D9E75", icon: "" },
 ]
 
 const handleLoadTemplate = async () => {
