@@ -68,6 +68,7 @@ export default function PlanningPage() {
   const [copyToYear, setCopyToYear] = useState(year)
   const [showResetModal, setShowResetModal] = useState(false)
   const [resetMonths, setResetMonths] = useState<number[]>([])
+  const [resetItems, setResetItems] = useState<string[]>([])
 
   const fetchItems = async () => {
   const { data: { user } } = await supabase.auth.getUser()
@@ -160,9 +161,14 @@ export default function PlanningPage() {
  const resetMonth = async () => {
   if (resetMonths.length === 0) return
   const labels = resetMonths.map(m => MONTHS[m - 1]).join(", ")
-  if (!confirm(`ล้างข้อมูล ${labels}? ตัวเลขจะถูกลบ แต่ชื่อรายการยังอยู่`)) return
+  const itemLabel = resetItems.length > 0 ? `${resetItems.length} รายการ` : "ทุกรายการ"
+  if (!confirm(`ล้าง ${itemLabel} ใน ${labels}? ตัวเลขจะถูกลบ แต่ชื่อรายการยังอยู่`)) return
 
-  for (const item of items) {
+  const targetItems = resetItems.length > 0
+    ? items.filter(i => resetItems.includes(i.id))
+    : items
+
+  for (const item of targetItems) {
     const updated = { ...item.monthly_amount }
     let changed = false
     resetMonths.forEach(m => {
@@ -178,9 +184,9 @@ export default function PlanningPage() {
 
   setShowResetModal(false)
   setResetMonths([])
+  setResetItems([])
   fetchItems()
 }
-
   const deleteItem = async (id: string) => {
     if (!confirm("ลบรายการนี้?")) return
     await supabase.from("planning_items").delete().eq("id", id)
@@ -372,12 +378,13 @@ export default function PlanningPage() {
   >
     <Copy size={14} /><span className="hidden sm:inline"> copy</span>
   </button>
+  
   <button
   onClick={() => setShowResetModal(true)}
   title="ล้างเดือน"
   className="px-3 py-2 text-xs text-gray-500 hover:bg-gray-50 border-r border-gray-200"
 >
-  <Trash2 size={14} /><span className="hidden sm:inline"> ล้าง</span>
+  <Trash2 size={14} /><span className="hidden sm:inline"> Delete</span>
 </button>
   <button
     onClick={exportExcel}
@@ -689,7 +696,38 @@ export default function PlanningPage() {
               </button>
             )
           })}
+          
         </div>
+        </div>
+<div>
+  <label className="text-xs text-gray-500 mb-1 block">เลือกรายการ (ไม่เลือก = ล้างทั้งหมด)</label>
+  <div className="max-h-40 overflow-y-auto flex flex-col gap-0.5 border border-gray-100 rounded-lg p-2">
+    {SECTIONS.map(sec => {
+      const secItems = items.filter(i => i.section === sec.key)
+      if (secItems.length === 0) return null
+      return (
+        <div key={sec.key}>
+          <p className={`text-xs font-semibold px-2 py-1 ${sec.color} rounded`}>{sec.label}</p>
+          {secItems.map(item => {
+            const selected = resetItems.includes(item.id)
+            return (
+              <button key={item.id}
+                onClick={() => setResetItems(
+                  selected ? resetItems.filter(x => x !== item.id) : [...resetItems, item.id]
+                )}
+                className={`w-full text-left px-2 py-1 rounded text-xs transition-colors ${
+                  selected ? "bg-[#D85A30] text-white" : "text-gray-600 hover:bg-gray-50"
+                }`}>
+                {item.name} {item.category && item.category !== item.name ? `(${item.category})` : ""}
+              </button>
+            )
+          })}
+        </div>
+      )
+    })}
+  </div>
+</div>
+<div>
         <button onClick={() => setResetMonths(resetMonths.length === 12 ? [] : MONTHS.map((_, i) => i + 1))}
           className="text-xs text-[#378ADD] hover:underline">
           {resetMonths.length === 12 ? "ยกเลิกทั้งหมด" : "เลือกทั้งปี"}
