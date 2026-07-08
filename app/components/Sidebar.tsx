@@ -70,7 +70,11 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
   const showFAB = fabPages.includes(pathname)
 
 const handleQuickAdd = async () => {
-    if (!amount) return
+  if (!amount) return
+  if (!category) {
+    alert("กรุณาเลือกหมวดหมู่")
+    return
+  }
     setLoading(true)
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) {
