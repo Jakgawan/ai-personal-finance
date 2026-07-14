@@ -27,7 +27,7 @@ export default function ResetPassword() {
     if (password.length < 8) return "รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร"
     if (!/[A-Z]/.test(password)) return "รหัสผ่านต้องมีตัวพิมพ์ใหญ่อย่างน้อย 1 ตัว"
     if (!/[0-9]/.test(password)) return "รหัสผ่านต้องมีตัวเลขอย่างน้อย 1 ตัว"
-    if (!/[!@#$%^&*]/.test(password)) return "รหัสผ่านต้องมีอักขระพิเศษ เช่น !@#$%"
+    if (!/[!@#$%^&*\-]/.test(password)) return "รหัสผ่านต้องมีอักขระพิเศษ เช่น !@#$% หรือ -"
     if (!confirmPassword) return "กรุณายืนยันรหัสผ่าน"
     if (password !== confirmPassword) return "รหัสผ่านไม่ตรงกัน"
     return ""
@@ -104,7 +104,7 @@ export default function ResetPassword() {
                   { label: "อย่างน้อย 8 ตัวอักษร", pass: password.length >= 8 },
                   { label: "ตัวพิมพ์ใหญ่ (A-Z)", pass: /[A-Z]/.test(password) },
                   { label: "ตัวเลข (0-9)", pass: /[0-9]/.test(password) },
-                  { label: "อักขระพิเศษ /[!@#$%^&*\-]/", pass: /[!@#$%^&*\-]/.test(password) },
+                  { label: "อักขระพิเศษ (!@#$% หรือ -)", pass: /[!@#$%^&*\-]/.test(password) },
                 ].map(({ label, pass }) => (
                   <p key={label} className={`text-xs flex items-center gap-1 ${pass ? "text-[#1D9E75]" : "text-gray-400"}`}>
                     {pass ? "✓" : "○"} {label}

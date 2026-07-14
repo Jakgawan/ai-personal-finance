@@ -1,7 +1,6 @@
 "use client"
 import { useState } from "react"
 import { supabase } from "@/lib/supabase"
-import { useRouter } from "next/navigation"
 import { Wallet, AlertTriangle } from "lucide-react"
 
 export default function Login() {
@@ -10,7 +9,7 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false)
   const [message, setMessage] = useState("")
   const [loading, setLoading] = useState(false)
-  const router = useRouter()
+
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -20,14 +19,18 @@ export default function Login() {
     setLoading(true)
     setMessage("")
     const { error } = await supabase.auth.signInWithPassword({ email, password })
-    if (error) {
-      setMessage("อีเมลหรือรหัสผ่านไม่ถูกต้อง")
-    } else {
-      router.push("/")
-    }
-    setLoading(false)
+if (error) {
+  if (error.message.includes("Invalid login")) {
+    setMessage("อีเมลหรือรหัสผ่านไม่ถูกต้อง")
+  } else if (error.message.includes("Email not confirmed")) {
+    setMessage("กรุณายืนยันอีเมลก่อนเข้าสู่ระบบ")
+  } else {
+    setMessage("เข้าสู่ระบบไม่สำเร็จ กรุณาลองใหม่")
   }
-
+} else {
+  window.location.href = "/"
+}
+  }
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-sm p-8 w-full max-w-md">

@@ -75,7 +75,7 @@ export default function ForgotPassword() {
             <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2.5">
               <p className="text-sm text-red-600 flex items-center gap-1.5">
   <AlertTriangle size={14} />
-  {message}
+  {error}
 </p>
             </div>
           )}
