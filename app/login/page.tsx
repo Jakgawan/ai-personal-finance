@@ -29,6 +29,7 @@ if (error) {
     setMessage("เข้าสู่ระบบไม่สำเร็จ กรุณาลองใหม่")
   }
 } else {
+  await new Promise(resolve => setTimeout(resolve, 300))
   window.location.href = "/"
 }
   }
