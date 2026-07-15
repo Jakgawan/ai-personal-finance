@@ -2,6 +2,7 @@
 import { useState } from "react"
 import { supabase } from "@/lib/supabase"
 import { Wallet, AlertTriangle } from "lucide-react"
+import { useRouter } from "next/navigation"
 
 export default function Login() {
   const [email, setEmail] = useState("")
@@ -9,7 +10,7 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false)
   const [message, setMessage] = useState("")
   const [loading, setLoading] = useState(false)
-
+  const router = useRouter()
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -29,19 +30,8 @@ if (error) {
     setMessage("เข้าสู่ระบบไม่สำเร็จ กรุณาลองใหม่")
   }
 } else {
-  // รอจนกว่า session จะพร้อมจริงๆ แทนการเดาเวลา
-  let session = null
-  for (let i = 0; i < 10; i++) {
-    const { data } = await supabase.auth.getSession()
-    session = data.session
-    if (session) break
-    await new Promise(resolve => setTimeout(resolve, 200))
-  }
-  if (session) {
-    window.location.href = "/"
-  } else {
-    setMessage("เข้าสู่ระบบไม่สำเร็จ กรุณาลองใหม่")
-  }
+  router.push("/")
+  router.refresh()
 }
   }
   return (
