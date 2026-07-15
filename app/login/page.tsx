@@ -29,8 +29,19 @@ if (error) {
     setMessage("เข้าสู่ระบบไม่สำเร็จ กรุณาลองใหม่")
   }
 } else {
-  await new Promise(resolve => setTimeout(resolve, 300))
-  window.location.href = "/"
+  // รอจนกว่า session จะพร้อมจริงๆ แทนการเดาเวลา
+  let session = null
+  for (let i = 0; i < 10; i++) {
+    const { data } = await supabase.auth.getSession()
+    session = data.session
+    if (session) break
+    await new Promise(resolve => setTimeout(resolve, 200))
+  }
+  if (session) {
+    window.location.href = "/"
+  } else {
+    setMessage("เข้าสู่ระบบไม่สำเร็จ กรุณาลองใหม่")
+  }
 }
   }
   return (
