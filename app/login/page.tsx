@@ -2,7 +2,6 @@
 import { useState } from "react"
 import { supabase } from "@/lib/supabase"
 import { Wallet, AlertTriangle } from "lucide-react"
-import { useRouter } from "next/navigation"
 
 export default function Login() {
   const [email, setEmail] = useState("")
@@ -10,7 +9,6 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false)
   const [message, setMessage] = useState("")
   const [loading, setLoading] = useState(false)
-  const router = useRouter()
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -19,21 +17,24 @@ export default function Login() {
     }
     setLoading(true)
     setMessage("")
-    const { error, data } = await supabase.auth.signInWithPassword({ email, password })
-alert("error: " + JSON.stringify(error) + " | session: " + JSON.stringify(data?.session ? "มี session" : "ไม่มี session"))
-if (error) {
-  if (error.message.includes("Invalid login")) {
-    setMessage("อีเมลหรือรหัสผ่านไม่ถูกต้อง")
-  } else if (error.message.includes("Email not confirmed")) {
-    setMessage("กรุณายืนยันอีเมลก่อนเข้าสู่ระบบ")
-  } else {
-    setMessage("เข้าสู่ระบบไม่สำเร็จ กรุณาลองใหม่")
+
+    const { error } = await supabase.auth.signInWithPassword({ email, password })
+
+    if (error) {
+      if (error.message.includes("Invalid login")) {
+        setMessage("อีเมลหรือรหัสผ่านไม่ถูกต้อง")
+      } else if (error.message.includes("Email not confirmed")) {
+        setMessage("กรุณายืนยันอีเมลก่อนเข้าสู่ระบบ")
+      } else {
+        setMessage("เข้าสู่ระบบไม่สำเร็จ กรุณาลองใหม่")
+      }
+      setLoading(false)
+      return
+    }
+
+    window.location.replace("/")
   }
-} else {
-  router.push("/")
-  router.refresh()
-}
-  }
+
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-sm p-8 w-full max-w-md">
@@ -46,7 +47,6 @@ if (error) {
 
         <div className="flex flex-col gap-4">
 
-          {/* Email */}
           <div>
             <label className="text-sm font-medium text-gray-700 mb-1 block">อีเมล</label>
             <input
@@ -58,7 +58,6 @@ if (error) {
             />
           </div>
 
-          {/* Password */}
           <div>
             <div className="flex items-center justify-between mb-1">
               <label className="text-sm font-medium text-gray-700">รหัสผ่าน</label>
@@ -83,17 +82,15 @@ if (error) {
             </div>
           </div>
 
-          {/* Error */}
           {message && (
             <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2.5">
               <p className="text-sm text-red-600 flex items-center gap-1.5">
-  <AlertTriangle size={14} />
-  {message}
-</p>
+                <AlertTriangle size={14} />
+                {message}
+              </p>
             </div>
           )}
 
-          {/* Submit */}
           <button
             onClick={handleLogin}
             disabled={loading}
