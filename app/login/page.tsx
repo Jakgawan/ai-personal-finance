@@ -18,7 +18,8 @@ export default function Login() {
     }
     setLoading(true)
     setMessage("")
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    const { error, data } = await supabase.auth.signInWithPassword({ email, password })
+alert("error: " + JSON.stringify(error) + " | session: " + JSON.stringify(data?.session ? "มี session" : "ไม่มี session"))
 if (error) {
   if (error.message.includes("Invalid login")) {
     setMessage("อีเมลหรือรหัสผ่านไม่ถูกต้อง")
