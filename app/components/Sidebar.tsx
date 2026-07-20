@@ -70,8 +70,24 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
 }, [pathname])
 
   const hideSidebar = pathname === "/login" || pathname === "/register" || pathname === "/forgot-password" || pathname === "/reset-password"
-  if (hideSidebar) return <>{children}</>
-  // หน้าที่จะแสดง FAB — มีแค่ Dashboard, รายการ, ธุรกิจ
+ useEffect(() => {
+  if (hideSidebar) return
+  const checkAuth = async () => {
+    let user = null
+    for (let i = 0; i < 5; i++) {
+      const { data } = await supabase.auth.getUser()
+      user = data.user
+      if (user) break
+      await new Promise(resolve => setTimeout(resolve, 200))
+    }
+    if (!user) {
+      window.location.href = "/login"
+    }
+  }
+  checkAuth()
+}, [pathname, hideSidebar])
+
+if (hideSidebar) return <>{children}</>
   const fabPages = ["/", "/transaction", "/business"]
   const showFAB = fabPages.includes(pathname)
 
