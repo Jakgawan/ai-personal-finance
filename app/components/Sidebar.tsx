@@ -60,7 +60,7 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
     setDebugMsg(prev => prev + ` | pathname=${pathname} hideSidebar=${hideSidebar}`)
     if (hideSidebar) return
     const checkAuth = async () => {
-      let user = null
+      let user: { id: string } | null = null
       for (let i = 0; i < 5; i++) {
         const { data, error } = await supabase.auth.getUser()
         user = data.user
