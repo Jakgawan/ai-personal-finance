@@ -54,14 +54,20 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
   }, [])
 
   useEffect(() => {
-    const checkAuth = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user && pathname !== "/login" && pathname !== "/register" && pathname !== "/forgot-password" && pathname !== "/reset-password") {
-  window.location.href = "/login"
-}
+  const checkAuth = async () => {
+    let user = null
+    for (let i = 0; i < 5; i++) {
+      const { data } = await supabase.auth.getUser()
+      user = data.user
+      if (user) break
+      await new Promise(resolve => setTimeout(resolve, 200))
     }
-    checkAuth()
-  }, [pathname])
+    if (!user && pathname !== "/login" && pathname !== "/register" && pathname !== "/forgot-password" && pathname !== "/reset-password") {
+      window.location.href = "/login"
+    }
+  }
+  checkAuth()
+}, [pathname])
 
   const hideSidebar = pathname === "/login" || pathname === "/register" || pathname === "/forgot-password" || pathname === "/reset-password"
   if (hideSidebar) return <>{children}</>
