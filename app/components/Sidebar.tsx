@@ -34,7 +34,6 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
   const [categories, setCategories] = useState<{ id: string; name: string; type: string; icon: string }[]>([])
   const [cycles, setCycles] = useState<{ id: string; name: string }[]>([])
 
-  const [debugMsg, setDebugMsg] = useState("")
   const hideSidebar = pathname === "/login" || pathname === "/register" || pathname === "/forgot-password" || pathname === "/reset-password"
 
   useEffect(() => {
@@ -57,23 +56,34 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
 
   // มี auth check useEffect เดียวเท่านั้น (ลบตัวเก่าที่ซ้ำออกแล้ว)
   useEffect(() => {
-    setDebugMsg(prev => prev + ` | pathname=${pathname} hideSidebar=${hideSidebar}`)
     if (hideSidebar) return
+
+    let active = true
+
+    // getSession() อ่านจาก localStorage ที่ supabase-js sync ไว้ในเครื่องอยู่แล้ว
+    // เร็วกว่า getUser() มาก (getUser() ต้องยิง request ไปเช็คกับ server ทุกครั้ง)
+    // จึงไม่มีปัญหา session ยังโหลดไม่ทันหลัง redirect แบบที่เจอก่อนหน้านี้
     const checkAuth = async () => {
-      let user: { id: string } | null = null
-      for (let i = 0; i < 5; i++) {
-        const { data, error } = await supabase.auth.getUser()
-        user = data.user
-        setDebugMsg(prev => prev + ` | try${i}: user=${user ? "YES" : "NO"} err=${error?.message || "none"}`)
-        if (user) break
-        await new Promise(resolve => setTimeout(resolve, 200))
-      }
-      if (!user) {
-        setDebugMsg(prev => prev + " | REDIRECTING TO LOGIN")
-        setTimeout(() => { window.location.href = "/login" }, 3000)
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!active) return
+      if (!session) {
+        window.location.href = "/login"
       }
     }
     checkAuth()
+
+    // ฟัง event การเปลี่ยนสถานะ auth แบบ real-time (login, logout, token refresh)
+    // เพื่อกันเคสที่ session หมดอายุ/ถูกล็อกเอาต์ระหว่างที่ผู้ใช้อยู่ในหน้าอื่นอยู่แล้ว
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!session) {
+        window.location.href = "/login"
+      }
+    })
+
+    return () => {
+      active = false
+      subscription.unsubscribe()
+    }
   }, [pathname, hideSidebar])
 
   if (hideSidebar) return <>{children}</>
@@ -171,11 +181,6 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
 
   return (
     <>
-      {debugMsg && (
-        <div style={{ position: "fixed", top: 0, left: 0, right: 0, background: "black", color: "lime", fontSize: "10px", padding: "8px", zIndex: 9999, wordBreak: "break-all" }}>
-          {debugMsg}
-        </div>
-      )}
       <div className="flex h-screen bg-gray-50">
 
         <aside className={`hidden md:flex flex-col bg-white border-r border-gray-200 transition-all duration-300 ${collapsed ? "w-11" : "w-40"}`}>
