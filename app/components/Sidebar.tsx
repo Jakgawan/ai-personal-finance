@@ -34,7 +34,6 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
   const [categories, setCategories] = useState<{ id: string; name: string; type: string; icon: string }[]>([])
   const [cycles, setCycles] = useState<{ id: string; name: string }[]>([])
 
-  const [debugMsg, setDebugMsg] = useState("")
   const hideSidebar = pathname === "/login" || pathname === "/register" || pathname === "/forgot-password" || pathname === "/reset-password"
 
   useEffect(() => {
@@ -55,23 +54,11 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
     fetchData()
   }, [])
 
-  // มี auth check useEffect เดียวเท่านั้น (ลบตัวเก่าที่ซ้ำออกแล้ว)
   useEffect(() => {
-    setDebugMsg(prev => prev + ` | pathname=${pathname} hideSidebar=${hideSidebar}`)
     if (hideSidebar) return
     const checkAuth = async () => {
-      let user: { id: string } | null = null
-      for (let i = 0; i < 5; i++) {
-        const { data, error } = await supabase.auth.getUser()
-        user = data.user
-        setDebugMsg(prev => prev + ` | try${i}: user=${user ? "YES" : "NO"} err=${error?.message || "none"}`)
-        if (user) break
-        await new Promise(resolve => setTimeout(resolve, 200))
-      }
-      if (!user) {
-        setDebugMsg(prev => prev + " | REDIRECTING TO LOGIN")
-        setTimeout(() => { window.location.href = "/login" }, 3000)
-      }
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) window.location.href = "/login"
     }
     checkAuth()
   }, [pathname, hideSidebar])
@@ -171,11 +158,6 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
 
   return (
     <>
-      {debugMsg && (
-        <div style={{ position: "fixed", top: 0, left: 0, right: 0, background: "black", color: "lime", fontSize: "10px", padding: "8px", zIndex: 9999, wordBreak: "break-all" }}>
-          {debugMsg}
-        </div>
-      )}
       <div className="flex h-screen bg-gray-50">
 
         <aside className={`hidden md:flex flex-col bg-white border-r border-gray-200 transition-all duration-300 ${collapsed ? "w-11" : "w-40"}`}>

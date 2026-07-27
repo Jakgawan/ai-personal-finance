@@ -199,7 +199,7 @@ setLiabilities(liabData || [])
   const last6Months = Array.from({ length: 6 }, (_, i) => {
     const d = new Date(currentYear, currentMonth - 5 + i, 1)
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
-    const label = d.toLocaleDateString(undefined, { month: "short" })
+    const label = d.toLocaleDateString("th-TH", { month: "short" })
     const monthTx = transactions.filter(t => t.date?.startsWith(key))
     return {
       label, key,

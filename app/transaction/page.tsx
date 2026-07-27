@@ -237,7 +237,7 @@ export default function TransactionPage() {
   const months = Array.from({ length: 12 }, (_, i) => {
     const m = String(i + 1).padStart(2, "0")
     const date = new Date(currentYear, i, 1)
-    const label = date.toLocaleDateString(undefined, { month: "long", year: "numeric" })
+    const label = date.toLocaleDateString("th-TH", { month: "long", year: "numeric" })
     return { value: `${currentYear}-${m}`, label }
   })
 
@@ -415,7 +415,7 @@ export default function TransactionPage() {
             <div className="flex items-center justify-between mb-4">
               <button onClick={prevMonth} className="px-3 py-1 border rounded-lg text-sm hover:bg-gray-100">←</button>
               <h2 className="text-sm font-semibold text-gray-700">
-                {calendarDate.toLocaleDateString(undefined, { month: "long", year: "numeric" })}
+                {calendarDate.toLocaleDateString("th-TH", { month: "long", year: "numeric" })}
               </h2>
               <button onClick={nextMonth} className="px-3 py-1 border rounded-lg text-sm hover:bg-gray-100">→</button>
             </div>
