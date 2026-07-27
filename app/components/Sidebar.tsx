@@ -56,11 +56,33 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (hideSidebar) return
-    const checkAuth = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) window.location.href = "/login"
+
+    let active = true
+
+    // getSession() อ่านจาก localStorage ที่ supabase-js sync ไว้ในเครื่องอยู่แล้ว
+    // เร็วกว่า getUser() มาก (getUser() ต้องยิง request ไปเช็คกับ server ทุกครั้ง)
+    // จึงไม่มีปัญหา session ยังโหลดไม่ทันหลัง redirect แบบที่เจอก่อนหน้านี้
+   const checkAuth = async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!active) return
+      if (!session) {
+        window.location.href = "/login"
+      }
     }
     checkAuth()
+
+    // ฟัง event การเปลี่ยนสถานะ auth แบบ real-time (login, logout, token refresh)
+    // เพื่อกันเคสที่ session หมดอายุ/ถูกล็อกเอาต์ระหว่างที่ผู้ใช้อยู่ในหน้าอื่นอยู่แล้ว
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!session) {
+        window.location.href = "/login"
+      }
+    })
+
+    return () => {
+      active = false
+      subscription.unsubscribe()
+    }
   }, [pathname, hideSidebar])
 
   if (hideSidebar) return <>{children}</>
