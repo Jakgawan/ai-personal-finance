@@ -149,10 +149,6 @@ export default function TransactionPage() {
   const handleSubmit = async () => {
   console.log("กดบันทึกแล้ว!")
   if (!name || !amount || !date) return
-  if (!category) {
-    alert("กรุณาเลือกหมวดหมู่")
-    return
-  }
     setLoading(true)
 
     const { data: { user } } = await supabase.auth.getUser()
@@ -535,8 +531,8 @@ export default function TransactionPage() {
               <input placeholder="จำนวน (฿)" type="number" value={amount} onChange={(e) => setAmount(e.target.value)}
                 className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75] text-gray-800" />
               <select value={category} onChange={(e) => setCategory(e.target.value)}
-                className={`border rounded-lg px-3 py-2 text-sm focus:outline-none text-gray-800 ${!category ? "border-red-300" : "border-gray-200"}`}>
-                  <option value="">-- เลือกหมวดหมู่ (จำเป็น) --</option>
+                className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none text-gray-800">
+                  <option value="">-- หมวดหมู่ --</option>
                 {categories.filter(c => !c.type || c.type === type).map(c => (
                   <option key={c.id} value={c.name}>{c.icon} {c.name}</option>
                 ))}
