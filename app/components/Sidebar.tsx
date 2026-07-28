@@ -5,6 +5,7 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import { LayoutDashboard, ListOrdered, CalendarDays, Scale, Briefcase, MessageCircle, GraduationCap, Settings, LogOut, Menu, Wallet } from "lucide-react"
+import QuickAddModal from "./QuickAddModal"
 
 const menuItems = [
   { href: "/", label: "ภาพรวม", icon: LayoutDashboard },
@@ -23,16 +24,9 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
   const [showQuickAdd, setShowQuickAdd] = useState(false)
   const pathname = usePathname()
 
-  const [name, setName] = useState("")
-  const [amount, setAmount] = useState("")
-  const [date, setDate] = useState(new Date().toISOString().split("T")[0])
-  const [type, setType] = useState("expense")
-  const [category, setCategory] = useState("")
-  const [cycleId, setCycleId] = useState("")
-  const [loading, setLoading] = useState(false)
-
   const [categories, setCategories] = useState<{ id: string; name: string; type: string; icon: string }[]>([])
   const [cycles, setCycles] = useState<{ id: string; name: string }[]>([])
+  const [profileMode, setProfileMode] = useState<"simple" | "full">("full")
 
   const hideSidebar = pathname === "/login" || pathname === "/register" || pathname === "/forgot-password" || pathname === "/reset-password"
 
@@ -44,12 +38,14 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
     const fetchData = async () => {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
-      const [{ data: catData }, { data: cycleData }] = await Promise.all([
+      const [{ data: catData }, { data: cycleData }, { data: profileData }] = await Promise.all([
         supabase.from("categories").select("*").eq("user_id", user.id),
         supabase.from("pay_cycles").select("*").eq("user_id", user.id),
+        supabase.from("financial_profile").select("mode").eq("user_id", user.id).maybeSingle(),
       ])
       setCategories(catData || [])
       setCycles(cycleData || [])
+      setProfileMode(profileData?.mode === "simple" ? "simple" : "full")
     }
     fetchData()
   }, [])
@@ -89,34 +85,6 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
 
   const fabPages = ["/", "/transaction", "/business"]
   const showFAB = fabPages.includes(pathname)
-
-  const handleQuickAdd = async () => {
-    if (!amount) return
-    setLoading(true)
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) {
-      setLoading(false)
-      return
-    }
-    await supabase.from("transactions").insert({
-      user_id: user.id,
-      name,
-      amount: Number(amount),
-      date,
-      type,
-      category: category || null,
-      cycle_id: cycleId || null,
-    })
-    window.dispatchEvent(new CustomEvent("transactionAdded"))
-    setName("")
-    setAmount("")
-    setDate(new Date().toISOString().split("T")[0])
-    setType("expense")
-    setCategory("")
-    setCycleId("")
-    setLoading(false)
-    setShowQuickAdd(false)
-  }
 
   const handleFAB = () => {
     if (pathname === "/business") {
@@ -219,74 +187,13 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
           </button>
         )}
 
-        {showQuickAdd && (
-          <div className="fixed inset-0 bg-black/40 flex items-end md:items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-2xl w-full max-w-md shadow-xl">
-              <div className="flex items-center justify-between px-6 pt-5 pb-3">
-                <h2 className="text-lg font-semibold text-gray-800">บันทึกรายการ</h2>
-                <button onClick={() => setShowQuickAdd(false)} className="text-gray-400 hover:text-gray-600 text-xl">✕</button>
-              </div>
-              <div className="px-6 pb-6 flex flex-col gap-3">
-                <div className="flex gap-3">
-                  <button onClick={() => setType("expense")}
-                    className={`flex-1 py-2 rounded-lg text-sm font-medium border transition-colors ${type === "expense" ? "bg-[#D85A30] text-white border-[#D85A30]" : "border-gray-200 text-gray-600"}`}>
-                    รายจ่าย
-                  </button>
-                  <button onClick={() => setType("income")}
-                    className={`flex-1 py-2 rounded-lg text-sm font-medium border transition-colors ${type === "income" ? "bg-[#1D9E75] text-white border-[#1D9E75]" : "border-gray-200 text-gray-600"}`}>
-                    รายรับ
-                  </button>
-                </div>
-                <input
-                  type="date"
-                  value={date}
-                  onChange={e => setDate(e.target.value)}
-                  className="border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75] text-gray-800"
-                />
-                <input
-                  placeholder="ชื่อรายการ เช่น ข้าวเที่ยง"
-                  value={name}
-                  onChange={e => setName(e.target.value)}
-                  className="border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75] text-gray-800"
-                />
-                <input
-                  placeholder="จำนวน (฿)"
-                  type="number"
-                  value={amount}
-                  onChange={e => setAmount(e.target.value)}
-                  className="border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75] text-gray-800"
-                />
-                <select
-                  value={category}
-                  onChange={e => setCategory(e.target.value)}
-                  className="border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75] text-gray-800"
-                >
-                  <option value="">-- หมวดหมู่ --</option>
-                  {categories.filter(c => !c.type || c.type === type).map(c => (
-                    <option key={c.id} value={c.name}>{c.icon} {c.name}</option>
-                  ))}
-                </select>
-                <select
-                  value={cycleId}
-                  onChange={e => setCycleId(e.target.value)}
-                  className="border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75] text-gray-800"
-                >
-                  <option value="">-- รอบเงินเดือน --</option>
-                  {cycles.map(c => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
-                </select>
-                <button
-                  onClick={handleQuickAdd}
-                  disabled={loading || !amount}
-                  className="w-full bg-[#1D9E75] text-white rounded-lg py-3 text-sm font-medium hover:bg-[#178a64] disabled:opacity-50 transition-colors"
-                >
-                  {loading ? "กำลังบันทึก..." : "บันทึก"}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+        <QuickAddModal
+          open={showQuickAdd}
+          onClose={() => setShowQuickAdd(false)}
+          mode={profileMode}
+          categories={categories}
+          cycles={cycles}
+        />
 
       </div>
     </>
