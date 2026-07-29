@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react"
 import { supabase } from "@/lib/supabase"
 import Link from "next/link"
 import ReactMarkdown from "react-markdown"
+import ConfirmModal from "@/app/components/ConfirmModal"
 
 type Message = {
   id?: string
@@ -17,6 +18,7 @@ export default function AIChatPage() {
   const [input, setInput] = useState("")
   const [loading, setLoading] = useState(false)
   const [financialContext, setFinancialContext] = useState("")
+  const [confirmState, setConfirmState] = useState<{ message: string; onConfirm: () => void } | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -112,12 +114,17 @@ export default function AIChatPage() {
     setLoading(false)
   }
 
-  const clearHistory = async () => {
-    if (!confirm("ล้างประวัติการสนทนาทั้งหมด?")) return
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
-    await supabase.from("chat_history").delete().eq("user_id", user.id)
-    setMessages([])
+  const clearHistory = () => {
+    setConfirmState({
+      message: "ล้างประวัติการสนทนาทั้งหมด?",
+      onConfirm: async () => {
+        setConfirmState(null)
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) return
+        await supabase.from("chat_history").delete().eq("user_id", user.id)
+        setMessages([])
+      },
+    })
   }
 
   return (
@@ -226,6 +233,13 @@ export default function AIChatPage() {
         </div>
         <p className="text-xs text-gray-400 text-center mt-2">Shift+Enter เพื่อขึ้นบรรทัดใหม่</p>
       </div>
+
+      <ConfirmModal
+        open={!!confirmState}
+        message={confirmState?.message || ""}
+        onConfirm={() => confirmState?.onConfirm()}
+        onCancel={() => setConfirmState(null)}
+      />
     </div>
   )
 }

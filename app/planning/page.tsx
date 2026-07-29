@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
 import React from "react"
 import { ClipboardList, BarChart2, Copy, Trash2 } from "lucide-react"
+import ConfirmModal from "@/app/components/ConfirmModal"
 
 type PlanItem = {
   id: string
@@ -69,6 +70,7 @@ export default function PlanningPage() {
   const [showResetModal, setShowResetModal] = useState(false)
   const [resetMonths, setResetMonths] = useState<number[]>([])
   const [resetItems, setResetItems] = useState<string[]>([])
+  const [confirmState, setConfirmState] = useState<{ message: string; onConfirm: () => void } | null>(null)
 
   const fetchItems = async () => {
   const { data: { user } } = await supabase.auth.getUser()
@@ -101,12 +103,17 @@ export default function PlanningPage() {
   setShowAddModal(false)
   fetchItems()
 }
- const copyMonth = async () => {
+ const copyMonth = () => {
   if (copyToMonths.length === 0) return
   const toLabels = copyToMonths.map(m => MONTHS[m - 1]).join(", ")
   const yearLabel = copyFromYear !== copyToYear ? ` (พ.ศ. ${copyToYear + 543})` : ""
-  if (!confirm(`copy จาก ${MONTHS[copyFrom - 1]} (พ.ศ. ${copyFromYear + 543}) ไป ${toLabels}${yearLabel}?`)) return
+  setConfirmState({
+    message: `copy จาก ${MONTHS[copyFrom - 1]} (พ.ศ. ${copyFromYear + 543}) ไป ${toLabels}${yearLabel}?`,
+    onConfirm: () => { setConfirmState(null); doCopyMonth() },
+  })
+}
 
+const doCopyMonth = async () => {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return
 
@@ -158,12 +165,17 @@ export default function PlanningPage() {
   setCopyToMonths([])
   fetchItems()
 }
- const resetMonth = async () => {
+ const resetMonth = () => {
   if (resetMonths.length === 0) return
   const labels = resetMonths.map(m => MONTHS[m - 1]).join(", ")
   const itemLabel = resetItems.length > 0 ? `${resetItems.length} รายการ` : "ทุกรายการ"
-  if (!confirm(`ล้าง ${itemLabel} ใน ${labels}? ตัวเลขจะถูกลบ แต่ชื่อรายการยังอยู่`)) return
+  setConfirmState({
+    message: `ล้าง ${itemLabel} ใน ${labels}? ตัวเลขจะถูกลบ แต่ชื่อรายการยังอยู่`,
+    onConfirm: () => { setConfirmState(null); doResetMonth() },
+  })
+}
 
+const doResetMonth = async () => {
   const targetItems = resetItems.length > 0
     ? items.filter(i => resetItems.includes(i.id))
     : items
@@ -187,10 +199,15 @@ export default function PlanningPage() {
   setResetItems([])
   fetchItems()
 }
-  const deleteItem = async (id: string) => {
-    if (!confirm("ลบรายการนี้?")) return
-    await supabase.from("planning_items").delete().eq("id", id)
-    fetchItems()
+  const deleteItem = (id: string) => {
+    setConfirmState({
+      message: "ลบรายการนี้?",
+      onConfirm: async () => {
+        setConfirmState(null)
+        await supabase.from("planning_items").delete().eq("id", id)
+        fetchItems()
+      },
+    })
   }
 
   const updateName = async (id: string, name: string) => {
@@ -206,30 +223,40 @@ export default function PlanningPage() {
     fetchItems()
   }
 
-  const loadTemplate = async () => {
-    if (!confirm("โหลด template Money Coach? รายการที่มีอยู่จะยังคงอยู่")) return
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
-    await supabase.from("planning_items").insert(
-  TEMPLATE_ITEMS.map(item => ({
-    user_id: user.id, year,
-    section: item.section, name: item.name, category: item.category, monthly_amount: {},
-  }))
-)
-    fetchItems()
+  const loadTemplate = () => {
+    setConfirmState({
+      message: "โหลด template Money Coach? รายการที่มีอยู่จะยังคงอยู่",
+      onConfirm: async () => {
+        setConfirmState(null)
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) return
+        await supabase.from("planning_items").insert(
+          TEMPLATE_ITEMS.map(item => ({
+            user_id: user.id, year,
+            section: item.section, name: item.name, category: item.category, monthly_amount: {},
+          }))
+        )
+        fetchItems()
+      },
+    })
   }
 
-  const fillRow = async (item: PlanItem) => {
+  const fillRow = (item: PlanItem) => {
     const firstMonth = Object.keys(item.monthly_amount).sort()[0]
     if (!firstMonth) return
     const firstValue = item.monthly_amount[firstMonth]
-    if (!confirm(`fill ฿${firstValue.toLocaleString()} ไปทุกเดือนที่ยังว่างอยู่?`)) return
-    const updated = { ...item.monthly_amount }
-    for (let m = 1; m <= 12; m++) {
-      if (!updated[String(m)]) updated[String(m)] = firstValue
-    }
-    await supabase.from("planning_items").update({ monthly_amount: updated }).eq("id", item.id)
-    fetchItems()
+    setConfirmState({
+      message: `fill ฿${firstValue.toLocaleString()} ไปทุกเดือนที่ยังว่างอยู่?`,
+      onConfirm: async () => {
+        setConfirmState(null)
+        const updated = { ...item.monthly_amount }
+        for (let m = 1; m <= 12; m++) {
+          if (!updated[String(m)]) updated[String(m)] = firstValue
+        }
+        await supabase.from("planning_items").update({ monthly_amount: updated }).eq("id", item.id)
+        fetchItems()
+      },
+    })
   }
 
   const rowTotal = (item: PlanItem) =>
@@ -751,6 +778,12 @@ export default function PlanningPage() {
   </div>
 )}
 
+      <ConfirmModal
+        open={!!confirmState}
+        message={confirmState?.message || ""}
+        onConfirm={() => confirmState?.onConfirm()}
+        onCancel={() => setConfirmState(null)}
+      />
     </div>
   )
 }

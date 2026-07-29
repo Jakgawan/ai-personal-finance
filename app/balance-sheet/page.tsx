@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
+import ConfirmModal from "@/app/components/ConfirmModal"
 
 type Asset = {
   id: string
@@ -58,6 +59,7 @@ export default function BalanceSheetPage() {
   const [incomeInput, setIncomeInput] = useState("")
   const [expenseInput, setExpenseInput] = useState("")
   const [savingInput, setSavingInput] = useState("")
+  const [confirmState, setConfirmState] = useState<{ message: string; onConfirm: () => void } | null>(null)
   const [occupationInput, setOccupationInput] = useState("salaried")
 
   // activeTab ใช้สลับระหว่าง สินทรัพย์ และ หนี้สิน บนมือถือ
@@ -177,10 +179,15 @@ export default function BalanceSheetPage() {
     await fetchAll()
   }
 
-  const deleteAsset = async (id: string) => {
-    if (!confirm("ลบสินทรัพย์นี้?")) return
-    await supabase.from("assets").delete().eq("id", id)
-    await fetchAll()
+  const deleteAsset = (id: string) => {
+    setConfirmState({
+      message: "ลบสินทรัพย์นี้?",
+      onConfirm: async () => {
+        setConfirmState(null)
+        await supabase.from("assets").delete().eq("id", id)
+        await fetchAll()
+      },
+    })
   }
 
   const openAddLiab = () => {
@@ -215,10 +222,15 @@ export default function BalanceSheetPage() {
     await fetchAll()
   }
 
-  const deleteLiab = async (id: string) => {
-    if (!confirm("ลบหนี้สินนี้?")) return
-    await supabase.from("liabilities_long").delete().eq("id", id)
-    await fetchAll()
+  const deleteLiab = (id: string) => {
+    setConfirmState({
+      message: "ลบหนี้สินนี้?",
+      onConfirm: async () => {
+        setConfirmState(null)
+        await supabase.from("liabilities_long").delete().eq("id", id)
+        await fetchAll()
+      },
+    })
   }
 
   // เปิด modal กรอกรายได้/รายจ่ายต่อเดือน — เอาค่าปัจจุบันมาใส่ช่องกรอก
@@ -602,6 +614,13 @@ export default function BalanceSheetPage() {
           </div>
         </div>
       )}
+
+      <ConfirmModal
+        open={!!confirmState}
+        message={confirmState?.message || ""}
+        onConfirm={() => confirmState?.onConfirm()}
+        onCancel={() => setConfirmState(null)}
+      />
     </div>
   )
 }

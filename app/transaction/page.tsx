@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabase"
 import ExportPDF from "@/app/components/ExportPDF"
 import { formatDate } from "@/lib/utils"
 import ScanSlip from "@/app/components/ScanSlip"
+import ConfirmModal from "@/app/components/ConfirmModal"
 import { BarChart2, CalendarDays } from "lucide-react"
 
 type Transaction = {
@@ -62,6 +63,7 @@ export default function TransactionPage() {
 
   const [calendarDate, setCalendarDate] = useState(new Date())
   const [selectedDay, setSelectedDay] = useState<string | null>(null)
+  const [confirmState, setConfirmState] = useState<{ message: string; onConfirm: () => void } | null>(null)
 
   // ดึงข้อมูลจาก Supabase ทั้งหมด
   // สำคัญ: order by date DESC แล้วตามด้วย created_at DESC
@@ -176,10 +178,15 @@ export default function TransactionPage() {
     setLoading(false)
   }
 
-  const handleDelete = async (id: string) => {
-    if (!confirm("ลบรายการนี้?")) return
-    await supabase.from("transactions").delete().eq("id", id)
-    await fetchAll()
+  const handleDelete = (id: string) => {
+    setConfirmState({
+      message: "ลบรายการนี้?",
+      onConfirm: async () => {
+        setConfirmState(null)
+        await supabase.from("transactions").delete().eq("id", id)
+        await fetchAll()
+      },
+    })
   }
 
   const exportExcel = async () => {
@@ -556,6 +563,13 @@ export default function TransactionPage() {
           </div>
         </div>
       )}
+
+      <ConfirmModal
+        open={!!confirmState}
+        message={confirmState?.message || ""}
+        onConfirm={() => confirmState?.onConfirm()}
+        onCancel={() => setConfirmState(null)}
+      />
     </div>
   )
 }

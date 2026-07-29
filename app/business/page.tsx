@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
 import { Building2 } from "lucide-react"
+import ConfirmModal from "@/app/components/ConfirmModal"
 
 type Business = {
   id: string
@@ -44,6 +45,7 @@ export default function BusinessPage() {
   const [txType, setTxType] = useState("expense")
   const [txCategory, setTxCategory] = useState("")
   const [loading, setLoading] = useState(false)
+  const [confirmState, setConfirmState] = useState<{ message: string; onConfirm: () => void } | null>(null)
 
   const fetchBusinesses = async () => {
     const { data: { user } } = await supabase.auth.getUser()
@@ -93,12 +95,17 @@ export default function BusinessPage() {
     fetchBusinesses()
   }
 
-  const deleteBusiness = async (id: string) => {
-    if (!confirm("ลบธุรกิจนี้? รายการทั้งหมดจะถูกลบด้วย")) return
-    await supabase.from("business_transactions").delete().eq("business_id", id)
-    await supabase.from("businesses").delete().eq("id", id)
-    setSelected(null)
-    fetchBusinesses()
+  const deleteBusiness = (id: string) => {
+    setConfirmState({
+      message: "ลบธุรกิจนี้? รายการทั้งหมดจะถูกลบด้วย",
+      onConfirm: async () => {
+        setConfirmState(null)
+        await supabase.from("business_transactions").delete().eq("business_id", id)
+        await supabase.from("businesses").delete().eq("id", id)
+        setSelected(null)
+        fetchBusinesses()
+      },
+    })
   }
 
   const openAddTx = () => {
@@ -143,10 +150,15 @@ export default function BusinessPage() {
   return () => window.removeEventListener("openBusinessTxModal", handler)
     }, [selected])
 
-  const deleteTx = async (id: string) => {
-    if (!confirm("ลบรายการนี้?")) return
-    await supabase.from("business_transactions").delete().eq("id", id)
-    if (selected) fetchTransactions(selected.id)
+  const deleteTx = (id: string) => {
+    setConfirmState({
+      message: "ลบรายการนี้?",
+      onConfirm: async () => {
+        setConfirmState(null)
+        await supabase.from("business_transactions").delete().eq("id", id)
+        if (selected) fetchTransactions(selected.id)
+      },
+    })
   }
 
   return (
@@ -351,6 +363,13 @@ export default function BusinessPage() {
           </div>
         </div>
       )}
+
+      <ConfirmModal
+        open={!!confirmState}
+        message={confirmState?.message || ""}
+        onConfirm={() => confirmState?.onConfirm()}
+        onCancel={() => setConfirmState(null)}
+      />
     </div>
   )
 }

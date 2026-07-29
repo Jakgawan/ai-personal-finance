@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
 import { Lightbulb, ClipboardList } from "lucide-react"
+import ConfirmModal from "@/app/components/ConfirmModal"
 
 type Category = {
   id: string
@@ -22,6 +23,7 @@ export default function CategoriesSection() {
   const [icon, setIcon] = useState("")
   const [editId, setEditId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [confirmState, setConfirmState] = useState<{ message: string; onConfirm: () => void } | null>(null)
   const DEFAULT_CATEGORIES = [
   { name: "อาหาร", type: "expense", color: "#D85A30", icon: "" },
   { name: "เดินทาง", type: "expense", color: "#F59E0B", icon: "" },
@@ -38,15 +40,20 @@ export default function CategoriesSection() {
   { name: "รายได้เสริม", type: "income", color: "#1D9E75", icon: "" },
 ]
 
-const handleLoadTemplate = async () => {
-  if (!confirm("โหลด template หมวดหมู่? (จะเพิ่มเข้าไปในรายการที่มีอยู่)")) return
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return
+const handleLoadTemplate = () => {
+  setConfirmState({
+    message: "โหลด template หมวดหมู่? (จะเพิ่มเข้าไปในรายการที่มีอยู่)",
+    onConfirm: async () => {
+      setConfirmState(null)
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
 
-  await supabase.from("categories").insert(
-    DEFAULT_CATEGORIES.map(c => ({ ...c, user_id: user.id }))
-  )
-  fetchCategories()
+      await supabase.from("categories").insert(
+        DEFAULT_CATEGORIES.map(c => ({ ...c, user_id: user.id }))
+      )
+      fetchCategories()
+    },
+  })
 }
 
   const fetchCategories = async () => {
@@ -202,6 +209,15 @@ const handleLoadTemplate = async () => {
           )}
         </div>
       ))}
+
+      <ConfirmModal
+        open={!!confirmState}
+        message={confirmState?.message || ""}
+        onConfirm={() => confirmState?.onConfirm()}
+        onCancel={() => setConfirmState(null)}
+        confirmLabel="โหลดเลย"
+        danger={false}
+      />
     </div>
   )
 }

@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
 import { User, Building2, AlertTriangle } from "lucide-react"
+import ConfirmModal from "@/app/components/ConfirmModal"
 
 type Recurring = {
   id: string
@@ -44,6 +45,7 @@ export default function RecurringSection() {
   const [createdLogs, setCreatedLogs] = useState<CreatedLog[]>([])
   const [showLog, setShowLog] = useState(false)
   const [activeTab, setActiveTab] = useState<"personal" | string>("personal")
+  const [confirmState, setConfirmState] = useState<{ message: string; onConfirm: () => void } | null>(null)
 
   const [name, setName] = useState("")
   const [amount, setAmount] = useState("")
@@ -198,10 +200,15 @@ export default function RecurringSection() {
     fetchAll()
   }
 
-  const deleteItem = async (id: string) => {
-    if (!confirm("ลบรายการซ้ำนี้?")) return
-    await supabase.from("recurring_transactions").delete().eq("id", id)
-    fetchAll()
+  const deleteItem = (id: string) => {
+    setConfirmState({
+      message: "ลบรายการซ้ำนี้?",
+      onConfirm: async () => {
+        setConfirmState(null)
+        await supabase.from("recurring_transactions").delete().eq("id", id)
+        fetchAll()
+      },
+    })
   }
 
   // กรองตาม tab
@@ -402,6 +409,13 @@ export default function RecurringSection() {
           </div>
         </div>
       )}
+
+      <ConfirmModal
+        open={!!confirmState}
+        message={confirmState?.message || ""}
+        onConfirm={() => confirmState?.onConfirm()}
+        onCancel={() => setConfirmState(null)}
+      />
     </div>
   )
 }
