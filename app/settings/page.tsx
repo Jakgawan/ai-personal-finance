@@ -1,6 +1,7 @@
 "use client"
 
-import { useState } from "react"
+import { Suspense, useState } from "react"
+import { useSearchParams } from "next/navigation"
 import ProfileSection from "./components/ProfileSection"
 import PayCyclesSection from "./components/PayCyclesSection"
 import CategoriesSection from "./components/CategoriesSection"
@@ -17,8 +18,14 @@ const menuItems = [
   { id: "display", label: "การแสดงผล", icon: Globe },
 ]
 
-export default function SettingsPage() {
-  const [active, setActive] = useState("profile")
+const validTabs = menuItems.map((m) => m.id)
+
+function SettingsContent() {
+  const searchParams = useSearchParams()
+  const initialTab = searchParams.get("tab")
+  const [active, setActive] = useState(
+    initialTab && validTabs.includes(initialTab) ? initialTab : "profile"
+  )
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -57,5 +64,13 @@ export default function SettingsPage() {
       </main>
 
     </div>
+  )
+}
+
+export default function SettingsPage() {
+  return (
+    <Suspense fallback={null}>
+      <SettingsContent />
+    </Suspense>
   )
 }

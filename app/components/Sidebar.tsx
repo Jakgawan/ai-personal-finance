@@ -6,6 +6,9 @@ import { usePathname } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import { LayoutDashboard, ListOrdered, CalendarDays, Scale, Briefcase, MessageCircle, GraduationCap, Settings, LogOut, Menu, Wallet } from "lucide-react"
 import QuickAddModal from "./QuickAddModal"
+import BottomNav from "./BottomNav"
+import MoreMenu from "./MoreMenu"
+import FloatingMenuButton from "./FloatingMenuButton"
 
 const menuItems = [
   { href: "/", label: "ภาพรวม", icon: LayoutDashboard },
@@ -20,18 +23,19 @@ const menuItems = [
 
 export default function Sidebar({ children }: { children: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(false)
-  const [mobileOpen, setMobileOpen] = useState(false)
   const [showQuickAdd, setShowQuickAdd] = useState(false)
+  const [showMoreMenu, setShowMoreMenu] = useState(false)
   const pathname = usePathname()
 
   const [categories, setCategories] = useState<{ id: string; name: string; type: string; icon: string }[]>([])
   const [cycles, setCycles] = useState<{ id: string; name: string }[]>([])
   const [profileMode, setProfileMode] = useState<"simple" | "full">("full")
+  const [showFloatingMenu, setShowFloatingMenu] = useState(true)
 
   const hideSidebar = pathname === "/login" || pathname === "/register" || pathname === "/forgot-password" || pathname === "/reset-password"
 
   useEffect(() => {
-    setMobileOpen(false)
+    setShowMoreMenu(false)
   }, [pathname])
 
   useEffect(() => {
@@ -41,11 +45,12 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
       const [{ data: catData }, { data: cycleData }, { data: profileData }] = await Promise.all([
         supabase.from("categories").select("*").eq("user_id", user.id),
         supabase.from("pay_cycles").select("*").eq("user_id", user.id),
-        supabase.from("financial_profile").select("mode").eq("user_id", user.id).maybeSingle(),
+        supabase.from("financial_profile").select("mode, show_floating_menu").eq("user_id", user.id).maybeSingle(),
       ])
       setCategories(catData || [])
       setCycles(cycleData || [])
       setProfileMode(profileData?.mode === "simple" ? "simple" : "full")
+      setShowFloatingMenu(profileData?.show_floating_menu !== false)
     }
     fetchData()
   }, [])
@@ -101,13 +106,7 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
           <Wallet size={18} /> Finance
         </span>}
         <button
-          onClick={() => {
-            if (window.innerWidth < 768) {
-              setMobileOpen(false)
-            } else {
-              setCollapsed(!collapsed)
-            }
-          }}
+          onClick={() => setCollapsed(!collapsed)}
           className="p-1.5 text-gray-500 hover:text-gray-800 hover:bg-gray-100 rounded-lg"
         >
           <Menu size={18} />
@@ -150,30 +149,20 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
           <SidebarContent />
         </aside>
 
-        {mobileOpen && (
-          <div
-            className="fixed inset-0 bg-black/40 z-40 md:hidden"
-            onClick={() => setMobileOpen(false)}
-          />
-        )}
-
-        <aside className={`fixed top-0 left-0 h-full w-64 bg-white z-50 shadow-xl transition-transform duration-300 md:hidden ${mobileOpen ? "translate-x-0" : "-translate-x-full"}`}>
-          <SidebarContent />
-        </aside>
-
         <div className="flex-1 flex flex-col overflow-hidden">
           <div className="md:hidden flex items-center justify-between px-4 py-3 bg-white border-b border-gray-200">
+            <span className="flex items-center gap-1.5 text-sm font-bold text-[#1D9E75]">
+              <Wallet size={18} /> Finance
+            </span>
             <button
-              onClick={() => setMobileOpen(true)}
+              onClick={() => setShowMoreMenu(true)}
               className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-lg"
             >
               <Menu size={18} />
             </button>
-            <span className="text-sm font-bold text-[#1D9E75]">💰 Finance</span>
-            <div className="w-8" />
           </div>
 
-          <main className="flex-1 overflow-auto pb-6">
+          <main className="flex-1 overflow-auto pb-20 md:pb-6">
             {children}
           </main>
         </div>
@@ -181,11 +170,23 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
         {showFAB && (
           <button
             onClick={handleFAB}
-            className="fixed bottom-6 right-6 w-14 h-14 bg-[#1D9E75] text-white rounded-full shadow-lg text-2xl hover:bg-[#178a64] transition-colors z-30 flex items-center justify-center"
+            className="hidden md:flex fixed bottom-6 right-6 w-14 h-14 bg-[#1D9E75] text-white rounded-full shadow-lg text-2xl hover:bg-[#178a64] transition-colors z-30 items-center justify-center"
           >
             +
           </button>
         )}
+
+        <BottomNav onFabClick={handleFAB} />
+
+        {showFloatingMenu && (
+          <FloatingMenuButton onOpen={() => setShowMoreMenu(true)} />
+        )}
+
+        <MoreMenu
+          open={showMoreMenu}
+          onClose={() => setShowMoreMenu(false)}
+          mode={profileMode}
+        />
 
         <QuickAddModal
           open={showQuickAdd}
