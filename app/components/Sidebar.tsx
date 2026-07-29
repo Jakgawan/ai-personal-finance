@@ -150,17 +150,13 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
         </aside>
 
         <div className="flex-1 flex flex-col overflow-hidden">
-          <div className="md:hidden flex items-center justify-between px-4 py-3 bg-white border-b border-gray-200">
-            <span className="flex items-center gap-1.5 text-sm font-bold text-[#1D9E75]">
-              <Wallet size={18} /> Finance
-            </span>
-            <button
-              onClick={() => setShowMoreMenu(true)}
-              className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-lg"
-            >
-              <Menu size={18} />
-            </button>
-          </div>
+          {!pathname.startsWith("/settings") && (
+            <div className="md:hidden flex items-center px-4 py-3 bg-white border-b border-gray-200">
+              <span className="flex items-center gap-1.5 text-sm font-bold text-[#1D9E75]">
+                <Wallet size={18} /> Finance
+              </span>
+            </div>
+          )}
 
           <main className="flex-1 overflow-auto pb-20 md:pb-6">
             {children}

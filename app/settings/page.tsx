@@ -1,58 +1,43 @@
 "use client"
 
-import { Suspense, useState } from "react"
+import { Suspense } from "react"
 import { useSearchParams } from "next/navigation"
+import Link from "next/link"
 import ProfileSection from "./components/ProfileSection"
 import PayCyclesSection from "./components/PayCyclesSection"
 import CategoriesSection from "./components/CategoriesSection"
 import RecurringSection from "./components/RecurringSection"
-import { User, CalendarDays, Tag, RefreshCw, Target, Bell, Globe } from "lucide-react"
+import { ChevronLeft } from "lucide-react"
 
-const menuItems = [
-  { id: "profile", label: "โปรไฟล์", icon: User },
-  { id: "paycycles", label: "รอบเงินเดือน", icon: CalendarDays },
-  { id: "categories", label: "หมวดหมู่", icon: Tag },
-  { id: "recurring", label: "รายการซ้ำ", icon: RefreshCw },
-  { id: "goals", label: "เป้าหมาย", icon: Target },
-  { id: "notifications", label: "แจ้งเตือน", icon: Bell },
-  { id: "display", label: "การแสดงผล", icon: Globe },
-]
+const SECTION_LABELS: Record<string, string> = {
+  profile: "โปรไฟล์",
+  paycycles: "รอบเงินเดือน",
+  categories: "หมวดหมู่",
+  recurring: "รายการซ้ำ",
+  goals: "เป้าหมาย",
+  notifications: "แจ้งเตือน",
+  display: "การแสดงผล",
+}
 
-const validTabs = menuItems.map((m) => m.id)
+const validTabs = Object.keys(SECTION_LABELS)
 
 function SettingsContent() {
   const searchParams = useSearchParams()
-  const initialTab = searchParams.get("tab")
-  const [active, setActive] = useState(
-    initialTab && validTabs.includes(initialTab) ? initialTab : "profile"
-  )
+  const tab = searchParams.get("tab")
+  const active = tab && validTabs.includes(tab) ? tab : "profile"
 
   return (
     <div className="min-h-screen bg-gray-50">
-
-      {/* Tabs แนวนอน — ทั้ง mobile และ desktop */}
-      <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
-        <div className="overflow-x-auto scrollbar-hide">
-          <div className="flex min-w-max px-4">
-            {menuItems.map((item) => (
-              <button
-                key={item.id}
-                onClick={() => setActive(item.id)}
-                className={`flex items-center gap-2 px-4 py-3 text-sm whitespace-nowrap border-b-2 transition-colors ${
-                  active === item.id
-                    ? "border-[#1D9E75] text-[#1D9E75] font-semibold"
-                    : "border-transparent text-gray-500 hover:text-gray-700"
-                }`}
-              >
-                <item.icon size={15} />
-                <span>{item.label}</span>
-              </button>
-            ))}
-          </div>
-        </div>
+      <div className="flex items-center gap-2 px-4 py-3 bg-white border-b border-gray-200 sticky top-0 z-10">
+        <Link
+          href="/"
+          className="p-1.5 -ml-1.5 text-gray-500 hover:bg-gray-100 rounded-lg"
+        >
+          <ChevronLeft size={20} />
+        </Link>
+        <h1 className="text-base font-semibold text-gray-800">{SECTION_LABELS[active]}</h1>
       </div>
 
-      {/* Content */}
       <main className="p-4 md:p-8">
         {active === "profile" && <ProfileSection />}
         {active === "paycycles" && <PayCyclesSection />}
@@ -62,7 +47,6 @@ function SettingsContent() {
           <div className="text-gray-400 text-sm">Coming soon...</div>
         )}
       </main>
-
     </div>
   )
 }
