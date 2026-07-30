@@ -7,6 +7,7 @@ import ProfileSection from "./components/ProfileSection"
 import PayCyclesSection from "./components/PayCyclesSection"
 import CategoriesSection from "./components/CategoriesSection"
 import RecurringSection from "./components/RecurringSection"
+import DisplaySection from "./components/DisplaySection"
 import { ChevronLeft } from "lucide-react"
 
 const SECTION_LABELS: Record<string, string> = {
@@ -43,7 +44,8 @@ function SettingsContent() {
         {active === "paycycles" && <PayCyclesSection />}
         {active === "categories" && <CategoriesSection />}
         {active === "recurring" && <RecurringSection />}
-        {["goals", "notifications", "display"].includes(active) && (
+        {active === "display" && <DisplaySection />}
+        {["goals", "notifications"].includes(active) && (
           <div className="text-gray-400 text-sm">Coming soon...</div>
         )}
       </main>

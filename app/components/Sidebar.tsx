@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { supabase } from "@/lib/supabase"
-import { LayoutDashboard, ListOrdered, CalendarDays, Scale, Briefcase, MessageCircle, GraduationCap, Settings, LogOut, Menu, Wallet } from "lucide-react"
+import { LayoutDashboard, ListOrdered, CalendarDays, Scale, Briefcase, MessageCircle, GraduationCap, Settings, LogOut, Menu, Wallet, ChevronLeft } from "lucide-react"
 import QuickAddModal from "./QuickAddModal"
 import BottomNav from "./BottomNav"
 import MoreMenu from "./MoreMenu"
@@ -20,6 +20,15 @@ const menuItems = [
   { href: "/courses", label: "คอร์สการเงิน", icon: GraduationCap },
   { href: "/settings", label: "Settings", icon: Settings },
 ]
+
+// หน้าที่เข้าถึงผ่าน MoreMenu เท่านั้น (ไม่ได้อยู่ใน bottom nav) — โชว์ปุ่ม back แทนโลโก้บนมือถือ
+const MOBILE_PAGE_TITLES: Record<string, string> = {
+  "/planning": "วางแผน",
+  "/balance-sheet": "งบการเงิน",
+  "/business": "ธุรกิจ",
+  "/ai": "ปรึกษาการเงิน",
+  "/courses": "คอร์สการเงิน",
+}
 
 export default function Sidebar({ children }: { children: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(false)
@@ -37,6 +46,15 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     setShowMoreMenu(false)
   }, [pathname])
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<{ show: boolean }>).detail
+      setShowFloatingMenu(detail.show)
+    }
+    window.addEventListener("floatingMenuToggled", handler)
+    return () => window.removeEventListener("floatingMenuToggled", handler)
+  }, [])
 
   useEffect(() => {
     const fetchData = async () => {
@@ -151,10 +169,27 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
 
         <div className="flex-1 flex flex-col overflow-hidden">
           {!pathname.startsWith("/settings") && (
-            <div className="md:hidden flex items-center px-4 py-3 bg-white border-b border-gray-200">
-              <span className="flex items-center gap-1.5 text-sm font-bold text-[#1D9E75]">
-                <Wallet size={18} /> Finance
-              </span>
+            <div className="md:hidden flex items-center justify-between px-4 py-3 bg-white border-b border-gray-200">
+              {MOBILE_PAGE_TITLES[pathname] ? (
+                <span className="flex items-center gap-2">
+                  <Link href="/" className="p-1.5 -ml-1.5 text-gray-500 hover:bg-gray-100 rounded-lg">
+                    <ChevronLeft size={20} />
+                  </Link>
+                  <h1 className="text-sm font-bold text-gray-800">{MOBILE_PAGE_TITLES[pathname]}</h1>
+                </span>
+              ) : (
+                <span className="flex items-center gap-1.5 text-sm font-bold text-[#1D9E75]">
+                  <Wallet size={18} /> Finance
+                </span>
+              )}
+              {!showFloatingMenu && (
+                <button
+                  onClick={() => setShowMoreMenu(true)}
+                  className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-lg"
+                >
+                  <Menu size={18} />
+                </button>
+              )}
             </div>
           )}
 
