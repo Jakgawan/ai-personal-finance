@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
 import { Plus } from "lucide-react"
+import { showToast } from "./Toast"
 
 type Category = { id: string; name: string; type: string; icon: string }
 type Cycle = { id: string; name: string }
@@ -120,6 +121,7 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles 
     window.dispatchEvent(new CustomEvent("transactionAdded"))
     setLoading(false)
     onClose()
+    showToast("บันทึกสำเร็จ")
   }
 
   return (
