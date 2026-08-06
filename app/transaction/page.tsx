@@ -555,7 +555,7 @@ export default function TransactionPage() {
             <div className="flex gap-3 mt-5">
               <button onClick={() => setShowModal(false)}
                 className="flex-1 border border-gray-200 rounded-lg py-2 text-sm hover:bg-gray-50 text-gray-700">ยกเลิก</button>
-              <button onClick={handleSubmit} disabled={loading}
+              <button onClick={handleSubmit} disabled={loading || !name || !amount || !date}
                 className="flex-1 bg-[#1D9E75] text-white rounded-lg py-2 text-sm hover:bg-[#178a64] disabled:opacity-50">
                 {loading ? "กำลังบันทึก..." : "บันทึก"}
               </button>

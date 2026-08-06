@@ -400,7 +400,7 @@ export default function RecurringSection() {
               </div>
               <div className="flex gap-3 mt-2">
                 <button onClick={() => setShowModal(false)} className="flex-1 border border-gray-200 rounded-lg py-2 text-sm hover:bg-gray-50">ยกเลิก</button>
-                <button onClick={saveItem} disabled={loading}
+                <button onClick={saveItem} disabled={loading || !name || !amount}
                   className="flex-1 bg-[#1D9E75] text-white rounded-lg btn-height-token flex items-center justify-center text-sm hover:bg-[#178a64] disabled:opacity-50">
                   {loading ? "กำลังบันทึก..." : "บันทึก"}
                 </button>

@@ -154,7 +154,7 @@ const handleLoadTemplate = () => {
           <div className="flex gap-2">
             <button
               onClick={handleSave}
-              disabled={loading}
+              disabled={loading || !name}
               className="flex-1 bg-[#1D9E75] text-white rounded-lg px-4 btn-height-token flex items-center justify-center text-sm hover:bg-[#178a64] disabled:opacity-50 transition-colors"
             >
               {editId ? "บันทึกการแก้ไข" : "เพิ่มหมวดหมู่"}

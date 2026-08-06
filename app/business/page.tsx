@@ -318,7 +318,7 @@ export default function BusinessPage() {
             </div>
             <div className="flex gap-3 mt-5">
               <button onClick={() => setShowBizModal(false)} className="flex-1 border border-gray-200 rounded-lg py-2 text-sm hover:bg-gray-50">ยกเลิก</button>
-              <button onClick={saveBusiness} disabled={loading}
+              <button onClick={saveBusiness} disabled={loading || !bizName}
                 className="flex-1 bg-[#1D9E75] text-white rounded-lg py-2 text-sm hover:bg-[#178a64] disabled:opacity-50">บันทึก</button>
             </div>
           </div>
@@ -354,7 +354,7 @@ export default function BusinessPage() {
                 className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75]" />
               <div className="flex gap-3 mt-2">
                 <button onClick={() => setShowTxModal(false)} className="flex-1 border border-gray-200 rounded-lg py-2 text-sm hover:bg-gray-50">ยกเลิก</button>
-                <button onClick={saveTx} disabled={loading}
+                <button onClick={saveTx} disabled={loading || !txName || !txAmount}
                   className="flex-1 bg-[#1D9E75] text-white rounded-lg py-2 text-sm hover:bg-[#178a64] disabled:opacity-50">
                   {loading ? "กำลังบันทึก..." : "บันทึก"}
                 </button>
