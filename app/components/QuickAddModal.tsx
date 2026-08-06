@@ -236,16 +236,19 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles 
               </div>
             )}
 
-            <select
-              value={cycleId}
-              onChange={e => setCycleId(e.target.value)}
-              className="border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none text-gray-800"
-            >
-              <option value="">-- รอบเงินเดือน --</option>
-              {cycles.map(c => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
+            <div>
+              <select
+                value={cycleId}
+                onChange={e => setCycleId(e.target.value)}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none text-gray-800"
+              >
+                <option value="">-- รอบเงินเดือน --</option>
+                {cycles.map(c => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+              <p className="text-xs text-gray-400 mt-1">ไม่บังคับ — เลือกไว้เพื่อดูสรุปแยกตามรอบเงินเดือน</p>
+            </div>
 
             <button
               onClick={handleSave}
