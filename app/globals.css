@@ -18,6 +18,58 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+/*
+  Design tokens — mobile-first, overridden for desktop via @media (min-width: 768px)
+  ตรงกับ breakpoint md: ของ Tailwind ที่ใช้แยก desktop/mobile ทั้งแอปอยู่แล้ว
+  สเปคต้นฉบับให้เป็นช่วง (เช่น icon 20-24px, gap-section 80-120px) ใช้ค่ากลางของช่วงเป็น default
+*/
+:root {
+  --fs-heading: 36px;
+  --fs-body: 16px;
+  --btn-height: 48px;
+  --icon-size: 22px;
+  --space-section: 48px;
+  --space-card-padding: 16px;
+}
+
+@media (min-width: 768px) {
+  :root {
+    --fs-heading: 48px;
+    --fs-body: 16px;
+    --btn-height: 44px;
+    --icon-size: 24px;
+    --space-section: 96px;
+    --space-card-padding: 24px;
+  }
+}
+
+.text-heading-token {
+  font-size: var(--fs-heading);
+  line-height: 1.2;
+  font-weight: 700;
+}
+
+.text-body-token {
+  font-size: var(--fs-body);
+}
+
+.btn-height-token {
+  height: var(--btn-height);
+}
+
+.icon-token {
+  width: var(--icon-size);
+  height: var(--icon-size);
+}
+
+.section-gap-token {
+  margin-bottom: var(--space-section);
+}
+
+.card-padding-token {
+  padding: var(--space-card-padding);
+}
+
 /* สีพื้นหลังอ่อน — เขียนเองด้วย hex กัน Tailwind v4 ไม่ generate */
 .bg-green-50 { background-color: #ECFDF5 !important; }
 .bg-green-100 { background-color: #D1FAE5 !important; }

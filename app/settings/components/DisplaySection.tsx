@@ -42,13 +42,13 @@ export default function DisplaySection() {
 
   return (
     <div className="max-w-lg">
-      <h2 className="text-xl font-semibold text-gray-800 mb-6">การแสดงผล</h2>
+      <h2 className="text-heading-token text-gray-800 mb-6">การแสดงผล</h2>
 
-      <div className="bg-white rounded-xl p-6 shadow-sm flex items-center justify-between gap-4">
+      <div className="bg-white rounded-xl card-padding-token shadow-sm flex items-center justify-between gap-4">
         <div>
           <p className="text-sm font-medium text-gray-800">แสดงปุ่มเมนูลอย</p>
           <p className="text-xs text-gray-400 mt-1">
-            ปุ่มลอยสีเขียวสำหรับเปิดเมนู ลากขึ้น-ลงได้ตามขอบจอ ถ้าปิดไว้จะมีแท็บ &quot;เพิ่มเติม&quot; ในแถบด้านล่างแทน
+            ปุ่มลอยสีเขียวสำหรับเปิดเมนู ลากขึ้น-ลงได้ตามขอบจอ ถ้าปิดไว้จะมีไอคอนเมนูมุมบนขวาแทน
           </p>
         </div>
         <button

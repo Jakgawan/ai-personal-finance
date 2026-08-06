@@ -105,10 +105,10 @@ const handleLoadTemplate = () => {
 
   return (
     <div className="max-w-lg">
-      <h2 className="text-xl font-semibold text-gray-800 mb-6">หมวดหมู่รายการ</h2>
+      <h2 className="text-heading-token text-gray-800 mb-6">หมวดหมู่รายการ</h2>
 
       {/* Form */}
-      <div className="bg-white rounded-xl p-6 shadow-sm mb-6">
+      <div className="bg-white rounded-xl card-padding-token shadow-sm mb-6">
         <h3 className="text-sm font-medium text-gray-700 mb-4">
           {editId ? "แก้ไขหมวดหมู่" : "เพิ่มหมวดหมู่ใหม่"}
         </h3>
@@ -155,7 +155,7 @@ const handleLoadTemplate = () => {
             <button
               onClick={handleSave}
               disabled={loading}
-              className="flex-1 bg-[#1D9E75] text-white rounded-lg px-4 py-2 text-sm hover:bg-[#178a64] disabled:opacity-50 transition-colors"
+              className="flex-1 bg-[#1D9E75] text-white rounded-lg px-4 btn-height-token flex items-center justify-center text-sm hover:bg-[#178a64] disabled:opacity-50 transition-colors"
             >
               {editId ? "บันทึกการแก้ไข" : "เพิ่มหมวดหมู่"}
             </button>

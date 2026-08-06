@@ -225,9 +225,9 @@ export default function RecurringSection() {
   return (
     <div className="max-w-3xl">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-gray-800">รายการซ้ำอัตโนมัติ</h1>
+        <h1 className="text-heading-token text-gray-800">รายการซ้ำอัตโนมัติ</h1>
         <button onClick={() => openAdd(activeTab === "personal" ? "" : activeTab)}
-          className="bg-[#1D9E75] text-white rounded-lg px-4 py-2 text-sm hover:bg-[#178a64]">
+          className="bg-[#1D9E75] text-white rounded-lg px-4 btn-height-token flex items-center justify-center text-sm hover:bg-[#178a64]">
           + เพิ่มรายการซ้ำ
         </button>
       </div>
@@ -401,7 +401,7 @@ export default function RecurringSection() {
               <div className="flex gap-3 mt-2">
                 <button onClick={() => setShowModal(false)} className="flex-1 border border-gray-200 rounded-lg py-2 text-sm hover:bg-gray-50">ยกเลิก</button>
                 <button onClick={saveItem} disabled={loading}
-                  className="flex-1 bg-[#1D9E75] text-white rounded-lg py-2 text-sm hover:bg-[#178a64] disabled:opacity-50">
+                  className="flex-1 bg-[#1D9E75] text-white rounded-lg btn-height-token flex items-center justify-center text-sm hover:bg-[#178a64] disabled:opacity-50">
                   {loading ? "กำลังบันทึก..." : "บันทึก"}
                 </button>
               </div>

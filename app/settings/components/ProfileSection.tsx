@@ -31,9 +31,9 @@ export default function ProfileSection() {
 
   return (
     <div className="max-w-lg">
-      <h2 className="text-xl font-semibold text-gray-800 mb-6">บัญชีและโปรไฟล์</h2>
+      <h2 className="text-heading-token text-gray-800 mb-6">บัญชีและโปรไฟล์</h2>
 
-      <div className="bg-white rounded-xl p-6 shadow-sm flex flex-col gap-4">
+      <div className="bg-white rounded-xl card-padding-token shadow-sm flex flex-col gap-4">
         <div>
           <label className="block text-sm text-gray-600 mb-1">ชื่อ</label>
           <input
@@ -62,7 +62,7 @@ export default function ProfileSection() {
         <button
           onClick={handleSave}
           disabled={loading}
-          className="bg-[#1D9E75] text-white rounded-lg px-4 py-2 text-sm hover:bg-[#178a64] disabled:opacity-50 transition-colors"
+          className="bg-[#1D9E75] text-white rounded-lg px-4 btn-height-token flex items-center justify-center text-sm hover:bg-[#178a64] disabled:opacity-50 transition-colors"
         >
           {loading ? "กำลังบันทึก..." : "บันทึก"}
         </button>
