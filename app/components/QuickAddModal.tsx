@@ -59,6 +59,8 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles 
 
   if (!open) return null
 
+  const amountError = amount !== "" && Number(amount) <= 0 ? "จำนวนเงินต้องมากกว่า 0" : ""
+
   const categoriesForType = categories.filter(c => !c.type || c.type === type)
 
   const topCategories = (() => {
@@ -102,7 +104,7 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles 
   }
 
   const handleSave = async () => {
-    if (!amount) return
+    if (!amount || Number(amount) <= 0) return
     setLoading(true)
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) {
@@ -188,13 +190,16 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles 
               onChange={e => setName(e.target.value)}
               className="border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75] text-gray-800"
             />
-            <input
-              placeholder="จำนวน (฿)"
-              type="number"
-              value={amount}
-              onChange={e => setAmount(e.target.value)}
-              className="border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75] text-gray-800"
-            />
+            <div>
+              <input
+                placeholder="จำนวน (฿)"
+                type="number"
+                value={amount}
+                onChange={e => setAmount(e.target.value)}
+                className={`w-full border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 text-gray-800 ${amountError ? "border-[#D85A30] focus:ring-[#D85A30]" : "border-gray-200 focus:ring-[#1D9E75]"}`}
+              />
+              {amountError && <p className="text-xs text-[#D85A30] mt-1">{amountError}</p>}
+            </div>
 
             {mode === "full" && (
               <div className="flex flex-col gap-2">
@@ -244,7 +249,7 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles 
 
             <button
               onClick={handleSave}
-              disabled={loading || !amount}
+              disabled={loading || !amount || !!amountError}
               className="w-full bg-[#1D9E75] text-white rounded-lg py-3 text-sm font-medium hover:bg-[#178a64] disabled:opacity-50 transition-colors"
             >
               {loading ? "กำลังบันทึก..." : "บันทึก"}
