@@ -6,12 +6,14 @@ Token ที่มีอยู่ (`app/globals.css`): `.text-heading-token`, `.
 
 | Token | Mobile | Desktop |
 |---|---|---|
-| heading | 36px | 48px |
-| body | 16px | 16px |
-| button height | 48px | 44px |
-| icon | 22px | 24px |
+| heading | 2.25rem (36px) | 3rem (48px) |
+| body | 1rem (16px) | 1rem (16px) |
+| button height | 3rem (48px) | 2.75rem (44px) |
+| icon | 1.375rem (22px) | 1.5rem (24px) |
 | section gap | 48px | 96px |
 | card padding | 16px | 24px |
+
+heading/body/button/icon ใช้หน่วย **rem** (accessibility — รองรับการปรับขนาดตัวอักษรของ user) ส่วน section gap/card padding เป็นเรื่อง layout คงหน่วย **px** ตามเดิม
 
 อัปเดตไฟล์นี้ทุกครั้งที่ apply token เพิ่ม เพื่อไม่ให้ตกหล่น
 

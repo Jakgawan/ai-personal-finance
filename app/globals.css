@@ -22,22 +22,24 @@ body {
   Design tokens — mobile-first, overridden for desktop via @media (min-width: 768px)
   ตรงกับ breakpoint md: ของ Tailwind ที่ใช้แยก desktop/mobile ทั้งแอปอยู่แล้ว
   สเปคต้นฉบับให้เป็นช่วง (เช่น icon 20-24px, gap-section 80-120px) ใช้ค่ากลางของช่วงเป็น default
+  fs/btn/icon ใช้ rem เพื่อรองรับการปรับขนาดตัวอักษรของ user (accessibility)
+  space-section/card-padding เป็นเรื่อง layout คงหน่วย px ตามเดิม
 */
 :root {
-  --fs-heading: 36px;
-  --fs-body: 16px;
-  --btn-height: 48px;
-  --icon-size: 22px;
+  --fs-heading: 2.25rem;
+  --fs-body: 1rem;
+  --btn-height: 3rem;
+  --icon-size: 1.375rem;
   --space-section: 48px;
   --space-card-padding: 16px;
 }
 
 @media (min-width: 768px) {
   :root {
-    --fs-heading: 48px;
-    --fs-body: 16px;
-    --btn-height: 44px;
-    --icon-size: 24px;
+    --fs-heading: 3rem;
+    --fs-body: 1rem;
+    --btn-height: 2.75rem;
+    --icon-size: 1.5rem;
     --space-section: 96px;
     --space-card-padding: 24px;
   }
