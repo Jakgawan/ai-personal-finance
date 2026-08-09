@@ -31,6 +31,8 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles 
   const [aiError, setAiError] = useState("")
 
   const [showAllCategories, setShowAllCategories] = useState(false)
+  const [categorySearch, setCategorySearch] = useState("")
+  const [categoryDropdownOpen, setCategoryDropdownOpen] = useState(false)
   const [categoryUsage, setCategoryUsage] = useState<{ category: string; type: string }[]>([])
 
   useEffect(() => {
@@ -55,6 +57,7 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles 
     setName(""); setAmount(""); setDate(new Date().toISOString().split("T")[0])
     setType("expense"); setCategory(""); setCycleId("")
     setInputMode("form"); setAiText(""); setAiError(""); setShowAllCategories(false)
+    setCategorySearch(""); setCategoryDropdownOpen(false)
   }, [open])
 
   if (!open) return null
@@ -72,6 +75,10 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles 
     const unused = categoriesForType.filter(c => !counts.has(c.name))
     return [...used, ...unused].slice(0, 4)
   })()
+
+  const filteredCategories = categoriesForType.filter(c =>
+    c.name.toLowerCase().includes(categorySearch.toLowerCase())
+  )
 
   const handleParseAI = async () => {
     if (!aiText.trim()) return
@@ -215,23 +222,51 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles 
                     </button>
                   ))}
                   <button
-                    onClick={() => setShowAllCategories(v => !v)}
+                    onClick={() => {
+                      setShowAllCategories(v => !v)
+                      setCategorySearch(category)
+                    }}
                     className="w-8 h-8 flex items-center justify-center rounded-full border border-gray-200 text-gray-500 hover:bg-gray-50 shrink-0"
                   >
                     <Plus size={16} />
                   </button>
                 </div>
                 {showAllCategories && (
-                  <select
-                    value={category}
-                    onChange={e => setCategory(e.target.value)}
-                    className="border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none text-gray-800"
-                  >
-                    <option value="">-- หมวดหมู่ --</option>
-                    {categoriesForType.map(c => (
-                      <option key={c.id} value={c.name}>{c.icon} {c.name}</option>
-                    ))}
-                  </select>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={categorySearch}
+                      onChange={e => { setCategorySearch(e.target.value); setCategoryDropdownOpen(true); if (category) setCategory("") }}
+                      onFocus={() => setCategoryDropdownOpen(true)}
+                      onBlur={() => setTimeout(() => setCategoryDropdownOpen(false), 150)}
+                      placeholder="พิมพ์ค้นหาหมวดหมู่..."
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75] text-gray-800"
+                    />
+                    {categoryDropdownOpen && (
+                      <div className="absolute z-10 mt-1 w-full max-h-48 overflow-y-auto bg-white border border-gray-200 rounded-lg shadow-lg">
+                        {filteredCategories.length === 0 ? (
+                          <p className="px-3 py-2 text-sm text-gray-400">ไม่พบหมวดหมู่</p>
+                        ) : (
+                          filteredCategories.map(c => (
+                            <button
+                              key={c.id}
+                              type="button"
+                              onMouseDown={e => e.preventDefault()}
+                              onClick={() => {
+                                setCategory(c.name)
+                                setCategorySearch(c.name)
+                                setCategoryDropdownOpen(false)
+                              }}
+                              className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center gap-2 ${category === c.name ? "bg-green-50 text-[#1D9E75]" : "text-gray-700"}`}
+                            >
+                              <span>{c.icon || "•"}</span>
+                              <span>{c.name}</span>
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
             )}
