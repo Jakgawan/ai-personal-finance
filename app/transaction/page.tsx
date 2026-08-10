@@ -61,6 +61,8 @@ export default function TransactionPage() {
   const [note, setNote] = useState("")
   const [loading, setLoading] = useState(false)
 
+  const [initialLoading, setInitialLoading] = useState(true)
+
   const [calendarDate, setCalendarDate] = useState(new Date())
   const [selectedDay, setSelectedDay] = useState<string | null>(null)
   const [confirmState, setConfirmState] = useState<{ message: string; onConfirm: () => void } | null>(null)
@@ -88,6 +90,7 @@ export default function TransactionPage() {
     setTransactions(txData || [])
     setCategories(catData || [])
     setCycles(cycleData || [])
+    setInitialLoading(false)
   }
 
   useEffect(() => { fetchAll() }, [])
@@ -260,6 +263,27 @@ export default function TransactionPage() {
 
   const prevMonth = () => setCalendarDate(new Date(calYear, calMonth - 1, 1))
   const nextMonth = () => setCalendarDate(new Date(calYear, calMonth + 1, 1))
+
+  if (initialLoading) {
+    return (
+      <div className="p-4 md:p-6 bg-gray-50 min-h-screen animate-pulse">
+        <div className="h-7 w-24 bg-gray-200 rounded mb-6" />
+        <div className="flex gap-2 mb-6">
+          <div className="h-9 w-24 bg-gray-200 rounded-lg" />
+          <div className="h-9 w-24 bg-gray-200 rounded-lg" />
+        </div>
+        <div className="bg-white rounded-xl shadow-sm p-4 md:p-5">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="h-12 border-b border-gray-100 last:border-0 flex items-center gap-4">
+              <div className="h-4 w-24 bg-gray-200 rounded" />
+              <div className="h-4 w-32 bg-gray-200 rounded flex-1" />
+              <div className="h-4 w-16 bg-gray-200 rounded" />
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="p-4 md:p-6 bg-gray-50 min-h-screen">

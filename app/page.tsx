@@ -220,7 +220,29 @@ setLiabilities(liabData || [])
     return { ...t, balance: bal }
   })
 
-  if (loading) return <div className="p-8 text-gray-400">กำลังโหลด...</div>
+  if (loading) {
+    return (
+      <div className="p-4 md:p-6 bg-gray-50 min-h-screen animate-pulse">
+        <div className="h-7 w-32 bg-gray-200 rounded mb-6" />
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="bg-white rounded-xl p-3 md:p-4 shadow-sm h-20">
+              <div className="h-3 w-16 bg-gray-200 rounded mb-2" />
+              <div className="h-5 w-20 bg-gray-200 rounded" />
+            </div>
+          ))}
+        </div>
+        <div className="bg-white rounded-xl shadow-sm p-4 md:p-5 mb-6 h-64">
+          <div className="h-4 w-40 bg-gray-200 rounded mb-4" />
+          <div className="w-24 h-24 rounded-full bg-gray-200 mx-auto" />
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+          <div className="md:col-span-2 bg-white rounded-xl p-4 md:p-5 shadow-sm h-56" />
+          <div className="bg-white rounded-xl p-4 md:p-5 shadow-sm h-56" />
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="p-4 md:p-6 bg-gray-50 min-h-screen">
@@ -308,7 +330,10 @@ setLiabilities(liabData || [])
             </div>
           </div>
           {expenseByCategory.length === 0 ? (
-            <p className="text-sm text-gray-400 text-center py-8">ยังไม่มีรายจ่าย</p>
+            <div className="text-center py-8">
+              <p className="text-sm text-gray-400">ยังไม่มีรายจ่ายในรอบนี้</p>
+              <p className="text-xs text-gray-400 mt-1">กดปุ่ม + เพื่อบันทึกรายจ่ายแรกของคุณ</p>
+            </div>
           ) : (
             <>
               {chartMode === "bar" && (
@@ -427,7 +452,10 @@ setLiabilities(liabData || [])
         </div>
 
         {latest5WithBalance.length === 0 ? (
-          <p className="text-center py-6 text-gray-400 text-sm">ยังไม่มีรายการ</p>
+          <div className="text-center py-6">
+            <p className="text-gray-400 text-sm">ยังไม่มีรายการ</p>
+            <p className="text-xs text-gray-400 mt-1">เริ่มบันทึกรายรับ-รายจ่ายแรกของคุณผ่านปุ่ม + ด้านล่าง</p>
+          </div>
         ) : (
           <>
             {/* Desktop — ตาราง */}
