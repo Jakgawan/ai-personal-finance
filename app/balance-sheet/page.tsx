@@ -277,7 +277,10 @@ export default function BalanceSheetPage() {
               <p className="text-xs text-gray-400">{group.desc}</p>
             </div>
             {groupAssets.length === 0 ? (
-              <p className="px-5 py-3 text-xs text-gray-300">ยังไม่มีรายการ</p>
+              <div className="px-5 py-3">
+                <p className="text-xs text-gray-300">ยังไม่มีรายการ</p>
+                <p className="text-xs text-gray-300 mt-0.5">กดปุ่ม &quot;+ เพิ่ม&quot; ด้านบนเพื่อบันทึก{group.label}แรกของคุณ</p>
+              </div>
             ) : (
               groupAssets.map(a => (
                 <div key={a.id} className="flex items-center justify-between px-5 py-3 border-b border-gray-50">
@@ -339,7 +342,10 @@ export default function BalanceSheetPage() {
         <p className="text-xs text-gray-400">ผ่อนหมดภายใน 1 ปี เช่น บัตรเครดิต, หนี้นอกระบบ</p>
       </div>
       {shortTermLiabs.length === 0 ? (
-        <p className="px-5 py-3 text-xs text-gray-300">ยังไม่มีรายการ</p>
+        <div className="px-5 py-3">
+          <p className="text-xs text-gray-300">ยังไม่มีรายการ</p>
+          <p className="text-xs text-gray-300 mt-0.5">กดปุ่ม &quot;+ เพิ่ม&quot; ด้านบนเพื่อบันทึกหนี้ระยะสั้น</p>
+        </div>
       ) : (
         shortTermLiabs.map(renderLiabRow)
       )}
@@ -354,7 +360,10 @@ export default function BalanceSheetPage() {
         <p className="text-xs text-gray-400">ผ่อนนานกว่า 1 ปี เช่น บ้าน, รถ, กยศ.</p>
       </div>
       {longTermLiabs.length === 0 ? (
-        <p className="px-5 py-3 text-xs text-gray-300">ยังไม่มีรายการ</p>
+        <div className="px-5 py-3">
+          <p className="text-xs text-gray-300">ยังไม่มีรายการ</p>
+          <p className="text-xs text-gray-300 mt-0.5">กดปุ่ม &quot;+ เพิ่ม&quot; ด้านบนเพื่อบันทึกหนี้ระยะยาว</p>
+        </div>
       ) : (
         longTermLiabs.map(renderLiabRow)
       )}

@@ -255,7 +255,12 @@ export default function BusinessPage() {
                 </thead>
                 <tbody>
                   {paginated.length === 0 ? (
-                    <tr><td colSpan={7} className="text-center py-8 text-gray-400">ยังไม่มีรายการ</td></tr>
+                    <tr>
+                      <td colSpan={7} className="text-center py-8 text-gray-400">
+                        <p>ยังไม่มีรายการ</p>
+                        <p className="text-xs mt-1">กดปุ่ม &quot;+ เพิ่มรายการ&quot; ด้านบนเพื่อบันทึกรายการแรกของธุรกิจนี้</p>
+                      </td>
+                    </tr>
                   ) : (
                     paginated.map((t, i) => (
                       <tr key={t.id} className="border-t border-gray-100 hover:bg-gray-50">
