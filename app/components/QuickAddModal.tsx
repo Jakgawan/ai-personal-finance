@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
-import { Plus } from "lucide-react"
+import { Plus, Loader2 } from "lucide-react"
 import { showToast } from "./Toast"
 
 type Category = { id: string; name: string; type: string; icon: string }
@@ -159,7 +159,8 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles 
               onChange={e => setAiText(e.target.value)}
               placeholder="เช่น ค่าข้าวเที่ยง 60 บาท"
               rows={2}
-              className="border border-gray-200 rounded-lg px-3 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-[#1D9E75] text-gray-800"
+              disabled={aiLoading}
+              className="border border-gray-200 rounded-lg px-3 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-[#1D9E75] text-gray-800 disabled:bg-gray-50 disabled:text-gray-400"
             />
             {aiError && <p className="text-xs text-[#D85A30]">{aiError}</p>}
             <button
@@ -167,7 +168,12 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles 
               disabled={aiLoading || !aiText.trim()}
               className="w-full bg-gray-800 text-white rounded-lg py-2.5 text-sm font-medium hover:bg-gray-700 disabled:opacity-50 transition-colors"
             >
-              {aiLoading ? "กำลังแปล..." : "แปลงข้อความ"}
+              {aiLoading ? (
+                <span className="flex items-center justify-center gap-1.5">
+                  <Loader2 size={14} className="animate-spin" />
+                  กำลังแปล...
+                </span>
+              ) : "แปลงข้อความ"}
             </button>
             <p className="text-xs text-gray-400">กด &quot;แปลงข้อความ&quot; แล้วตรวจสอบผลลัพธ์ก่อนบันทึก</p>
           </div>

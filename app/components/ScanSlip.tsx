@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
-import { Camera, ScanLine, CheckCircle2 } from "lucide-react"
+import { Camera, CheckCircle2, Loader2 } from "lucide-react"
 
 type ScannedData = {
   name: string
@@ -112,8 +112,8 @@ useEffect(() => {
             <div className="px-6 pb-6">
               {/* Upload area */}
               <div
-                onClick={() => fileRef.current?.click()}
-                className="border-2 border-dashed border-gray-200 rounded-xl p-6 text-center cursor-pointer hover:border-[#1D9E75] transition-colors mb-4"
+                onClick={() => !scanning && fileRef.current?.click()}
+                className={`border-2 border-dashed border-gray-200 rounded-xl p-6 text-center transition-colors mb-4 ${scanning ? "cursor-not-allowed opacity-60" : "cursor-pointer hover:border-[#1D9E75]"}`}
               >
                 {preview ? (
                   <img src={preview} alt="slip" className="max-h-48 mx-auto rounded-lg object-contain" />
@@ -136,8 +136,8 @@ useEffect(() => {
 
               {scanning && (
                 <div className="text-center py-4">
-                  <p className="text-sm text-gray-500 animate-pulse flex items-center justify-center gap-1.5">
-  <ScanLine size={14} />
+                  <p className="text-sm text-gray-500 flex items-center justify-center gap-1.5">
+  <Loader2 size={14} className="animate-spin" />
   AI กำลังอ่านสลิป...
 </p>
                 </div>
