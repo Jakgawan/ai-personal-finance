@@ -1,10 +1,20 @@
 "use client"
-import { useState, useEffect } from "react"
+import { Suspense, useState } from "react"
 import { supabase } from "@/lib/supabase"
-import { useRouter } from "next/navigation"
-import { LockKeyhole, CheckCircle2 , AlertTriangle } from "lucide-react"
+import { useRouter, useSearchParams } from "next/navigation"
+import { LockKeyhole, CheckCircle2, AlertTriangle } from "lucide-react"
 
-export default function ResetPassword() {
+function ResetPasswordForm() {
+  const searchParams = useSearchParams()
+  const tokenHash = searchParams.get("token_hash")
+  const type = searchParams.get("type")
+
+  const [step, setStep] = useState<"confirm" | "form" | "invalid">(
+    tokenHash && type === "recovery" ? "confirm" : "invalid"
+  )
+  const [verifying, setVerifying] = useState(false)
+  const [verifyError, setVerifyError] = useState("")
+
   const [password, setPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
@@ -13,14 +23,20 @@ export default function ResetPassword() {
   const [success, setSuccess] = useState(false)
   const router = useRouter()
 
-  useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-      if (event === "PASSWORD_RECOVERY") {
-        // Supabase set session ให้แล้ว พร้อมรับรหัสผ่านใหม่
-      }
+  const handleConfirm = async () => {
+    setVerifying(true)
+    setVerifyError("")
+    const { error } = await supabase.auth.verifyOtp({
+      token_hash: tokenHash!,
+      type: "recovery",
     })
-    return () => subscription.unsubscribe()
-  }, [])
+    if (error) {
+      setVerifyError("ลิงก์หมดอายุหรือถูกใช้ไปแล้ว กรุณาขอลิงก์ใหม่")
+    } else {
+      setStep("form")
+    }
+    setVerifying(false)
+  }
 
   const validate = (): string => {
     if (!password) return "กรุณากรอกรหัสผ่านใหม่"
@@ -43,12 +59,66 @@ export default function ResetPassword() {
     setError("")
     const { error } = await supabase.auth.updateUser({ password })
     if (error) {
-      setError("เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง")
+      if (error.code === "same_password") {
+        setError("รหัสผ่านใหม่ซ้ำกับรหัสผ่านเดิม กรุณาตั้งรหัสผ่านอื่น")
+      } else {
+        setError("เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง")
+      }
     } else {
       setSuccess(true)
       setTimeout(() => router.push("/login"), 3000)
     }
     setLoading(false)
+  }
+
+  if (step === "invalid") {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-2xl shadow-sm p-8 w-full max-w-md text-center">
+          <AlertTriangle size={40} className="text-[#D85A30] mx-auto mb-4" />
+          <h2 className="text-xl font-bold text-gray-800 mb-2">ลิงก์ไม่ถูกต้อง</h2>
+          <p className="text-sm text-gray-500 mb-6">กรุณาขอลิงก์รีเซ็ตรหัสผ่านใหม่อีกครั้ง</p>
+          <a href="/forgot-password" className="block w-full bg-[#1D9E75] text-white rounded-lg py-3 text-sm font-medium hover:bg-[#178a64] transition-colors text-center">
+            ขอลิงก์ใหม่
+          </a>
+        </div>
+      </div>
+    )
+  }
+
+  if (step === "confirm") {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-2xl shadow-sm p-8 w-full max-w-md text-center">
+          <LockKeyhole size={40} className="text-[#1D9E75] mx-auto mb-4" />
+          <h2 className="text-xl font-bold text-gray-800 mb-2">ยืนยันการรีเซ็ตรหัสผ่าน</h2>
+          <p className="text-sm text-gray-500 mb-6">กดปุ่มด้านล่างเพื่อตั้งรหัสผ่านใหม่</p>
+
+          {verifyError && (
+            <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2.5 mb-4">
+              <p className="text-sm text-red-600 flex items-center gap-1.5">
+                <AlertTriangle size={14} />
+                {verifyError}
+              </p>
+            </div>
+          )}
+
+          <button
+            onClick={handleConfirm}
+            disabled={verifying}
+            className="w-full bg-[#1D9E75] text-white rounded-lg py-3 text-sm font-medium hover:bg-[#178a64] disabled:opacity-50 transition-colors"
+          >
+            {verifying ? "กำลังยืนยัน..." : "ยืนยันเพื่อตั้งรหัสผ่านใหม่"}
+          </button>
+
+          {verifyError && (
+            <a href="/forgot-password" className="block mt-3 text-sm text-[#1D9E75] hover:underline">
+              ขอลิงก์ใหม่
+            </a>
+          )}
+        </div>
+      </div>
+    )
   }
 
   if (success) {
@@ -159,5 +229,13 @@ export default function ResetPassword() {
 
       </div>
     </div>
+  )
+}
+
+export default function ResetPassword() {
+  return (
+    <Suspense fallback={null}>
+      <ResetPasswordForm />
+    </Suspense>
   )
 }
