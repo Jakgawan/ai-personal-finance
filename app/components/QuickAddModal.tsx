@@ -4,8 +4,9 @@ import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
 import { Plus, Loader2, X } from "lucide-react"
 import { showToast } from "./Toast"
+import CategoryIcon from "./CategoryIcon"
 
-type Category = { id: string; name: string; type: string; icon: string }
+type Category = { id: string; name: string; type: string; icon: string; color?: string }
 type Cycle = { id: string; name: string }
 
 type Props = {
@@ -223,7 +224,7 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles 
                       onClick={() => setCategory(category === c.name ? "" : c.name)}
                       className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-sm border transition-colors ${category === c.name ? "bg-[#1D9E75] text-white border-[#1D9E75]" : "border-gray-200 text-gray-600"}`}
                     >
-                      <span>{c.icon || "•"}</span>
+                      <CategoryIcon icon={c.icon} color={c.color} size="sm" selected={category === c.name} />
                       <span>{c.name}</span>
                     </button>
                   ))}
@@ -265,7 +266,7 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles 
                               }}
                               className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center gap-2 ${category === c.name ? "bg-green-50 text-[#1D9E75]" : "text-gray-700"}`}
                             >
-                              <span>{c.icon || "•"}</span>
+                              <CategoryIcon icon={c.icon} color={c.color} size="sm" />
                               <span>{c.name}</span>
                             </button>
                           ))

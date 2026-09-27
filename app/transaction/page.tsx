@@ -565,7 +565,7 @@ export default function TransactionPage() {
                 className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none text-gray-800">
                   <option value="">-- หมวดหมู่ --</option>
                 {categories.filter(c => !c.type || c.type === type).map(c => (
-                  <option key={c.id} value={c.name}>{c.icon} {c.name}</option>
+                  <option key={c.id} value={c.name}>{c.name}</option>
                 ))}
               </select>
               <select value={cycleId} onChange={(e) => setCycleId(e.target.value)}

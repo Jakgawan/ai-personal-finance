@@ -4,6 +4,8 @@ import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
 import { Lightbulb, ClipboardList } from "lucide-react"
 import ConfirmModal from "@/app/components/ConfirmModal"
+import CategoryIcon from "@/app/components/CategoryIcon"
+import { CATEGORY_ICONS } from "@/lib/category-icons"
 
 type Category = {
   id: string
@@ -25,19 +27,19 @@ export default function CategoriesSection() {
   const [loading, setLoading] = useState(false)
   const [confirmState, setConfirmState] = useState<{ message: string; onConfirm: () => void } | null>(null)
   const DEFAULT_CATEGORIES = [
-  { name: "อาหาร", type: "expense", color: "#D85A30", icon: "" },
-  { name: "เดินทาง", type: "expense", color: "#F59E0B", icon: "" },
-  { name: "ที่พัก", type: "expense", color: "#8B5CF6", icon: "" },
-  { name: "สุขภาพ", type: "expense", color: "#EC4899", icon: "" },
-  { name: "บันเทิง", type: "expense", color: "#378ADD", icon: "" },
-  { name: "ช้อปปิ้ง", type: "expense", color: "#6B7280", icon: "" },
-  { name: "ชำระหนี้", type: "expense", color: "#D85A30", icon: "" },
-  { name: "สาธารณูปโภค", type: "expense", color: "#F59E0B", icon: "" },
-  { name: "ประกัน", type: "expense", color: "#8B5CF6", icon: "" },
-  { name: "ออมเงิน", type: "expense", color: "#1D9E75", icon: "" },
-  { name: "อื่นๆ", type: "expense", color: "#6B7280", icon: "" },
-  { name: "เงินเดือน", type: "income", color: "#1D9E75", icon: "" },
-  { name: "รายได้เสริม", type: "income", color: "#1D9E75", icon: "" },
+  { name: "อาหาร", type: "expense", color: "#D85A30", icon: "utensils" },
+  { name: "เดินทาง", type: "expense", color: "#F59E0B", icon: "car" },
+  { name: "ที่พัก", type: "expense", color: "#8B5CF6", icon: "house" },
+  { name: "สุขภาพ", type: "expense", color: "#EC4899", icon: "heart-pulse" },
+  { name: "บันเทิง", type: "expense", color: "#378ADD", icon: "film" },
+  { name: "ช้อปปิ้ง", type: "expense", color: "#6B7280", icon: "shopping-bag" },
+  { name: "ชำระหนี้", type: "expense", color: "#D85A30", icon: "credit-card" },
+  { name: "สาธารณูปโภค", type: "expense", color: "#F59E0B", icon: "zap" },
+  { name: "ประกัน", type: "expense", color: "#8B5CF6", icon: "shield" },
+  { name: "ออมเงิน", type: "expense", color: "#1D9E75", icon: "piggy-bank" },
+  { name: "อื่นๆ", type: "expense", color: "#6B7280", icon: "tag" },
+  { name: "เงินเดือน", type: "income", color: "#1D9E75", icon: "wallet" },
+  { name: "รายได้เสริม", type: "income", color: "#1D9E75", icon: "coins" },
 ]
 
 const handleLoadTemplate = () => {
@@ -113,19 +115,43 @@ const handleLoadTemplate = () => {
           {editId ? "แก้ไขหมวดหมู่" : "เพิ่มหมวดหมู่ใหม่"}
         </h3>
         <div className="flex flex-col gap-3">
-          <div className="flex gap-3">
-            <input
-              placeholder="Emoji icon เช่น 🍔"
-              value={icon}
-              onChange={(e) => setIcon(e.target.value)}
-              className="w-20 border border-gray-200 rounded-lg px-3 py-2 text-sm text-center focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
-            />
-            <input
-              placeholder="ชื่อหมวดหมู่"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
-            />
+          <div className="flex items-center gap-3">
+            <CategoryIcon icon={icon} color={color} size="lg" />
+            <div>
+              <p className="text-sm text-gray-800">{name || "ชื่อหมวดหมู่"}</p>
+              <p className="text-xs text-gray-400">ตัวอย่างที่จะแสดงในแอป</p>
+            </div>
+          </div>
+
+          <input
+            placeholder="ชื่อหมวดหมู่"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75]"
+          />
+
+          <div>
+            <p className="text-xs text-gray-500 mb-2">ไอคอน</p>
+            <div className="grid grid-cols-6 gap-2">
+              {CATEGORY_ICONS.map(({ key, label, Icon }) => {
+                const selected = icon === key
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setIcon(selected ? "" : key)}
+                    aria-label={label}
+                    aria-pressed={selected}
+                    className={`aspect-square rounded-lg border flex items-center justify-center transition-colors ${
+                      selected ? "border-transparent" : "border-gray-200 text-gray-500 hover:bg-gray-50"
+                    }`}
+                    style={selected ? { backgroundColor: color } : undefined}
+                  >
+                    <Icon size={16} color={selected ? "#fff" : undefined} />
+                  </button>
+                )
+              })}
+            </div>
           </div>
 
           <select
@@ -192,12 +218,7 @@ const handleLoadTemplate = () => {
             items.map((cat) => (
               <div key={cat.id} className="flex items-center justify-between px-6 py-3 border-b border-gray-100 last:border-0">
                 <div className="flex items-center gap-3">
-                  <span
-                    className="w-7 h-7 rounded-full flex items-center justify-center text-sm"
-                    style={{ backgroundColor: cat.color || "#eee" }}
-                  >
-                    {cat.icon || "•"}
-                  </span>
+                  <CategoryIcon icon={cat.icon} color={cat.color} size="md" />
                   <p className="text-sm text-gray-800">{cat.name}</p>
                 </div>
                 <div className="flex gap-2">

@@ -37,7 +37,7 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
   const [showMoreMenu, setShowMoreMenu] = useState(false)
   const pathname = usePathname()
 
-  const [categories, setCategories] = useState<{ id: string; name: string; type: string; icon: string }[]>([])
+  const [categories, setCategories] = useState<{ id: string; name: string; type: string; icon: string; color?: string }[]>([])
   const [cycles, setCycles] = useState<{ id: string; name: string }[]>([])
   const [profileMode, setProfileMode] = useState<"simple" | "full">("full")
   const [showFloatingMenu, setShowFloatingMenu] = useState(true)
