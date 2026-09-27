@@ -30,6 +30,7 @@ Next.js (App Router), TypeScript, Tailwind CSS v4, Supabase (auth + database), V
 - เจอบั๊กไม่คาดคิด / spec ไม่ชัด / ต้องตัดสินใจเรื่อง UX → หยุดถามผู้ใช้ ห้ามเดา
 - ไม่ใช้ Codex / Antigravity ในสายงานนี้ (main สั่งงานข้ามเครื่องมือไม่ได้)
 - env สำหรับรันแอปทดสอบ ตั้งใน cloud environment ของ Claude Code (ห้ามให้ผู้ใช้วาง key ในแชท): `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `GEMINI_API_KEY`, `TEST_USER_EMAIL`, `TEST_USER_PASSWORD` — ถ้ายังไม่มี ให้แจ้งผู้ใช้ว่าทดสอบเบราว์เซอร์ไม่ได้ อย่าข้ามเงียบๆ
+- **ห้ามแสดงค่า env ออกมาเด็ดขาด** (ทั้ง main และทุก agent) — เช็คได้แค่ว่ามี/ไม่มี เช่น `[ -n "$VAR" ] && echo set` ห้าม `echo $VAR`, `env`, `printenv`, `cat .env*` หรือ log ค่าในโค้ด
 
 ## Design System
 

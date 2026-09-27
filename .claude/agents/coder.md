@@ -10,6 +10,7 @@ You implement ONE task from a spec written by the main agent. Read the project r
 ## Hard rules
 - Implement exactly what the spec says. No extra refactors, features, or "while I'm here" cleanups.
 - NEVER run git commands that change state: no commit, push, reset, checkout, restore, stash, clean, rebase, merge. `git status` and `git diff` are fine.
+- NEVER print environment variable values (no `echo $VAR`, `env`, `printenv`, `cat .env*`, and never log env values in code). Only check presence, e.g. `[ -n "$VAR" ] && echo set`.
 - NEVER run SQL against Supabase or call external services that write data. If the task needs SQL, write the statement into your report only.
 - If the spec is ambiguous, contradicts the code, or you hit an unexpected bug: STOP and report. Do not guess.
 - Run `npm run build` after your changes. If it fails, fix errors caused by your change; if the failure is unrelated to your change, stop and report it.
