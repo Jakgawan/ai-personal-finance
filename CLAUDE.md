@@ -31,6 +31,7 @@ Next.js (App Router), TypeScript, Tailwind CSS v4, Supabase (auth + database), V
 - ไม่ใช้ Codex / Antigravity ในสายงานนี้ (main สั่งงานข้ามเครื่องมือไม่ได้)
 - env สำหรับรันแอปทดสอบ ตั้งใน cloud environment ของ Claude Code (ห้ามให้ผู้ใช้วาง key ในแชท): `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `GEMINI_API_KEY`, `TEST_USER_EMAIL`, `TEST_USER_PASSWORD` — ถ้ายังไม่มี ให้แจ้งผู้ใช้ว่าทดสอบเบราว์เซอร์ไม่ได้ อย่าข้ามเงียบๆ
 - **ห้ามแสดงค่า env ออกมาเด็ดขาด** (ทั้ง main และทุก agent) — เช็คได้แค่ว่ามี/ไม่มี เช่น `[ -n "$VAR" ] && echo set` ห้าม `echo $VAR`, `env`, `printenv`, `cat .env*` หรือ log ค่าในโค้ด
+- **Gemini ใช้ free tier — ห้ามทำให้เสียเงินหรือเปลืองโควต้า:** ระหว่างทดสอบห้ามเรียก `/api/chat`, `/api/ocr`, `/api/parse-transaction` หรือ Gemini โดยตรง ถ้างานไหนจำเป็นต้องเรียก ให้ขออนุญาตผู้ใช้ก่อน และเรียกให้น้อยที่สุด (1-2 ครั้ง) ห้ามวนลูปหรือยิงซ้ำอัตโนมัติ, ห้ามเปลี่ยนรุ่นโมเดล Gemini ในโค้ดโดยไม่ถามผู้ใช้
 
 ## Design System
 
