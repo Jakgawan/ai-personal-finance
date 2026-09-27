@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
 import React from "react"
-import { ClipboardList, BarChart2, Copy, Trash2 } from "lucide-react"
+import { ClipboardList, BarChart2, Copy, Trash2, ChevronLeft, ChevronRight, X, ArrowRight } from "lucide-react"
 import ConfirmModal from "@/app/components/ConfirmModal"
 
 type PlanItem = {
@@ -424,9 +424,9 @@ const doResetMonth = async () => {
         </div>
         {/* ปุ่มเลือกปี อยู่แถวล่าง ไม่เบียดกัน */}
         <div className="flex items-center gap-2">
-          <button onClick={() => setYear(y => y - 1)} className="px-3 py-1.5 border rounded-lg text-sm hover:bg-gray-100">←</button>
+          <button onClick={() => setYear(y => y - 1)} aria-label="ปีก่อน" className="px-3 py-1.5 border rounded-lg text-sm hover:bg-gray-100 inline-flex items-center justify-center h-8 min-w-8"><ChevronLeft size={18} /></button>
           <span className="text-sm font-semibold text-gray-700">พ.ศ. {year + 543}</span>
-          <button onClick={() => setYear(y => y + 1)} className="px-3 py-1.5 border rounded-lg text-sm hover:bg-gray-100">→</button>
+          <button onClick={() => setYear(y => y + 1)} aria-label="ปีถัดไป" className="px-3 py-1.5 border rounded-lg text-sm hover:bg-gray-100 inline-flex items-center justify-center h-8 min-w-8"><ChevronRight size={18} /></button>
         </div>
       </div>
 
@@ -487,8 +487,9 @@ const doResetMonth = async () => {
                               </div>
                               <button
                                 onClick={() => deleteItem(item.id)}
-                                className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 text-xs ml-1"
-                              >✕</button>
+                                aria-label="ลบ"
+                                className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 ml-1"
+                              ><X size={12} /></button>
                             </div>
                           )}
                         </td>
@@ -523,10 +524,10 @@ const doResetMonth = async () => {
                         <td className="px-2 py-2">
                           <button
                             onClick={() => fillRow(item)}
-                            className="text-xs text-gray-400 hover:text-[#1D9E75] px-2 py-1 rounded hover:bg-green-50 transition-colors whitespace-nowrap"
+                            className="text-xs text-gray-400 hover:text-[#1D9E75] px-2 py-1 rounded hover:bg-green-50 transition-colors whitespace-nowrap inline-flex items-center gap-1"
                             title="copy ค่าเดือนแรกไปทุกเดือน"
                           >
-                            fill →
+                            fill <ArrowRight size={12} />
                           </button>
                         </td>
                       </tr>

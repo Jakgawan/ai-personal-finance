@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
-import { User, Building2, AlertTriangle } from "lucide-react"
+import { User, Building2, AlertTriangle, CircleCheck, X } from "lucide-react"
 import ConfirmModal from "@/app/components/ConfirmModal"
 
 type Recurring = {
@@ -235,10 +235,10 @@ export default function RecurringSection() {
       {showLog && createdLogs.length > 0 && (
         <div className="bg-green-50 border border-green-200 rounded-xl p-4 mb-6">
           <div className="flex items-center justify-between mb-2">
-            <p className="text-sm font-semibold text-[#1D9E75]">
-              ✅ สร้างรายการอัตโนมัติ {createdLogs.length} รายการ
+            <p className="text-sm font-semibold text-[#1D9E75] inline-flex items-center gap-1">
+              <CircleCheck size={14} /> สร้างรายการอัตโนมัติ {createdLogs.length} รายการ
             </p>
-            <button onClick={() => setShowLog(false)} className="text-gray-400 hover:text-gray-600 text-sm">✕</button>
+            <button onClick={() => setShowLog(false)} aria-label="ปิด" className="text-gray-400 hover:text-gray-600"><X size={16} /></button>
           </div>
           {createdLogs.map((log, i) => (
             <div key={i} className="flex justify-between text-xs text-gray-600 py-1 border-t border-green-100">
@@ -357,7 +357,7 @@ export default function RecurringSection() {
               <h2 className="text-lg font-semibold text-gray-800">
                 {editItem ? "แก้ไขรายการซ้ำ" : "เพิ่มรายการซ้ำ"}
               </h2>
-              <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-gray-600 text-xl">✕</button>
+              <button onClick={() => setShowModal(false)} aria-label="ปิด" className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
             </div>
             <div className="px-6 pb-6 flex flex-col gap-3">
               <div className="flex gap-3">

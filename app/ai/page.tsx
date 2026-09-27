@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabase"
 import Link from "next/link"
 import ReactMarkdown from "react-markdown"
 import ConfirmModal from "@/app/components/ConfirmModal"
+import { MessageCircle } from "lucide-react"
 
 type Message = {
   id?: string
@@ -144,7 +145,7 @@ export default function AIChatPage() {
       <div className="flex-1 overflow-y-auto px-4 py-6 flex flex-col gap-4">
         {messages.length === 0 && (
           <div className="text-center py-12">
-            <p className="text-4xl mb-3">💬</p>
+            <MessageCircle size={36} className="text-gray-400 mx-auto mb-3" />
             <p className="text-gray-500 text-sm font-medium">ถามเรื่องการเงินได้เลย</p>
             <p className="text-gray-400 text-xs mt-1">AI รู้ข้อมูลรายรับ รายจ่าย และสินทรัพย์ของคุณ</p>
             <div className="flex flex-wrap gap-2 justify-center mt-4">

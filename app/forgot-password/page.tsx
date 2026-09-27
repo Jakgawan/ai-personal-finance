@@ -1,7 +1,7 @@
 "use client"
 import { useState } from "react"
 import { supabase } from "@/lib/supabase"
-import { KeyRound, AlertTriangle } from "lucide-react"
+import { KeyRound, AlertTriangle, Mail } from "lucide-react"
 export default function ForgotPassword() {
   const [email, setEmail] = useState("")
   const [loading, setLoading] = useState(false)
@@ -35,7 +35,7 @@ export default function ForgotPassword() {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl shadow-sm p-8 w-full max-w-md text-center">
-          <p className="text-5xl mb-4">📧</p>
+          <Mail size={48} className="text-[#1D9E75] mx-auto mb-4" />
           <h2 className="text-xl font-bold text-gray-800 mb-2">ตรวจสอบอีเมลของคุณ</h2>
           <p className="text-sm text-gray-500 mb-2">เราส่งลิงก์รีเซ็ตรหัสผ่านไปที่</p>
           <p className="text-sm font-medium text-gray-800 mb-6">{email}</p>

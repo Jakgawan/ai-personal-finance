@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
-import { Plus, Loader2 } from "lucide-react"
+import { Plus, Loader2, X } from "lucide-react"
 import { showToast } from "./Toast"
 
 type Category = { id: string; name: string; type: string; icon: string }
@@ -138,7 +138,7 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles 
       <div className="bg-white rounded-2xl w-full max-w-md shadow-xl">
         <div className="flex items-center justify-between px-6 pt-5 pb-3">
           <h2 className="text-lg font-semibold text-gray-800">บันทึกรายการ</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl">✕</button>
+          <button onClick={onClose} aria-label="ปิด" className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
         </div>
 
         <div className="px-6 flex gap-2 mb-3">

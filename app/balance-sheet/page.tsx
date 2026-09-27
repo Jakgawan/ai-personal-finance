@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
 import ConfirmModal from "@/app/components/ConfirmModal"
+import { Lightbulb } from "lucide-react"
 
 type Asset = {
   id: string
@@ -560,7 +561,7 @@ export default function BalanceSheetPage() {
 
               {/* ข้อความแนะนำว่าหนี้แบบไหนคือสั้น/ยาว */}
               <div className="bg-blue-50 rounded-lg p-3 text-xs text-gray-600 leading-relaxed">
-                <p className="font-semibold text-[#378ADD] mb-1">💡 หนี้ระยะไหน?</p>
+                <p className="font-semibold text-[#378ADD] mb-1 inline-flex items-center gap-1"><Lightbulb size={14} className="text-[#378ADD]" /> หนี้ระยะไหน?</p>
                 <p><span className="font-medium">ระยะสั้น</span> = ผ่อนหมดภายใน 1 ปี เช่น บัตรเครดิต, หนี้นอกระบบ, ผ่อนสินค้า</p>
                 <p><span className="font-medium">ระยะยาว</span> = ผ่อนนานกว่า 1 ปี เช่น บ้าน, รถ, กยศ.</p>
               </div>
@@ -603,7 +604,7 @@ export default function BalanceSheetPage() {
     className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75] text-gray-800" />
   {incomeInput && Number(incomeInput) > 0 && (
     <div className="bg-green-50 rounded-lg p-2 mt-2 text-xs text-gray-600">
-      <p className="font-semibold text-[#1D9E75] mb-1">💡 แนะนำเป้าออม</p>
+      <p className="font-semibold text-[#1D9E75] mb-1 inline-flex items-center gap-1"><Lightbulb size={14} className="text-[#1D9E75]" /> แนะนำเป้าออม</p>
       <p>ขั้นต่ำ 10% = ฿{(Number(incomeInput) * 0.1).toLocaleString()}/เดือน</p>
       <p>เหมาะสม 20% = ฿{(Number(incomeInput) * 0.2).toLocaleString()}/เดือน</p>
       {savingInput && Number(savingInput) > 0 && (

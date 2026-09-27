@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
-import { Lightbulb } from "lucide-react"
+import { Lightbulb, Check } from "lucide-react"
 
 type PayCycle = {
   id: string
@@ -153,7 +153,7 @@ export default function PayCyclesSection() {
           {/* Preview — แสดงทันทีเมื่อกรอกวันที่ */}
           {preview && (
             <div className="bg-green-50 border border-green-100 rounded-lg px-3 py-2">
-              <p className="text-xs text-[#1D9E75]">✓ {preview}</p>
+              <p className="text-xs text-[#1D9E75] inline-flex items-center gap-1"><Check size={12} /> {preview}</p>
             </div>
           )}
 

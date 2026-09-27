@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { supabase } from "@/lib/supabase"
-import { Wallet, PartyPopper, AlertTriangle, CheckCircle2 } from "lucide-react"
+import { Wallet, PartyPopper, AlertTriangle, CheckCircle2, Check, Circle } from "lucide-react"
 
 export default function Register() {
   const [email, setEmail] = useState("")
@@ -142,7 +142,7 @@ export default function Register() {
       { label: "อักขระพิเศษ (!@#$% หรือ -)", pass: /[!@#$%^&*\-]/.test(password) },
     ].map(({ label, pass }) => (
       <p key={label} className={`text-xs flex items-center gap-1 ${pass ? "text-[#1D9E75]" : "text-gray-400"}`}>
-        {pass ? "✓" : "○"} {label}
+        {pass ? <Check size={12} /> : <Circle size={12} />} {label}
       </p>
     ))}
   </div>
