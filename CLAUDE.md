@@ -86,7 +86,11 @@ Next.js (App Router), TypeScript, Tailwind CSS v4, Supabase (auth + database), V
 
 ### เฟส 0 — ทำให้ข้อมูลเชื่อถือได้ (ตรวจโค้ดจริง 2026-09-27 — ตำแหน่งบรรทัดอาจขยับ ให้ตรวจซ้ำก่อนเขียน spec)
 1. Supabase insert/update/delete ~50 จุดไม่เช็ค `error` แต่ขึ้น "สำเร็จ" เสมอ (เช่น `QuickAddModal.tsx`, `balance-sheet`, `RecurringSection.tsx`, `business`, `planning`, `CategoriesSection.tsx`, `PayCyclesSection.tsx`, `ai`, `ScanSlip.tsx`; `transaction/page.tsx` มีแค่ `console.log`)
-2. Recurring บันทึกซ้ำ: 2 จุดประมวลผลพร้อมกันไม่มี guard — `RecurringProcessor` ใน `app/layout.tsx` กับ `processRecurring()` ใน `RecurringSection.tsx`
+2. Recurring บันทึกซ้ำ: 2 จุดประมวลผลพร้อมกันไม่มี guard — `RecurringProcessor` ใน `app/layout.tsx` กับ `processRecurring()` ใน `RecurringSection.tsx` — **แผนที่ผู้ใช้อนุมัติแล้ว (2026-09-27) ยังไม่เริ่มเขียนโค้ด:**
+   - รวมเป็นฟังก์ชันเดียว `lib/recurring.ts` ให้ทั้ง 2 จุดเรียกใช้ (RecurringSection ยังโชว์ log รายการที่สร้าง)
+   - กันซ้ำแบบ "จองงวด" (compare-and-swap ไม่ต้องรัน SQL): update `next_date` → งวดถัดไป โดยมีเงื่อนไข `.eq("next_date", ค่าเดิม)` + `.select()` ถ้าไม่ได้แถวกลับมา = ที่อื่นจองไปแล้ว ข้าม; จองได้แล้วค่อย insert รายการ ถ้า insert error ให้คืน `next_date` เดิม (conditional update เหมือนกัน)
+   - งวดค้าง: **สร้างครบทุกงวด** (ผู้ใช้เลือก) ลงวันที่จริงของแต่ละงวด มีเพดานต่อครั้ง (เช่น 24 งวด) กันวนไม่จบ
+   - บั๊กข้างเคียงที่ต้องแก้ด้วย: วันสิ้นเดือนเพี้ยน (31 ม.ค. + 1 เดือน → 3 มี.ค.) ให้ยึดวันจาก `start_date` แล้ว clamp เป็นวันสุดท้ายของเดือน; "วันนี้" ใช้ `toISOString()` (UTC) ทำให้ช่วงตี 0-7 เวลาไทยช้าไป 1 วัน → ใช้วันที่ตามเวลาเครื่อง; ไม่เช็ค error ของ insert/update
 3. Debt ratio = 0% เมื่อไม่มี asset แต่มีหนี้ (`balance-sheet/page.tsx` สูตร `totalAssets > 0 ? ... : 0`) — ต้องถามผู้ใช้ว่ากรณีนี้ควรแสดงอะไร
 4. ~~API Gemini ไม่เช็ค login~~ — เสร็จแล้ว (`getAuthUser` ใน `lib/supabase-server.ts`, ตอบ 401 ก่อนเรียก Gemini, ทดสอบ login จริงแล้วทั้ง desktop/mobile)
 5. ~~RLS~~ — ตรวจแล้ว 2026-09-27 ไม่ต้องแก้: ทุก table ใน `public` เปิด RLS, policy `ALL` ใช้ `auth.uid() = user_id` (ไม่มี `with_check` → Postgres ใช้เงื่อนไขเดียวกันตอนเขียน), `courses` อ่านได้ทุกคน (ไม่มีข้อมูลผู้ใช้), table `planning` เก่าไม่ได้ใช้ในแอปแต่มี RLS แล้ว — table ใหม่ทุกตัวต้องเปิด RLS + policy แบบเดียวกัน
