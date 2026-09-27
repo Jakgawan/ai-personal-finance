@@ -87,8 +87,8 @@ Next.js (App Router), TypeScript, Tailwind CSS v4, Supabase (auth + database), V
 1. Supabase insert/update/delete ~50 จุดไม่เช็ค `error` แต่ขึ้น "สำเร็จ" เสมอ (เช่น `QuickAddModal.tsx`, `balance-sheet`, `RecurringSection.tsx`, `business`, `planning`, `CategoriesSection.tsx`, `PayCyclesSection.tsx`, `ai`, `ScanSlip.tsx`; `transaction/page.tsx` มีแค่ `console.log`)
 2. Recurring บันทึกซ้ำ: 2 จุดประมวลผลพร้อมกันไม่มี guard — `RecurringProcessor` ใน `app/layout.tsx` กับ `processRecurring()` ใน `RecurringSection.tsx`
 3. Debt ratio = 0% เมื่อไม่มี asset แต่มีหนี้ (`balance-sheet/page.tsx` สูตร `totalAssets > 0 ? ... : 0`) — ต้องถามผู้ใช้ว่ากรณีนี้ควรแสดงอะไร
-4. API Gemini 3 ตัว (`app/api/chat`, `ocr`, `parse-transaction`) ไม่เช็ค login และ `proxy.ts` matcher ยกเว้น `/api`
-5. RLS: ไม่มี migration/SQL ใน repo — ให้ coder เขียน SQL ตรวจสถานะ RLS ทุก table ให้ผู้ใช้รัน
+4. ~~API Gemini ไม่เช็ค login~~ — เสร็จแล้ว (`getAuthUser` ใน `lib/supabase-server.ts`, ตอบ 401 ก่อนเรียก Gemini, ทดสอบ login จริงแล้วทั้ง desktop/mobile)
+5. ~~RLS~~ — ตรวจแล้ว 2026-09-27 ไม่ต้องแก้: ทุก table ใน `public` เปิด RLS, policy `ALL` ใช้ `auth.uid() = user_id` (ไม่มี `with_check` → Postgres ใช้เงื่อนไขเดียวกันตอนเขียน), `courses` อ่านได้ทุกคน (ไม่มีข้อมูลผู้ใช้), table `planning` เก่าไม่ได้ใช้ในแอปแต่มี RLS แล้ว — table ใหม่ทุกตัวต้องเปิด RLS + policy แบบเดียวกัน
 6. ติดตั้ง Sentry (backlog ข้อ 11) — ผู้ใช้ต้องสร้างบัญชี/DSN เอง
 7. ซ่อนเมนู "ธุรกิจ" (`MoreMenu.tsx`, `Sidebar.tsx`) และหน้า "คอร์ส" (mock data ทั้งหมด) จาก UI — **ห้ามลบโค้ด/route** — ต้องถามผู้ใช้ว่าจะกันการเข้า URL ตรงด้วยไหม, หลังซ่อนแล้วอัปเดตหัวข้อ Mobile Navigation/Mode ในไฟล์นี้
 8. Emoji ที่เหลือ: `forgot-password/page.tsx`, `reset-password/page.tsx`, `ai/page.tsx`, `balance-sheet/page.tsx` (2 จุด), `CategoriesSection.tsx`, `ProfileSection.tsx`, `RecurringSection.tsx`
