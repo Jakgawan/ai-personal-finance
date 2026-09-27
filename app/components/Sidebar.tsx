@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { supabase } from "@/lib/supabase"
-import { LayoutDashboard, ListOrdered, CalendarDays, Scale, Briefcase, MessageCircle, GraduationCap, Settings, LogOut, Menu, Wallet, ChevronLeft } from "lucide-react"
+import { LayoutDashboard, ListOrdered, CalendarDays, Scale, MessageCircle, Settings, LogOut, Menu, Wallet, ChevronLeft } from "lucide-react"
 import QuickAddModal from "./QuickAddModal"
 import BottomNav from "./BottomNav"
 import MoreMenu from "./MoreMenu"
@@ -15,9 +15,10 @@ const menuItems = [
   { href: "/transaction", label: "รายการ", icon: ListOrdered },
   { href: "/planning", label: "วางแผน", icon: CalendarDays },
   { href: "/balance-sheet", label: "งบการเงิน", icon: Scale },
-  { href: "/business", label: "ธุรกิจ", icon: Briefcase },
+  // ซ่อนไว้ชั่วคราว (เฟส 0 ข้อ 7) — route /business และ /courses ยังอยู่ เอา comment ออกเพื่อแสดงกลับ
+  // { href: "/business", label: "ธุรกิจ", icon: Briefcase },
   { href: "/ai", label: "ปรึกษาการเงิน", icon: MessageCircle },
-  { href: "/courses", label: "คอร์สการเงิน", icon: GraduationCap },
+  // { href: "/courses", label: "คอร์สการเงิน", icon: GraduationCap },
   { href: "/settings", label: "Settings", icon: Settings },
 ]
 
