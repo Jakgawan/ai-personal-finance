@@ -19,6 +19,18 @@ Next.js (App Router), TypeScript, Tailwind CSS v4, Supabase (auth + database), V
 - Git commit message เป็นภาษาอังกฤษ กระชับ ตรงประเด็น
 - ก่อนทดสอบด้วยบัญชีในเบราว์เซอร์ ให้เช็คก่อนว่าเป็นบัญชีทดสอบ ไม่ใช่บัญชีจริงของผู้ใช้ (`toto15405@gmail.com` คือบัญชีจริง ห้ามใช้ทดสอบ — มีบัญชีทดสอบแยกต่างหาก)
 
+## Workflow แบบหลาย agent (ตกลงกับผู้ใช้ 2026-09-27)
+
+- **ผู้ใช้** สั่งงาน → **main (Opus)** → สั่ง **coder** / **reviewer** (นิยามใน `.claude/agents/`)
+- **main ห้ามเขียนโค้ดแอปและ SQL เอง** — ให้ coder (Sonnet) เขียนทั้งหมด main ทำได้เอง: วางแผน/เขียน spec, อ่านโค้ด, commit, แก้ CLAUDE.md, ไฟล์ตั้งค่า agent, สคริปต์ทดสอบเบราว์เซอร์ชั่วคราวที่ไม่เข้า repo
+- ลำดับต่อ 1 งาน: main เขียน spec (ไฟล์/บรรทัด/เหตุผล/เกณฑ์ผ่าน) → coder เขียน + build → reviewer (Opus, context ใหม่, read-only) ตรวจ → ไม่ผ่านส่งกลับ coder → main อ่าน diff เอง + `npm run build` + ทดสอบเบราว์เซอร์ mobile/desktop → commit ทีละงานย่อย
+- **การอนุมัติ:** ต้นเฟส main เสนอรายการงานทั้งเฟสให้ผู้ใช้อนุมัติครั้งเดียว — ไม่ต้องรายงานทุก commit ย่อย — **รายงานก่อน push ทุกครั้ง ห้าม push เองจนกว่าผู้ใช้อนุมัติ** และรายงานก่อนเริ่มเฟสถัดไปเสมอ
+- รายงานก่อน push ต้องมี: แก้อะไร, อธิบายโค้ดทีละบรรทัด, ผล build/ทดสอบ, จุดที่ไม่แน่ใจ, **token ที่ agent แต่ละตัวใช้** (ตัวเลขจากระบบตอน agent ทำงานเสร็จ)
+- SQL: coder เขียน → reviewer ตรวจ → main ยื่นให้ผู้ใช้รันเองใน Supabase
+- เจอบั๊กไม่คาดคิด / spec ไม่ชัด / ต้องตัดสินใจเรื่อง UX → หยุดถามผู้ใช้ ห้ามเดา
+- ไม่ใช้ Codex / Antigravity ในสายงานนี้ (main สั่งงานข้ามเครื่องมือไม่ได้)
+- env สำหรับรันแอปทดสอบ ตั้งใน cloud environment ของ Claude Code (ห้ามให้ผู้ใช้วาง key ในแชท): `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `GEMINI_API_KEY`, `TEST_USER_EMAIL`, `TEST_USER_PASSWORD` — ถ้ายังไม่มี ให้แจ้งผู้ใช้ว่าทดสอบเบราว์เซอร์ไม่ได้ อย่าข้ามเงียบๆ
+
 ## Design System
 
 - สีหลัก: เขียว `#1D9E75` (primary/income), แดง `#D85A30` (expense/negative), น้ำเงิน `#378ADD` (info)
@@ -42,7 +54,7 @@ Next.js (App Router), TypeScript, Tailwind CSS v4, Supabase (auth + database), V
 - `mode = 'simple' | 'full'` (CHECK constraint มีอยู่แล้วใน DB)
 - simple → MoreMenu เหลือแค่ "ตั้งค่า" + "ออกจากระบบ"
 - full → MoreMenu เห็นครบ: วางแผน/งบการเงิน/ปรึกษาการเงิน/คอร์สการเงิน/เพิ่มเติม/ตั้งค่า/ออกจากระบบ
-- **ยังไม่มี UI ให้ user สลับ mode เอง** (ค้างใน backlog — ดูข้อ 7 ด้านล่าง)
+- **ยังไม่มี UI ให้ user สลับ mode เอง** (ค้างใน backlog — ดูข้อ 4 ด้านล่าง)
 
 ## สถานะปัจจุบัน (ทำเสร็จแล้ว — อัปเดตทุกครั้งที่งานใหญ่เสร็จ)
 
@@ -61,8 +73,32 @@ Next.js (App Router), TypeScript, Tailwind CSS v4, Supabase (auth + database), V
 - 3b: Helper text ใต้ dropdown รอบเงินเดือน (FAB modal)
 - 3c: Disabled button ผูก required field ครบ 8 จุด
 - 3d: Combobox หมวดหมู่ (พิมพ์ค้นหาแทน `<select>` เต็มรายการ)
-- Lucide icons แทน emoji ทุกหน้าแล้ว
+- Lucide icons แทน emoji เกือบครบ — ยังเหลือ 7 จุด (ดูเฟส 0 ข้อ 8)
 - 1: Loading State + Empty State — skeleton ตอนโหลด Dashboard/Transaction list, empty state พร้อมคำแนะนำใน Dashboard/Balance Sheet/Business, loading indicator ตอน AI parse ข้อความ (QuickAddModal) และตอนสแกนสลิป OCR (ScanSlip)
+
+## แผนตามเฟส (ตกลง 2026-09-27 — ลำดับทำจริงยึดหัวข้อนี้)
+
+บริบท: ยังไม่มีผู้ใช้จริง, deploy แค่ Vercel (ยังไม่เป็น PWA — ไม่มี manifest), ยังไม่มีระบบวัดผล
+หลักคิด: เสถียร/เชื่อถือได้ → คนใช้ซ้ำ → รายได้
+
+### เฟส 0 — ทำให้ข้อมูลเชื่อถือได้ (ตรวจโค้ดจริง 2026-09-27 — ตำแหน่งบรรทัดอาจขยับ ให้ตรวจซ้ำก่อนเขียน spec)
+1. Supabase insert/update/delete ~50 จุดไม่เช็ค `error` แต่ขึ้น "สำเร็จ" เสมอ (เช่น `QuickAddModal.tsx`, `balance-sheet`, `RecurringSection.tsx`, `business`, `planning`, `CategoriesSection.tsx`, `PayCyclesSection.tsx`, `ai`, `ScanSlip.tsx`; `transaction/page.tsx` มีแค่ `console.log`)
+2. Recurring บันทึกซ้ำ: 2 จุดประมวลผลพร้อมกันไม่มี guard — `RecurringProcessor` ใน `app/layout.tsx` กับ `processRecurring()` ใน `RecurringSection.tsx`
+3. Debt ratio = 0% เมื่อไม่มี asset แต่มีหนี้ (`balance-sheet/page.tsx` สูตร `totalAssets > 0 ? ... : 0`) — ต้องถามผู้ใช้ว่ากรณีนี้ควรแสดงอะไร
+4. API Gemini 3 ตัว (`app/api/chat`, `ocr`, `parse-transaction`) ไม่เช็ค login และ `proxy.ts` matcher ยกเว้น `/api`
+5. RLS: ไม่มี migration/SQL ใน repo — ให้ coder เขียน SQL ตรวจสถานะ RLS ทุก table ให้ผู้ใช้รัน
+6. ติดตั้ง Sentry (backlog ข้อ 11) — ผู้ใช้ต้องสร้างบัญชี/DSN เอง
+7. ซ่อนเมนู "ธุรกิจ" (`MoreMenu.tsx`, `Sidebar.tsx`) และหน้า "คอร์ส" (mock data ทั้งหมด) จาก UI — **ห้ามลบโค้ด/route** — ต้องถามผู้ใช้ว่าจะกันการเข้า URL ตรงด้วยไหม, หลังซ่อนแล้วอัปเดตหัวข้อ Mobile Navigation/Mode ในไฟล์นี้
+8. Emoji ที่เหลือ: `forgot-password/page.tsx`, `reset-password/page.tsx`, `ai/page.tsx`, `balance-sheet/page.tsx` (2 จุด), `CategoriesSection.tsx`, `ProfileSection.tsx`, `RecurringSection.tsx`
+
+### เฟส 1 — คนใช้ซ้ำ
+- Backlog ข้อ 4 (Onboarding + mode toggle, เริ่มที่ simple), ข้อ 10 (Core loop บน Dashboard), ข้อ 6 (แจ้งเตือน — ต้องทำ manifest + service worker ก่อน, iOS ต้อง "เพิ่มลงหน้าจอโฮม" ก่อนจึงรับ push ได้)
+- วัดผลด้วย SQL จากตาราง transactions เมื่อเริ่มมีผู้ใช้
+
+### เฟส 2 — รายได้
+- Free/Pro แบ่งตามโควต้า AI (ต้องมี auth API จากเฟส 0 ข้อ 4 ก่อน), Export ข้อมูลฟรีเสมอ, ทดสอบการจ่ายด้วย PromptPay QR + เปิด Pro ด้วยมือก่อนต่อ Omise, Backlog ข้อ 7 เป็นตัวเลือกของ Pro
+
+ยังไม่จัดเข้าเฟส: Backlog ข้อ 2, 3, 5, 8, 9 — **พักไว้:** โหมดธุรกิจ, Goals, Streak, Multi-language, Widget, React Native, เปรียบเทียบผู้ใช้อื่น, Multi-user business
 
 ## Backlog — เรียงลำดับที่วางแผนไว้ (ยังไม่เริ่ม เว้นแต่ระบุ)
 
@@ -80,7 +116,7 @@ Next.js (App Router), TypeScript, Tailwind CSS v4, Supabase (auth + database), V
 
 ## Backlog ใหญ่ — โหมดธุรกิจแบบสลับได้ (ทำหลังทุกอย่างข้างบนเสร็จ)
 
-**หลักการ:** ไม่แยกเป็นแอปใหม่ ใช้ core เดียวกัน (auth, database, UI shell) — เพิ่ม toggle สลับ "ส่วนบุคคล/ธุรกิจ" อยู่บนสุดของ MoreMenu root panel (สลับได้ในบัญชีเดียว ไม่ใช่เลือกครั้งเดียวจบ) เมนู "ธุรกิจ" แบบเดิมที่เคยอยู่ใน MoreMenu list ตัดออกแล้ว (ซ้ำกับ toggle นี้)
+**หลักการ:** ไม่แยกเป็นแอปใหม่ ใช้ core เดียวกัน (auth, database, UI shell) — เพิ่ม toggle สลับ "ส่วนบุคคล/ธุรกิจ" อยู่บนสุดของ MoreMenu root panel (สลับได้ในบัญชีเดียว ไม่ใช่เลือกครั้งเดียวจบ) เมนู "ธุรกิจ" แบบเดิม: **พับแผนไว้ ซ่อนจาก UI แต่ห้ามลบโค้ด/route** (เก็บไว้พัฒนาต่อ) — ณ 2026-09-27 ยังแสดงอยู่ รอซ่อนในเฟส 0 ข้อ 7
 
 **โครงสร้าง mode 3 ชั้น:**
 ```
@@ -112,7 +148,7 @@ Next.js (App Router), TypeScript, Tailwind CSS v4, Supabase (auth + database), V
 
 - `alert()`/`confirm()` ของเบราว์เซอร์ **ไม่ทำงานแน่นอนบน PWA/มือถือบางเครื่อง** ต้องใช้ custom Modal/Toast component เสมอ ห้ามใช้ native dialog
 - Touch event บน React ต้องผูกผ่าน `addEventListener(..., { passive: false })` ด้วย `ref`+`useEffect` ไม่ใช่ JSX prop ธรรมดา ถ้าต้องการ `preventDefault()` ทำงานจริง (React 17+ ผูก touch listener แบบ passive by default)
-- Mobile session sync ช้ากว่า desktop — ต้อง retry/verify การเช็ค auth ไม่เชื่อผลลัพธ์ครั้งแรกทันที
+- Mobile session sync ช้ากว่า desktop — ต้อง retry/verify การเช็ค auth ไม่เชื่อผลลัพธ์ครั้งแรกทันที (หมายเหตุ: โค้ดปัจจุบันใช้ `getSession()` + `onAuthStateChange` ใน `Sidebar.tsx` ไม่มี retry — บั๊ก login มือถือล่าสุดผู้ใช้แก้ที่ config ไม่ใช่โค้ด (แจ้ง 2026-09-27) อย่าเพิ่ม retry กลับโดยไม่ถามผู้ใช้)
 - ตรวจ syntax ให้ครบก่อนส่งโค้ดเสมอ (ปิด `</div>` ครบ, ไม่มี `useEffect` ซ้ำ, มี TypeScript type annotation ชัดเจน)
 - แยก breakpoint mobile/desktop ให้ชัดเจนทุกครั้งที่ redesign — เคยมี regression ที่ mobile-only design หลุดไปกระทบ desktop มาแล้ว
 - Tailwind v4 ไม่เหมาะกับ CSS variable ที่ต้องเปลี่ยนค่าตาม breakpoint (ใช้ `@theme` ไม่ได้ ต้องใช้ CSS custom properties + media query แทน)
