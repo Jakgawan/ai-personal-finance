@@ -75,7 +75,8 @@ Next.js (App Router), TypeScript, Tailwind CSS v4, Supabase (auth + database), V
 - 3b: Helper text ใต้ dropdown รอบเงินเดือน (FAB modal)
 - 3c: Disabled button ผูก required field ครบ 8 จุด
 - 3d: Combobox หมวดหมู่ (พิมพ์ค้นหาแทน `<select>` เต็มรายการ)
-- Lucide icons แทน emoji เกือบครบ — ยังเหลือ 7 จุด (ดูเฟส 0 ข้อ 8)
+- Lucide icons แทน emoji ครบทั้งแอป (เฟส 0 ข้อ 8) — ยกเว้นหน้า business/courses ที่ซ่อนอยู่ และลูกศรในข้อความธรรมดา
+- ไอคอนหมวดหมู่: เลือกจากชุด Lucide 24 ตัว (`lib/category-icons.ts`) แสดงผ่าน `CategoryIcon.tsx` (ไอคอนขาวบนวงกลมสีหมวด) เก็บ key ในคอลัมน์ `categories.icon` เดิม — emoji เก่าในข้อมูลยังแสดงได้, ค่าว่าง → ไอคอน Tag
 - 1: Loading State + Empty State — skeleton ตอนโหลด Dashboard/Transaction list, empty state พร้อมคำแนะนำใน Dashboard/Balance Sheet/Business, loading indicator ตอน AI parse ข้อความ (QuickAddModal) และตอนสแกนสลิป OCR (ScanSlip)
 
 ## แผนตามเฟส (ตกลง 2026-09-27 — ลำดับทำจริงยึดหัวข้อนี้)
@@ -91,7 +92,7 @@ Next.js (App Router), TypeScript, Tailwind CSS v4, Supabase (auth + database), V
 5. ~~RLS~~ — ตรวจแล้ว 2026-09-27 ไม่ต้องแก้: ทุก table ใน `public` เปิด RLS, policy `ALL` ใช้ `auth.uid() = user_id` (ไม่มี `with_check` → Postgres ใช้เงื่อนไขเดียวกันตอนเขียน), `courses` อ่านได้ทุกคน (ไม่มีข้อมูลผู้ใช้), table `planning` เก่าไม่ได้ใช้ในแอปแต่มี RLS แล้ว — table ใหม่ทุกตัวต้องเปิด RLS + policy แบบเดียวกัน
 6. ~~Sentry~~ — ติดตั้งแล้ว (`@sentry/nextjs` v11, จับแค่ error, ปิดเก็บข้อมูลส่วนตัว/request body ทั้งหมดใน `dataCollection`, tunnel `/monitoring`, ยังไม่อัปโหลด source map) ทดสอบบน Vercel Preview แล้ว `/monitoring` ตอบ 200 — **ตอน merge เข้า main ต้องติ๊ก Production ให้ `NEXT_PUBLIC_SENTRY_DSN` ใน Vercel ด้วย** (ตอนนี้ตั้งแค่ Preview)
 7. ~~ซ่อนเมนูธุรกิจ/คอร์ส~~ — เสร็จแล้ว: ซ่อนแค่เมนู (ผู้ใช้เลือกไม่กัน URL ตรง), route/โค้ดยังอยู่ครบ
-8. Emoji ที่เหลือ: `forgot-password/page.tsx`, `reset-password/page.tsx`, `ai/page.tsx`, `balance-sheet/page.tsx` (2 จุด), `CategoriesSection.tsx`, `ProfileSection.tsx`, `RecurringSection.tsx`
+8. ~~Emoji ที่เหลือ~~ — เสร็จแล้ว: 8a แทน emoji + สัญลักษณ์ในปุ่ม (✕ ← → ☰ ✓ ○) ด้วย Lucide, 8b ตัวเลือกไอคอนหมวดหมู่ (ดูสถานะปัจจุบัน)
 
 ### เฟส 1 — คนใช้ซ้ำ
 - Backlog ข้อ 4 (Onboarding + mode toggle, เริ่มที่ simple), ข้อ 10 (Core loop บน Dashboard), ข้อ 6 (แจ้งเตือน — ต้องทำ manifest + service worker ก่อน, iOS ต้อง "เพิ่มลงหน้าจอโฮม" ก่อนจึงรับ push ได้)
