@@ -48,14 +48,14 @@ Next.js (App Router), TypeScript, Tailwind CSS v4, Supabase (auth + database), V
 - **FloatingMenuButton**: ปุ่ม pill เล็ก ชิดขอบขวาจอ (`right` คงที่) ลากได้แค่แนวตั้งเท่านั้น (ห้ามลากอิสระทั่วจอ เพื่อไม่ชนกับ AssistiveTouch ของ iOS) เปิด overlay กลางจอ (ไม่ใช่ popup มุมจอ)
 - **MoreMenu overlay**: 2 ชั้น (root panel → "เพิ่มเติม"/"ตั้งค่า" sub-panel มีปุ่มย้อนกลับ ←) root panel เริ่มต้นเสมอทุกครั้งที่เปิดใหม่
 - Toggle "แสดงปุ่มเมนูลอย" ใน Settings (คอลัมน์ `financial_profile.show_floating_menu`) — ถ้าปิด ไอคอนเมนูเล็กจะโผล่ที่มุมบนขวาของ top bar แทน (bottom bar ไม่เปลี่ยนจำนวนปุ่ม)
-- หน้าที่เข้าถึงผ่าน MoreMenu (วางแผน/งบการเงิน/ธุรกิจ/คอร์ส/AI) มีปุ่ม back (←) ที่ header กลับไปหน้า Dashboard ตรงๆ (ไม่ต้องจำ panel ที่มา)
+- หน้าที่เข้าถึงผ่าน MoreMenu (วางแผน/งบการเงิน/AI — ธุรกิจ/คอร์สซ่อนจากเมนูแล้วแต่ยังเข้า URL ตรงได้) มีปุ่ม back (←) ที่ header กลับไปหน้า Dashboard ตรงๆ (ไม่ต้องจำ panel ที่มา)
 - Settings: **mobile = full-page ทีละหัวข้อ + back button**, **desktop = tab bar แนวนอนเดิม** — ต้องแยก breakpoint ให้ถูก (เคยมี regression ที่ desktop ดันกลายเป็น mobile layout มาแล้ว ระวังซ้ำ)
 
 ## Mode ผู้ใช้ (financial_profile.mode)
 
 - `mode = 'simple' | 'full'` (CHECK constraint มีอยู่แล้วใน DB)
 - simple → MoreMenu เหลือแค่ "ตั้งค่า" + "ออกจากระบบ"
-- full → MoreMenu เห็นครบ: วางแผน/งบการเงิน/ปรึกษาการเงิน/คอร์สการเงิน/เพิ่มเติม/ตั้งค่า/ออกจากระบบ
+- full → MoreMenu root panel 6 ปุ่ม (grid 3 คอลัมน์): วางแผน/งบการเงิน/ปรึกษาการเงิน/เพิ่มเติม/ตั้งค่า/ออกจากระบบ — "ธุรกิจ"/"คอร์สการเงิน" ถูก comment ไว้ใน `MoreMenu.tsx`/`Sidebar.tsx` (เอา comment ออกเพื่อแสดงกลับ)
 - **ยังไม่มี UI ให้ user สลับ mode เอง** (ค้างใน backlog — ดูข้อ 4 ด้านล่าง)
 
 ## สถานะปัจจุบัน (ทำเสร็จแล้ว — อัปเดตทุกครั้งที่งานใหญ่เสร็จ)
@@ -89,8 +89,8 @@ Next.js (App Router), TypeScript, Tailwind CSS v4, Supabase (auth + database), V
 3. Debt ratio = 0% เมื่อไม่มี asset แต่มีหนี้ (`balance-sheet/page.tsx` สูตร `totalAssets > 0 ? ... : 0`) — ต้องถามผู้ใช้ว่ากรณีนี้ควรแสดงอะไร
 4. ~~API Gemini ไม่เช็ค login~~ — เสร็จแล้ว (`getAuthUser` ใน `lib/supabase-server.ts`, ตอบ 401 ก่อนเรียก Gemini, ทดสอบ login จริงแล้วทั้ง desktop/mobile)
 5. ~~RLS~~ — ตรวจแล้ว 2026-09-27 ไม่ต้องแก้: ทุก table ใน `public` เปิด RLS, policy `ALL` ใช้ `auth.uid() = user_id` (ไม่มี `with_check` → Postgres ใช้เงื่อนไขเดียวกันตอนเขียน), `courses` อ่านได้ทุกคน (ไม่มีข้อมูลผู้ใช้), table `planning` เก่าไม่ได้ใช้ในแอปแต่มี RLS แล้ว — table ใหม่ทุกตัวต้องเปิด RLS + policy แบบเดียวกัน
-6. ติดตั้ง Sentry (backlog ข้อ 11) — ผู้ใช้ต้องสร้างบัญชี/DSN เอง
-7. ซ่อนเมนู "ธุรกิจ" (`MoreMenu.tsx`, `Sidebar.tsx`) และหน้า "คอร์ส" (mock data ทั้งหมด) จาก UI — **ห้ามลบโค้ด/route** — ต้องถามผู้ใช้ว่าจะกันการเข้า URL ตรงด้วยไหม, หลังซ่อนแล้วอัปเดตหัวข้อ Mobile Navigation/Mode ในไฟล์นี้
+6. ~~Sentry~~ — ติดตั้งแล้ว (`@sentry/nextjs` v11, จับแค่ error, ปิดเก็บข้อมูลส่วนตัว/request body ทั้งหมดใน `dataCollection`, tunnel `/monitoring`, ยังไม่อัปโหลด source map) ทดสอบบน Vercel Preview แล้ว `/monitoring` ตอบ 200 — **ตอน merge เข้า main ต้องติ๊ก Production ให้ `NEXT_PUBLIC_SENTRY_DSN` ใน Vercel ด้วย** (ตอนนี้ตั้งแค่ Preview)
+7. ~~ซ่อนเมนูธุรกิจ/คอร์ส~~ — เสร็จแล้ว: ซ่อนแค่เมนู (ผู้ใช้เลือกไม่กัน URL ตรง), route/โค้ดยังอยู่ครบ
 8. Emoji ที่เหลือ: `forgot-password/page.tsx`, `reset-password/page.tsx`, `ai/page.tsx`, `balance-sheet/page.tsx` (2 จุด), `CategoriesSection.tsx`, `ProfileSection.tsx`, `RecurringSection.tsx`
 
 ### เฟส 1 — คนใช้ซ้ำ
@@ -118,7 +118,7 @@ Next.js (App Router), TypeScript, Tailwind CSS v4, Supabase (auth + database), V
 
 ## Backlog ใหญ่ — โหมดธุรกิจแบบสลับได้ (ทำหลังทุกอย่างข้างบนเสร็จ)
 
-**หลักการ:** ไม่แยกเป็นแอปใหม่ ใช้ core เดียวกัน (auth, database, UI shell) — เพิ่ม toggle สลับ "ส่วนบุคคล/ธุรกิจ" อยู่บนสุดของ MoreMenu root panel (สลับได้ในบัญชีเดียว ไม่ใช่เลือกครั้งเดียวจบ) เมนู "ธุรกิจ" แบบเดิม: **พับแผนไว้ ซ่อนจาก UI แต่ห้ามลบโค้ด/route** (เก็บไว้พัฒนาต่อ) — ณ 2026-09-27 ยังแสดงอยู่ รอซ่อนในเฟส 0 ข้อ 7
+**หลักการ:** ไม่แยกเป็นแอปใหม่ ใช้ core เดียวกัน (auth, database, UI shell) — เพิ่ม toggle สลับ "ส่วนบุคคล/ธุรกิจ" อยู่บนสุดของ MoreMenu root panel (สลับได้ในบัญชีเดียว ไม่ใช่เลือกครั้งเดียวจบ) เมนู "ธุรกิจ" แบบเดิม: **พับแผนไว้ ซ่อนจาก UI แต่ห้ามลบโค้ด/route** (เก็บไว้พัฒนาต่อ) — ซ่อนจากเมนูแล้ว (เฟส 0 ข้อ 7)
 
 **โครงสร้าง mode 3 ชั้น:**
 ```
