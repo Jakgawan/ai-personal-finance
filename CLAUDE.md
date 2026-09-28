@@ -115,7 +115,7 @@ Next.js (App Router), TypeScript, Tailwind CSS v4, Supabase (auth + database), V
 7. **ดึงยอดจริงจาก Transaction มาเทียบใน Planning** — match ตาม category+เดือน แสดงแผน vs จริง
 8. **Google/Facebook Login** — เปิดผ่าน Supabase Dashboard > Authentication > Providers (built-in ไม่ต้องเขียนโค้ดเยอะ) — ต้องเช็ค Secure Email Change เปิดใช้งานจริงก่อนด้วย
 9. **Export ข้อมูลเป็น JSON** — safety net ให้ผู้ใช้อุ่นใจเรื่องความเป็นเจ้าของข้อมูล
-10. **Core loop redesign บน Dashboard** — ยอดคงเหลือใช้ได้จริงวันนี้ใหญ่สุดชัดสุดอยู่บนสุด, ปุ่มเพิ่มรายการใกล้ตัวเลขนี้ที่สุด, ปุ่มจำนวนเงินด่วน (50/100/200) กดแทนพิมพ์, AI insight แบบ scripted ผูกข้อมูลจริงเท่านั้น (ห้ามชมลอยๆ ไม่มีข้อมูลรองรับ)
+10. ~~**Core loop redesign บน Dashboard**~~ — เสร็จแล้ว (เฟส 1 ข้อ 2, 2026-09-28): สูตรใน `lib/daily-budget.ts` — ใช้ได้วันนี้ = (รายรับรอบ − รายจ่ายก่อนวันนี้) ÷ วันที่เหลือรวมวันนี้ − รายจ่ายวันนี้; state ok/over (วันนี้ใช้เกิน)/cycle-negative (ติดลบจากวันก่อน วันนี้ยังไม่ใช้)/no-income; รอบเงินเดือนใช้ `resolveCycleRange` (clamp วันสิ้นเดือน, วันนี้ไม่อยู่ในรอบ → ใช้เดือนปฏิทิน) ทุกส่วนของ Dashboard ใช้ช่วงเดียวกัน; ปุ่มด่วน ส่ง event `openQuickAdd` {amount,type} → เปิด QuickAdd พร้อมจำนวน (ต้องกดบันทึก); insight แบบกฎ 1 ข้อ ไม่ใช้ AI
 11. **Error tracking (Sentry)** — ติดตั้งเพื่อจับบั๊กที่เกิดจริงบน production โดยอัตโนมัติ โดยเฉพาะบั๊กที่เกิดเฉพาะบางเครื่อง/เบราว์เซอร์ที่ทดสอบเองไม่เจอ (มีประวัติเจอบั๊กแบบนี้มาแล้วหลายครั้ง เช่น ปุ่มลอยพังเฉพาะมือถือ, session ไม่ sync บน Safari)
 
 ## Backlog ใหญ่ — โหมดธุรกิจแบบสลับได้ (ทำหลังทุกอย่างข้างบนเสร็จ)
