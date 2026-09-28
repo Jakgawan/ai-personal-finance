@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
 import ConfirmModal from "@/app/components/ConfirmModal"
+import { showToast } from "@/app/components/Toast"
 import { Lightbulb } from "lucide-react"
 
 type Asset = {
@@ -179,10 +180,15 @@ export default function BalanceSheetPage() {
     if (!assetName || !assetValue) return
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
+    let writeError: { message: string } | null
     if (editAsset) {
-      await supabase.from("assets").update({ name: assetName, asset_group: assetGroup, value: Number(assetValue), updated_at: new Date().toISOString() }).eq("id", editAsset.id)
+      ({ error: writeError } = await supabase.from("assets").update({ name: assetName, asset_group: assetGroup, value: Number(assetValue), updated_at: new Date().toISOString() }).eq("id", editAsset.id))
     } else {
-      await supabase.from("assets").insert({ user_id: user.id, name: assetName, asset_group: assetGroup, value: Number(assetValue) })
+      ({ error: writeError } = await supabase.from("assets").insert({ user_id: user.id, name: assetName, asset_group: assetGroup, value: Number(assetValue) }))
+    }
+    if (writeError) {
+      showToast("บันทึกไม่สำเร็จ ลองใหม่อีกครั้ง", "error")
+      return
     }
     setShowAssetModal(false)
     await fetchAll()
@@ -193,7 +199,11 @@ export default function BalanceSheetPage() {
       message: "ลบสินทรัพย์นี้?",
       onConfirm: async () => {
         setConfirmState(null)
-        await supabase.from("assets").delete().eq("id", id)
+        const { error } = await supabase.from("assets").delete().eq("id", id)
+        if (error) {
+          showToast("ลบไม่สำเร็จ ลองใหม่อีกครั้ง", "error")
+          return
+        }
         await fetchAll()
       },
     })
@@ -217,15 +227,20 @@ export default function BalanceSheetPage() {
     if (!user) {
       return
     }
+    let writeError: { message: string } | null
     if (editLiab) {
-      await supabase.from("liabilities_long").update({
+      ({ error: writeError } = await supabase.from("liabilities_long").update({
         name: liabName, term: liabTerm,
         balance: Number(liabBalance), updated_at: new Date().toISOString()
-      }).eq("id", editLiab.id)
+      }).eq("id", editLiab.id))
     } else {
-      await supabase.from("liabilities_long").insert({
+      ({ error: writeError } = await supabase.from("liabilities_long").insert({
         user_id: user.id, name: liabName, term: liabTerm, balance: Number(liabBalance)
-      })
+      }))
+    }
+    if (writeError) {
+      showToast("บันทึกไม่สำเร็จ ลองใหม่อีกครั้ง", "error")
+      return
     }
     setShowLiabModal(false)
     await fetchAll()
@@ -236,7 +251,11 @@ export default function BalanceSheetPage() {
       message: "ลบหนี้สินนี้?",
       onConfirm: async () => {
         setConfirmState(null)
-        await supabase.from("liabilities_long").delete().eq("id", id)
+        const { error } = await supabase.from("liabilities_long").delete().eq("id", id)
+        if (error) {
+          showToast("ลบไม่สำเร็จ ลองใหม่อีกครั้ง", "error")
+          return
+        }
         await fetchAll()
       },
     })
@@ -255,7 +274,7 @@ export default function BalanceSheetPage() {
   const saveProfile = async () => {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return
-  await supabase.from("financial_profile").upsert({
+  const { error } = await supabase.from("financial_profile").upsert({
     user_id: user.id,
     monthly_income: Number(incomeInput) || 0,
     monthly_expense: Number(expenseInput) || 0,
@@ -263,6 +282,10 @@ export default function BalanceSheetPage() {
     occupation: occupationInput,
     updated_at: new Date().toISOString(),
   })
+  if (error) {
+    showToast("บันทึกไม่สำเร็จ ลองใหม่อีกครั้ง", "error")
+    return
+  }
   setShowProfileModal(false)
   await fetchAll()
 }
@@ -480,17 +503,31 @@ export default function BalanceSheetPage() {
   <h2 className="text-sm font-semibold text-gray-700 mb-3">ประเภทอาชีพ</h2>
   <div className="flex gap-3">
     <button onClick={async () => {
+      const prevOccupation = occupation
       setOccupation("salaried")
       const { data: { user } } = await supabase.auth.getUser()
-      if (user) await supabase.from("financial_profile").upsert({ user_id: user.id, occupation: "salaried", updated_at: new Date().toISOString() })
+      if (user) {
+        const { error } = await supabase.from("financial_profile").upsert({ user_id: user.id, occupation: "salaried", updated_at: new Date().toISOString() })
+        if (error) {
+          setOccupation(prevOccupation)
+          showToast("บันทึกไม่สำเร็จ ลองใหม่อีกครั้ง", "error")
+        }
+      }
     }}
       className={`flex-1 py-2.5 rounded-lg text-sm font-medium border transition-colors ${occupation === "salaried" ? "bg-[#1D9E75] text-white border-[#1D9E75]" : "border-gray-200 text-gray-600"}`}>
       งานประจำ
     </button>
     <button onClick={async () => {
+      const prevOccupation = occupation
       setOccupation("freelance")
       const { data: { user } } = await supabase.auth.getUser()
-      if (user) await supabase.from("financial_profile").upsert({ user_id: user.id, occupation: "freelance", updated_at: new Date().toISOString() })
+      if (user) {
+        const { error } = await supabase.from("financial_profile").upsert({ user_id: user.id, occupation: "freelance", updated_at: new Date().toISOString() })
+        if (error) {
+          setOccupation(prevOccupation)
+          showToast("บันทึกไม่สำเร็จ ลองใหม่อีกครั้ง", "error")
+        }
+      }
     }}
       className={`flex-1 py-2.5 rounded-lg text-sm font-medium border transition-colors ${occupation === "freelance" ? "bg-[#378ADD] text-white border-[#378ADD]" : "border-gray-200 text-gray-600"}`}>
       ฟรีแลนซ์
