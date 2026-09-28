@@ -294,10 +294,14 @@ export default function Dashboard() {
             <>
               <p className="text-sm opacity-90">เงินรอบนี้ติดลบ</p>
               <p className="text-[2.5rem] leading-tight font-bold tabular-nums mt-1">
-                -฿{formatMoney(Math.abs(budget.cycleBalance))}
+                {Math.round(budget.cycleBalance) < 0 ? "-" : ""}฿{formatMoney(Math.abs(budget.cycleBalance))}
               </p>
               <p className="text-sm mt-3">
-                รายจ่ายรอบนี้มากกว่ารายรับ <span className="font-semibold tabular-nums">฿{formatMoney(Math.abs(budget.cycleBalance))}</span>
+                {Math.round(budget.cycleBalance) < 0 ? (
+                  <>รายจ่ายรอบนี้มากกว่ารายรับ <span className="font-semibold tabular-nums">฿{formatMoney(Math.abs(budget.cycleBalance))}</span></>
+                ) : (
+                  "เงินรอบนี้หมดแล้ว"
+                )}
               </p>
               <p className="text-sm opacity-90 mt-1">เหลืออีก {budget.daysLeftInclToday} วันในรอบ</p>
             </>

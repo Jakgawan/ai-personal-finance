@@ -9,7 +9,7 @@ export type BudgetTransaction = {
   category?: string | null
 }
 
-// over = วันนี้ใช้เกินงบ (มีรายจ่ายวันนี้), cycle-negative = ไม่ได้ใช้วันนี้แต่รอบติดลบจากวันก่อนๆ
+// cycle-negative = เงินหมด/ติดลบตั้งแต่ก่อนวันนี้ (ไม่ว่าวันนี้จะใช้เพิ่มหรือไม่), over = ต้นวันยังมีเงิน แต่วันนี้ใช้เกินงบรายวัน
 export type BudgetState = "ok" | "over" | "cycle-negative" | "no-income"
 
 export type InsightPart = { text: string; bold?: boolean }
@@ -140,7 +140,8 @@ export function calcDailyBudget(
   // ตัดสิน state หลังปัดค่า (|x| < 0.5 = 0) กันโชว์ "-฿0" สีแดง
   const state: BudgetState =
     cycleIncome <= 0 ? "no-income"
-    : roundZero(availableToday) < 0 ? (roundZero(todayExpense) > 0 ? "over" : "cycle-negative")
+    : roundZero(startOfTodayBalance) <= 0 ? "cycle-negative"
+    : roundZero(availableToday) < 0 ? "over"
     : "ok"
 
   const tomorrowBudget = daysLeftInclToday > 1 ? cycleBalance / (daysLeftInclToday - 1) : null
