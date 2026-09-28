@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
 import { User, Building2, AlertTriangle, CircleCheck, X } from "lucide-react"
 import ConfirmModal from "@/app/components/ConfirmModal"
+import { processDueRecurring, firstNextDate, todayLocal, type CreatedLog } from "@/lib/recurring"
 
 type Recurring = {
   id: string
@@ -21,13 +22,6 @@ type Recurring = {
 type Business = {
   id: string
   name: string
-}
-
-type CreatedLog = {
-  name: string
-  amount: number
-  type: string
-  date: string
 }
 
 const CYCLE_LABEL: Record<string, string> = {
@@ -52,7 +46,7 @@ export default function RecurringSection() {
   const [type, setType] = useState("expense")
   const [category, setCategory] = useState("")
   const [cycle, setCycle] = useState("monthly")
-  const [startDate, setStartDate] = useState(new Date().toISOString().split("T")[0])
+  const [startDate, setStartDate] = useState(todayLocal())
   const [businessId, setBusinessId] = useState<string>("")
 
   const fetchAll = async () => {
@@ -68,84 +62,28 @@ export default function RecurringSection() {
     setBusinesses(biz || [])
   }
 
-  useEffect(() => {
-    fetchAll()
-    processRecurring()
-  }, [])
-
-  const calcNextDate = (date: string, cycle: string) => {
-    const d = new Date(date)
-    if (cycle === "monthly") d.setMonth(d.getMonth() + 1)
-    if (cycle === "weekly") d.setDate(d.getDate() + 7)
-    if (cycle === "yearly") d.setFullYear(d.getFullYear() + 1)
-    return d.toISOString().split("T")[0]
-  }
-
   const processRecurring = async () => {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
+    // ใช้ฟังก์ชันกลางจาก lib/recurring.ts (มี guard กันสร้างซ้ำ ใช้ร่วมกับ RecurringProcessor ใน layout)
+    const { created } = await processDueRecurring()
 
-    const today = new Date().toISOString().split("T")[0]
-    const { data } = await supabase
-      .from("recurring_transactions")
-      .select("*")
-      .eq("user_id", user.id)
-      .eq("is_active", true)
-      .lte("next_date", today)
-
-    if (!data || data.length === 0) return
-
-    const logs: CreatedLog[] = []
-
-    for (const item of data) {
-      if (item.business_id) {
-        await supabase.from("business_transactions").insert({
-          user_id: user.id,
-          business_id: item.business_id,
-          name: item.name,
-          amount: item.amount,
-          type: item.type,
-          category: item.category,
-          date: item.next_date,
-        })
-      } else {
-        await supabase.from("transactions").insert({
-          user_id: user.id,
-          name: item.name,
-          amount: item.amount,
-          type: item.type,
-          category: item.category,
-          date: item.next_date,
-          note: "สร้างอัตโนมัติจากรายการซ้ำ",
-        })
-      }
-
-      logs.push({
-        name: item.name,
-        amount: item.amount,
-        type: item.type,
-        date: item.next_date,
-      })
-
-      await supabase
-        .from("recurring_transactions")
-        .update({ next_date: calcNextDate(item.next_date, item.cycle) })
-        .eq("id", item.id)
-    }
-
-    if (logs.length > 0) {
-      setCreatedLogs(logs)
+    if (created.length > 0) {
+      setCreatedLogs(created)
       setShowLog(true)
     }
 
     fetchAll()
   }
 
+  useEffect(() => {
+    fetchAll()
+    processRecurring()
+  }, [])
+
   const openAdd = (bizId?: string) => {
     setEditItem(null)
     setName(""); setAmount(""); setType("expense")
     setCategory(""); setCycle("monthly")
-    setStartDate(new Date().toISOString().split("T")[0])
+    setStartDate(todayLocal())
     setBusinessId(bizId || "")
     setShowModal(true)
   }
@@ -165,21 +103,10 @@ export default function RecurringSection() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
 
-   const calcFirstNextDate = (date: string, cycle: string) => {
-  const today = new Date().toISOString().split("T")[0]
-  let d = new Date(date)
- while (d.toISOString().split("T")[0] <= today) {
-    if (cycle === "monthly") d.setMonth(d.getMonth() + 1)
-    if (cycle === "weekly") d.setDate(d.getDate() + 7)
-    if (cycle === "yearly") d.setFullYear(d.getFullYear() + 1)
-  }
-  return d.toISOString().split("T")[0]
-}
-
     const payload = {
         name, amount: Number(amount), type, category,
         cycle, start_date: startDate,
-        next_date: calcFirstNextDate(startDate, cycle),
+        next_date: firstNextDate(startDate, cycle),
         user_id: user.id,
         business_id: businessId || null,
     }
