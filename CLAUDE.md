@@ -56,7 +56,8 @@ Next.js (App Router), TypeScript, Tailwind CSS v4, Supabase (auth + database), V
 - `mode = 'simple' | 'full'` (CHECK constraint มีอยู่แล้วใน DB)
 - simple → MoreMenu เหลือแค่ "ตั้งค่า" + "ออกจากระบบ"
 - full → MoreMenu root panel 6 ปุ่ม (grid 3 คอลัมน์): วางแผน/งบการเงิน/ปรึกษาการเงิน/เพิ่มเติม/ตั้งค่า/ออกจากระบบ — "ธุรกิจ"/"คอร์สการเงิน" ถูก comment ไว้ใน `MoreMenu.tsx`/`Sidebar.tsx` (เอา comment ออกเพื่อแสดงกลับ)
-- **ยังไม่มี UI ให้ user สลับ mode เอง** (ค้างใน backlog — ดูข้อ 4 ด้านล่าง)
+- สลับ mode ได้ที่ ตั้งค่า > การแสดงผล (`DisplaySection.tsx`, ส่ง event `profileModeChanged` ให้ Sidebar/MoreMenu เปลี่ยนทันที)
+- Onboarding: ผู้ใช้ที่ยังไม่มีแถว `financial_profile` ถูก Sidebar พาไป `/onboarding` เลือก simple (ค่าเริ่มต้น)/full แล้วบันทึกแถว → ไม่ถามซ้ำ (ไม่ใช้คอลัมน์ใหม่) — ถ้า query profile error จะไม่ redirect; แถวเก่าที่ `mode` เป็น null ถือเป็น full
 
 ## สถานะปัจจุบัน (ทำเสร็จแล้ว — อัปเดตทุกครั้งที่งานใหญ่เสร็จ)
 
@@ -108,7 +109,7 @@ Next.js (App Router), TypeScript, Tailwind CSS v4, Supabase (auth + database), V
 1. ~~**Loading State + Empty State**~~ — เสร็จแล้ว ดูหัวข้อ "สถานะปัจจุบัน" ด้านบน
 2. **Sticky Action Button** — ปุ่ม "บันทึก" ใน FAB Modal sticky อยู่ล่างสุดของ modal เสมอ
 3. **UX Writing Guideline** — ทบทวนข้อความทั้งแอปให้เป็น active voice บอกผลลัพธ์ตรงๆ
-4. **Onboarding + mode toggle ใน Settings** — เพิ่ม toggle สลับ mode (simple/full) ใน Settings + หน้า Onboarding ถามตอนสมัครครั้งแรก (ถ้าเคยเลือกแล้วไม่ถามซ้ำ)
+4. ~~**Onboarding + mode toggle ใน Settings**~~ — เสร็จแล้ว (เฟส 1 ข้อ 1, 2026-09-28) ดูหัวข้อ Mode ผู้ใช้
 5. **AI Chat แบบ Conversational Data Entry** — คุยประโยคยาวกับ AI Chat (เช่น "มีหนี้บัตรเครดิต 50000 รายได้เดือนละ 30000") ให้ AI แยกแยะไปกรอก `financial_profile`/`liabilities_long`/`assets` พร้อมขึ้นการ์ด preview ให้กดยืนยันก่อนบันทึกจริง (ไม่บันทึกอัตโนมัติ) เริ่ม scope เล็ก (2 table หลัก) ก่อนขยาย
 6. **แจ้งเตือน recurring bills ผ่าน Web Push** — เพิ่ม tables `notification_settings`, `custom_reminders`, ตั้งเวลาแจ้งเตือนประจำวันได้เอง + custom reminder เอง, backend ใช้ Vercel Cron/Supabase Edge Function เช็คทุกชั่วโมง, กดแจ้งเตือนเปิดตรงไปที่ FAB บันทึกด่วนทันที
 7. **ดึงยอดจริงจาก Transaction มาเทียบใน Planning** — match ตาม category+เดือน แสดงแผน vs จริง
