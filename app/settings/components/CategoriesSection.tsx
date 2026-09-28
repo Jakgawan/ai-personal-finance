@@ -6,6 +6,7 @@ import { Lightbulb, ClipboardList } from "lucide-react"
 import ConfirmModal from "@/app/components/ConfirmModal"
 import CategoryIcon from "@/app/components/CategoryIcon"
 import { CATEGORY_ICONS } from "@/lib/category-icons"
+import { showToast } from "@/app/components/Toast"
 
 type Category = {
   id: string
@@ -25,7 +26,7 @@ export default function CategoriesSection() {
   const [icon, setIcon] = useState("")
   const [editId, setEditId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
-  const [confirmState, setConfirmState] = useState<{ message: string; onConfirm: () => void } | null>(null)
+  const [confirmState, setConfirmState] = useState<{ message: string; onConfirm: () => void; confirmLabel: string; danger: boolean } | null>(null)
   const DEFAULT_CATEGORIES = [
   { name: "อาหาร", type: "expense", color: "#D85A30", icon: "utensils" },
   { name: "เดินทาง", type: "expense", color: "#F59E0B", icon: "car" },
@@ -50,11 +51,17 @@ const handleLoadTemplate = () => {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
-      await supabase.from("categories").insert(
+      const { error } = await supabase.from("categories").insert(
         DEFAULT_CATEGORIES.map(c => ({ ...c, user_id: user.id }))
       )
+      if (error) {
+        showToast("โหลด template ไม่สำเร็จ ลองใหม่อีกครั้ง", "error")
+        return
+      }
       fetchCategories()
     },
+    confirmLabel: "โหลดเลย",
+    danger: false,
   })
 }
 
@@ -78,10 +85,20 @@ const handleLoadTemplate = () => {
     if (!user) return
 
     if (editId) {
-      await supabase.from("categories").update({ name, type, color, icon }).eq("id", editId)
+      const { error } = await supabase.from("categories").update({ name, type, color, icon }).eq("id", editId)
+      if (error) {
+        showToast("บันทึกไม่สำเร็จ ลองใหม่อีกครั้ง", "error")
+        setLoading(false)
+        return
+      }
       setEditId(null)
     } else {
-      await supabase.from("categories").insert({ user_id: user.id, name, type, color, icon })
+      const { error } = await supabase.from("categories").insert({ user_id: user.id, name, type, color, icon })
+      if (error) {
+        showToast("บันทึกไม่สำเร็จ ลองใหม่อีกครั้ง", "error")
+        setLoading(false)
+        return
+      }
     }
 
     setName(""); setIcon(""); setColor(COLORS[0]); setType("expense")
@@ -97,9 +114,21 @@ const handleLoadTemplate = () => {
     setIcon(cat.icon || "")
   }
 
-  const handleDelete = async (id: string) => {
-    await supabase.from("categories").delete().eq("id", id)
-    fetchCategories()
+  const handleDelete = (cat: Category) => {
+    setConfirmState({
+      message: `ลบหมวดหมู่ "${cat.name}"? รายการที่ใช้หมวดนี้จะไม่ถูกลบ`,
+      onConfirm: async () => {
+        setConfirmState(null)
+        const { error } = await supabase.from("categories").delete().eq("id", cat.id)
+        if (error) {
+          showToast("ลบไม่สำเร็จ ลองใหม่อีกครั้ง", "error")
+          return
+        }
+        fetchCategories()
+      },
+      confirmLabel: "ลบ",
+      danger: true,
+    })
   }
 
   const income = categories.filter(c => c.type === "income")
@@ -223,7 +252,7 @@ const handleLoadTemplate = () => {
                 </div>
                 <div className="flex gap-2">
                   <button onClick={() => handleEdit(cat)} className="text-xs text-[#378ADD] hover:underline">แก้ไข</button>
-                  <button onClick={() => handleDelete(cat.id)} className="text-xs text-[#D85A30] hover:underline">ลบ</button>
+                  <button onClick={() => handleDelete(cat)} className="text-xs text-[#D85A30] hover:underline">ลบ</button>
                 </div>
               </div>
             ))
@@ -236,8 +265,8 @@ const handleLoadTemplate = () => {
         message={confirmState?.message || ""}
         onConfirm={() => confirmState?.onConfirm()}
         onCancel={() => setConfirmState(null)}
-        confirmLabel="โหลดเลย"
-        danger={false}
+        confirmLabel={confirmState?.confirmLabel}
+        danger={confirmState?.danger}
       />
     </div>
   )

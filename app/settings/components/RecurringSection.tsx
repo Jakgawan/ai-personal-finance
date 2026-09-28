@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
 import { User, Building2, AlertTriangle, CircleCheck, X } from "lucide-react"
 import ConfirmModal from "@/app/components/ConfirmModal"
+import { showToast } from "@/app/components/Toast"
 import { processDueRecurring, firstNextDate, todayLocal, type CreatedLog } from "@/lib/recurring"
 
 type Recurring = {
@@ -111,10 +112,13 @@ export default function RecurringSection() {
         business_id: businessId || null,
     }
 
-    if (editItem) {
-      await supabase.from("recurring_transactions").update(payload).eq("id", editItem.id)
-    } else {
-      await supabase.from("recurring_transactions").insert(payload)
+    const { error } = editItem
+      ? await supabase.from("recurring_transactions").update(payload).eq("id", editItem.id)
+      : await supabase.from("recurring_transactions").insert(payload)
+    if (error) {
+      showToast("บันทึกไม่สำเร็จ ลองใหม่อีกครั้ง", "error")
+      setLoading(false)
+      return
     }
 
     setShowModal(false)
@@ -123,7 +127,11 @@ export default function RecurringSection() {
   }
 
   const toggleActive = async (item: Recurring) => {
-    await supabase.from("recurring_transactions").update({ is_active: !item.is_active }).eq("id", item.id)
+    const { error } = await supabase.from("recurring_transactions").update({ is_active: !item.is_active }).eq("id", item.id)
+    if (error) {
+      showToast("บันทึกไม่สำเร็จ ลองใหม่อีกครั้ง", "error")
+      return
+    }
     fetchAll()
   }
 
@@ -132,7 +140,11 @@ export default function RecurringSection() {
       message: "ลบรายการซ้ำนี้?",
       onConfirm: async () => {
         setConfirmState(null)
-        await supabase.from("recurring_transactions").delete().eq("id", id)
+        const { error } = await supabase.from("recurring_transactions").delete().eq("id", id)
+        if (error) {
+          showToast("ลบไม่สำเร็จ ลองใหม่อีกครั้ง", "error")
+          return
+        }
         fetchAll()
       },
     })

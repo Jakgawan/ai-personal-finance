@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
+import { showToast } from "@/app/components/Toast"
 
 export default function DisplaySection() {
   const [showFloatingMenu, setShowFloatingMenu] = useState(true)
@@ -32,11 +33,17 @@ export default function DisplaySection() {
       setLoading(false)
       return
     }
-    await supabase.from("financial_profile").upsert({
+    const { error } = await supabase.from("financial_profile").upsert({
       user_id: user.id,
       show_floating_menu: next,
       updated_at: new Date().toISOString(),
     })
+    if (error) {
+      // ย้อนค่ากลับ เพราะ UI เปลี่ยนไปก่อนแล้วแต่บันทึกไม่สำเร็จ
+      setShowFloatingMenu(!next)
+      window.dispatchEvent(new CustomEvent("floatingMenuToggled", { detail: { show: !next } }))
+      showToast("บันทึกไม่สำเร็จ ลองใหม่อีกครั้ง", "error")
+    }
     setLoading(false)
   }
 
