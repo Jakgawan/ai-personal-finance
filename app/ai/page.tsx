@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabase"
 import Link from "next/link"
 import ReactMarkdown from "react-markdown"
 import ConfirmModal from "@/app/components/ConfirmModal"
+import { showToast } from "@/app/components/Toast"
 import { MessageCircle } from "lucide-react"
 
 type Message = {
@@ -82,11 +83,16 @@ export default function AIChatPage() {
 
     const { data: { user } } = await supabase.auth.getUser()
 
-    await supabase.from("chat_history").insert({
+    const { error: userSaveError } = await supabase.from("chat_history").insert({
       user_id: user?.id,
       role: "user",
       content: userMsg.content,
     })
+    // แจ้งเตือนแค่ครั้งเดียวต่อการสนทนา 1 รอบ (กัน toast ซ้ำถ้าบันทึกข้อความ AI พลาดด้วย)
+    const saveFailedToastShown: boolean = !!userSaveError
+    if (userSaveError) {
+      showToast("บันทึกประวัติแชทไม่สำเร็จ", "error")
+    }
 
     try {
       const res = await fetch("/api/chat", {
@@ -103,11 +109,14 @@ export default function AIChatPage() {
 
       setMessages(prev => [...prev, assistantMsg])
 
-      await supabase.from("chat_history").insert({
+      const { error: assistantSaveError } = await supabase.from("chat_history").insert({
         user_id: user?.id,
         role: "assistant",
         content: data.reply,
       })
+      if (assistantSaveError && !saveFailedToastShown) {
+        showToast("บันทึกประวัติแชทไม่สำเร็จ", "error")
+      }
     } catch {
       setMessages(prev => [...prev, { role: "assistant", content: "เกิดข้อผิดพลาด กรุณาลองใหม่" }])
     }
@@ -122,7 +131,11 @@ export default function AIChatPage() {
         setConfirmState(null)
         const { data: { user } } = await supabase.auth.getUser()
         if (!user) return
-        await supabase.from("chat_history").delete().eq("user_id", user.id)
+        const { error } = await supabase.from("chat_history").delete().eq("user_id", user.id)
+        if (error) {
+          showToast("ล้างประวัติไม่สำเร็จ ลองใหม่อีกครั้ง", "error")
+          return
+        }
         setMessages([])
       },
     })
