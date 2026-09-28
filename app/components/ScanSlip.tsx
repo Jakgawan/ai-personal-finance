@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
 import { Camera, CheckCircle2, Loader2, X } from "lucide-react"
+import { showToast } from "./Toast"
 
 type ScannedData = {
   name: string
@@ -68,9 +69,12 @@ useEffect(() => {
     if (!scanned) return
     setSaving(true)
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
+    if (!user) {
+      setSaving(false)
+      return
+    }
 
-    await supabase.from("transactions").insert({
+    const { error } = await supabase.from("transactions").insert({
       user_id: user.id,
       name: scanned.name,
       amount: Number(scanned.amount),
@@ -79,6 +83,12 @@ useEffect(() => {
       category: scanned.category,
       note: "สแกนจากสลิป",
     })
+
+    if (error) {
+      showToast("บันทึกไม่สำเร็จ ลองใหม่อีกครั้ง", "error")
+      setSaving(false)
+      return
+    }
 
     setSaving(false)
     setShowModal(false)

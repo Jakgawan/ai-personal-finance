@@ -119,7 +119,7 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles 
       setLoading(false)
       return
     }
-    await supabase.from("transactions").insert({
+    const { error } = await supabase.from("transactions").insert({
       user_id: user.id,
       name,
       amount: Number(amount),
@@ -128,6 +128,11 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles 
       category: category || null,
       cycle_id: cycleId || null,
     })
+    if (error) {
+      showToast("บันทึกไม่สำเร็จ ลองใหม่อีกครั้ง", "error")
+      setLoading(false)
+      return
+    }
     window.dispatchEvent(new CustomEvent("transactionAdded"))
     setLoading(false)
     onClose()

@@ -6,6 +6,7 @@ import ExportPDF from "@/app/components/ExportPDF"
 import { formatDate } from "@/lib/utils"
 import ScanSlip from "@/app/components/ScanSlip"
 import ConfirmModal from "@/app/components/ConfirmModal"
+import { showToast } from "@/app/components/Toast"
 import { BarChart2, CalendarDays, List, ChevronLeft, ChevronRight } from "lucide-react"
 
 type Transaction = {
@@ -86,7 +87,6 @@ export default function TransactionPage() {
     ])
 
     // setTransactions trigger re-render ทันทีที่ได้ข้อมูลใหม่
-    console.log("จำนวนที่ดึงมาได้:", txData?.length, txData)
     setTransactions(txData || [])
     setCategories(catData || [])
     setCycles(cycleData || [])
@@ -152,7 +152,6 @@ export default function TransactionPage() {
   // ทำให้ข้อมูลใหม่โหลดเสร็จก่อนที่ modal จะปิด
   // ผู้ใช้เห็นรายการใหม่ทันทีโดยไม่ต้องรีเพจ
   const handleSubmit = async () => {
-  console.log("กดบันทึกแล้ว!")
   if (!name || !amount || !date) return
     setLoading(true)
 
@@ -169,11 +168,18 @@ export default function TransactionPage() {
 
    if (editId) {
       const { error } = await supabase.from("transactions").update(payload).eq("id", editId)
-      if (error) console.log("update error:", error)
+      if (error) {
+        showToast("บันทึกไม่สำเร็จ ลองใหม่อีกครั้ง", "error")
+        setLoading(false)
+        return
+      }
     } else {
-      const { data, error } = await supabase.from("transactions").insert(payload).select()
-      if (error) console.log("insert error:", error)
-      else console.log("insert สำเร็จ:", data)
+      const { error } = await supabase.from("transactions").insert(payload)
+      if (error) {
+        showToast("บันทึกไม่สำเร็จ ลองใหม่อีกครั้ง", "error")
+        setLoading(false)
+        return
+      }
     }
 
     await fetchAll()
@@ -186,7 +192,11 @@ export default function TransactionPage() {
       message: "ลบรายการนี้?",
       onConfirm: async () => {
         setConfirmState(null)
-        await supabase.from("transactions").delete().eq("id", id)
+        const { error } = await supabase.from("transactions").delete().eq("id", id)
+        if (error) {
+          showToast("ลบไม่สำเร็จ ลองใหม่อีกครั้ง", "error")
+          return
+        }
         await fetchAll()
       },
     })
