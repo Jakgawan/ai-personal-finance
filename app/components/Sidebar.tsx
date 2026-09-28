@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import { LayoutDashboard, ListOrdered, CalendarDays, Scale, MessageCircle, Settings, LogOut, Menu, Wallet, ChevronLeft } from "lucide-react"
 import QuickAddModal from "./QuickAddModal"
@@ -36,13 +36,14 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
   const [showQuickAdd, setShowQuickAdd] = useState(false)
   const [showMoreMenu, setShowMoreMenu] = useState(false)
   const pathname = usePathname()
+  const router = useRouter()
 
   const [categories, setCategories] = useState<{ id: string; name: string; type: string; icon: string; color?: string }[]>([])
   const [cycles, setCycles] = useState<{ id: string; name: string }[]>([])
   const [profileMode, setProfileMode] = useState<"simple" | "full">("full")
   const [showFloatingMenu, setShowFloatingMenu] = useState(true)
 
-  const hideSidebar = pathname === "/login" || pathname === "/register" || pathname === "/forgot-password" || pathname === "/reset-password"
+  const hideSidebar = pathname === "/login" || pathname === "/register" || pathname === "/forgot-password" || pathname === "/reset-password" || pathname === "/onboarding"
 
   useEffect(() => {
     setShowMoreMenu(false)
@@ -58,21 +59,34 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
   }, [])
 
   useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<{ mode: "simple" | "full" }>).detail
+      setProfileMode(detail.mode)
+    }
+    window.addEventListener("profileModeChanged", handler)
+    return () => window.removeEventListener("profileModeChanged", handler)
+  }, [])
+
+  useEffect(() => {
     const fetchData = async () => {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
-      const [{ data: catData }, { data: cycleData }, { data: profileData }] = await Promise.all([
+      const [{ data: catData }, { data: cycleData }, { data: profileData, error: profileError }] = await Promise.all([
         supabase.from("categories").select("*").eq("user_id", user.id),
         supabase.from("pay_cycles").select("*").eq("user_id", user.id),
         supabase.from("financial_profile").select("mode, show_floating_menu").eq("user_id", user.id).maybeSingle(),
       ])
+      // ผู้ใช้ใหม่ยังไม่มีแถว financial_profile -> พาไปหน้าเลือกโหมด (ไม่ redirect ถ้า query error)
+      if (!profileError && !profileData && window.location.pathname !== "/onboarding") {
+        router.replace("/onboarding")
+      }
       setCategories(catData || [])
       setCycles(cycleData || [])
       setProfileMode(profileData?.mode === "simple" ? "simple" : "full")
       setShowFloatingMenu(profileData?.show_floating_menu !== false)
     }
     fetchData()
-  }, [])
+  }, [router])
 
   useEffect(() => {
     if (hideSidebar) return
