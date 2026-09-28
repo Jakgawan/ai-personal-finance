@@ -54,11 +54,15 @@ function calcFinancialScore(
   score += savingScore
 
   const annualIncome = cycleIncome * 12
+  // ยังไม่มีรายรับในรอบนี้แต่มีหนี้ → หารด้วย 0 ไม่ได้ ให้คะแนนหนี้เป็น 0 แทนการแสดงว่าดีเยี่ยม
+  const noIncomeWithDebt = annualIncome === 0 && liabilities > 0
   const debtRate = annualIncome > 0 ? (liabilities / annualIncome) * 100 : 0
-  const debtScore = debtRate <= 35 ? 25 : debtRate <= 50 ? 15 : debtRate <= 70 ? 8 : 0
+  const debtScore = noIncomeWithDebt ? 0 : debtRate <= 35 ? 25 : debtRate <= 50 ? 15 : debtRate <= 70 ? 8 : 0
   details.push({
   label: "ภาระหนี้สิน", score: debtScore, max: 25,
-  tip: debtRate <= 35 ? "ภาระหนี้อยู่ในเกณฑ์ดี" : `หนี้ ${debtRate.toFixed(1)}% ของรายได้ทั้งปี เป้า < 35%`
+  tip: noIncomeWithDebt
+    ? "มีหนี้แต่ยังไม่มีรายรับในรอบนี้ บันทึกรายรับเพื่อคำนวณภาระหนี้"
+    : debtRate <= 35 ? "ภาระหนี้อยู่ในเกณฑ์ดี" : `หนี้ ${debtRate.toFixed(1)}% ของรายได้ทั้งปี เป้า < 35%`
 })
   score += debtScore
 
