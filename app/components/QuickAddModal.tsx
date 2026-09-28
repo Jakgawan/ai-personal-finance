@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabase"
 import { Plus, Loader2, X } from "lucide-react"
 import { showToast } from "./Toast"
 import CategoryIcon from "./CategoryIcon"
+import { todayLocal } from "@/lib/recurring"
 
 type Category = { id: string; name: string; type: string; icon: string; color?: string }
 type Cycle = { id: string; name: string }
@@ -15,12 +16,15 @@ type Props = {
   mode: "simple" | "full"
   categories: Category[]
   cycles: Cycle[]
+  // ค่าเริ่มต้นจากปุ่มบันทึกด่วน (ไม่ส่ง = เปิดจาก FAB แบบปกติ)
+  initialAmount?: number | null
+  initialType?: "expense" | "income"
 }
 
-export default function QuickAddModal({ open, onClose, mode, categories, cycles }: Props) {
+export default function QuickAddModal({ open, onClose, mode, categories, cycles, initialAmount, initialType }: Props) {
   const [name, setName] = useState("")
   const [amount, setAmount] = useState("")
-  const [date, setDate] = useState(new Date().toISOString().split("T")[0])
+  const [date, setDate] = useState(todayLocal())
   const [type, setType] = useState<"expense" | "income">("expense")
   const [category, setCategory] = useState("")
   const [cycleId, setCycleId] = useState("")
@@ -53,9 +57,18 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles 
     loadUsage()
   }, [open, mode])
 
+  // เปิดพร้อมค่าเริ่มต้น -> ไปแท็บฟอร์ม ใส่ประเภท/จำนวนให้ (ไม่ focus อะไร)
+  useEffect(() => {
+    if (!open) return
+    if (initialType === undefined && (initialAmount === undefined || initialAmount === null)) return
+    setInputMode("form")
+    if (initialType) setType(initialType)
+    if (initialAmount !== undefined && initialAmount !== null) setAmount(String(initialAmount))
+  }, [open, initialAmount, initialType])
+
   useEffect(() => {
     if (open) return
-    setName(""); setAmount(""); setDate(new Date().toISOString().split("T")[0])
+    setName(""); setAmount(""); setDate(todayLocal())
     setType("expense"); setCategory(""); setCycleId("")
     setInputMode("form"); setAiText(""); setAiError(""); setShowAllCategories(false)
     setCategorySearch(""); setCategoryDropdownOpen(false)

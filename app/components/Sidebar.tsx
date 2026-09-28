@@ -34,6 +34,8 @@ const MOBILE_PAGE_TITLES: Record<string, string> = {
 export default function Sidebar({ children }: { children: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(false)
   const [showQuickAdd, setShowQuickAdd] = useState(false)
+  // ค่าเริ่มต้นที่ส่งมาจากปุ่มบันทึกด่วนบน Dashboard (event openQuickAdd) — เคลียร์ตอนปิด modal
+  const [quickAddInitial, setQuickAddInitial] = useState<{ amount: number | null; type: "expense" | "income" } | null>(null)
   const [showMoreMenu, setShowMoreMenu] = useState(false)
   const pathname = usePathname()
   const router = useRouter()
@@ -57,6 +59,18 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
     window.addEventListener("floatingMenuToggled", handler)
     return () => window.removeEventListener("floatingMenuToggled", handler)
   }, [])
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      // หน้า business ใช้ modal ของตัวเอง — ไม่สนใจ event นี้
+      if (pathname === "/business") return
+      const detail = (e as CustomEvent<{ amount: number | null; type: "expense" | "income" }>).detail
+      setQuickAddInitial({ amount: detail?.amount ?? null, type: detail?.type === "income" ? "income" : "expense" })
+      setShowQuickAdd(true)
+    }
+    window.addEventListener("openQuickAdd", handler)
+    return () => window.removeEventListener("openQuickAdd", handler)
+  }, [pathname])
 
   useEffect(() => {
     const handler = (e: Event) => {
@@ -236,10 +250,12 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
 
         <QuickAddModal
           open={showQuickAdd}
-          onClose={() => setShowQuickAdd(false)}
+          onClose={() => { setShowQuickAdd(false); setQuickAddInitial(null) }}
           mode={profileMode}
           categories={categories}
           cycles={cycles}
+          initialAmount={quickAddInitial?.amount}
+          initialType={quickAddInitial?.type}
         />
 
       </div>
