@@ -97,6 +97,7 @@ Next.js (App Router), TypeScript, Tailwind CSS v4, Supabase (auth + database), V
 
 ### เฟส 1 — คนใช้ซ้ำ
 - Backlog ข้อ 4 (Onboarding + mode toggle, เริ่มที่ simple), ข้อ 10 (Core loop บน Dashboard), ข้อ 6 (แจ้งเตือน — ต้องทำ manifest + service worker ก่อน, iOS ต้อง "เพิ่มลงหน้าจอโฮม" ก่อนจึงรับ push ได้)
+- 3a PWA ติดตั้งได้ — เสร็จแล้ว (2026-09-29): `app/manifest.ts` (**ชื่อแอปชั่วคราว** `APP_NAME = "Finance"` ผู้ใช้ยังไม่ได้ตั้งชื่อจริง), **ไอคอนร่าง** จาก `public/icons/icon.svg` → `npm run icons` (ใช้ sharp ที่มากับ Next ยังไม่ได้ใส่ใน devDependencies), meta tag ใน `<head>` ของ `app/layout.tsx`, `public/sw.js` ขั้นต่ำ (ไม่มี fetch handler/ไม่ cache ข้อมูล — ตั้งใจ) ลงทะเบียนเฉพาะ production, `proxy.ts` ยกเว้น manifest/sw.js/icons/apple-icon — ถัดไป 3b push notification
 - วัดผลด้วย SQL จากตาราง transactions เมื่อเริ่มมีผู้ใช้
 
 ### เฟส 2 — รายได้
