@@ -1,6 +1,6 @@
 import webpush from "web-push"
 
-export type PushPayload = { title: string; body: string; url: string }
+export type PushPayload = { title: string; body: string; url: string; tag?: string }
 
 export type PushSub = { endpoint: string; p256dh: string; auth: string }
 
@@ -30,7 +30,7 @@ export async function sendPush(
     await wp.sendNotification(
       { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
       JSON.stringify(payload),
-      { TTL: 60 * 60 * 12 }
+      { TTL: 60 * 60 * 12, timeout: 10000 }
     )
     return "ok"
   } catch (err) {

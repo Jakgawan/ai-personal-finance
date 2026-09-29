@@ -13,12 +13,14 @@ self.addEventListener("push", (event) => {
   let title = "Finance"
   let body = ""
   let url = "/"
+  let tag
   try {
     const data = event.data ? event.data.json() : null
     if (data) {
       title = data.title || title
       body = data.body || body
       url = data.url || url
+      tag = data.tag || undefined
     }
   } catch {
     // payload ไม่ใช่ JSON — ใช้ค่าเริ่มต้น
@@ -30,6 +32,7 @@ self.addEventListener("push", (event) => {
       badge: "/icons/icon-192.png",
       data: { url },
       lang: "th",
+      tag,
     })
   )
 })
