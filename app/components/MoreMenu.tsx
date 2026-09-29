@@ -3,8 +3,9 @@
 import { useEffect, useState } from "react"
 import Link from "next/link"
 import { supabase } from "@/lib/supabase"
+import { removePushSubscriptionOnSignOut } from "@/lib/push-client"
 import {
-  CalendarDays, Scale, Briefcase, MessageCircle, GraduationCap,
+  CalendarDays, Scale, MessageCircle,
   Settings, LogOut, MoreHorizontal, ChevronLeft, X,
   Tag, RefreshCw, Target, User, Bell, Globe,
   type LucideIcon,
@@ -27,9 +28,10 @@ type Tile =
 const ROOT_FULL: Tile[] = [
   { kind: "link", label: "วางแผน", icon: CalendarDays, href: "/planning" },
   { kind: "link", label: "งบการเงิน", icon: Scale, href: "/balance-sheet" },
-  { kind: "link", label: "ธุรกิจ", icon: Briefcase, href: "/business" },
+  // ซ่อนไว้ชั่วคราว (เฟส 0 ข้อ 7) — route /business และ /courses ยังอยู่ เอา comment ออกเพื่อแสดงกลับ
+  // { kind: "link", label: "ธุรกิจ", icon: Briefcase, href: "/business" },
   { kind: "link", label: "ปรึกษาการเงิน", icon: MessageCircle, href: "/ai" },
-  { kind: "link", label: "คอร์สการเงิน", icon: GraduationCap, href: "/courses" },
+  // { kind: "link", label: "คอร์สการเงิน", icon: GraduationCap, href: "/courses" },
   { kind: "panel", label: "เพิ่มเติม", icon: MoreHorizontal, panel: "more" },
   { kind: "panel", label: "ตั้งค่า", icon: Settings, panel: "settings" },
   { kind: "signout" },
@@ -69,6 +71,7 @@ export default function MoreMenu({ open, onClose, mode }: Props) {
   if (!open) return null
 
   const handleSignOut = async () => {
+    await removePushSubscriptionOnSignOut()
     await supabase.auth.signOut()
     window.location.href = "/login"
   }
@@ -98,7 +101,7 @@ export default function MoreMenu({ open, onClose, mode }: Props) {
           )}
         </div>
 
-        <div className="grid grid-cols-4 gap-4 p-5 pt-4">
+        <div className={`grid ${panel === "root" && mode === "full" ? "grid-cols-3" : "grid-cols-4"} gap-4 p-5 pt-4`}>
           {tiles.map((tile, i) => {
             if (tile.kind === "signout") {
               return (

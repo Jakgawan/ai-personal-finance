@@ -5,8 +5,10 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import Sidebar from "@/app/components/Sidebar"
 import Toast from "@/app/components/Toast"
+import ServiceWorkerRegister from "@/app/components/ServiceWorkerRegister"
+import { APP_NAME } from "@/app/manifest"
 import { useEffect } from "react"
-import { supabase } from "@/lib/supabase"
+import { processDueRecurring } from "@/lib/recurring"
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -20,53 +22,8 @@ const geistMono = Geist_Mono({
 
 function RecurringProcessor() {
   useEffect(() => {
-    const process = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-
-      const today = new Date().toISOString().split("T")[0]
-      const { data } = await supabase
-        .from("recurring_transactions")
-        .select("*")
-        .eq("user_id", user.id)
-        .eq("is_active", true)
-        .lte("next_date", today)
-
-      for (const item of data || []) {
-        if (item.business_id) {
-          await supabase.from("business_transactions").insert({
-            user_id: user.id,
-            business_id: item.business_id,
-            name: item.name,
-            amount: item.amount,
-            type: item.type,
-            category: item.category,
-            date: item.next_date,
-          })
-        } else {
-          await supabase.from("transactions").insert({
-            user_id: user.id,
-            name: item.name,
-            amount: item.amount,
-            type: item.type,
-            category: item.category,
-            date: item.next_date,
-            note: "สร้างอัตโนมัติจากรายการซ้ำ",
-          })
-        }
-
-        const d = new Date(item.next_date)
-        if (item.cycle === "monthly") d.setMonth(d.getMonth() + 1)
-        if (item.cycle === "weekly") d.setDate(d.getDate() + 7)
-        if (item.cycle === "yearly") d.setFullYear(d.getFullYear() + 1)
-
-        await supabase
-          .from("recurring_transactions")
-          .update({ next_date: d.toISOString().split("T")[0] })
-          .eq("id", item.id)
-      }
-    }
-    process()
+    // ประมวลผลรายการซ้ำที่ถึงกำหนดแล้ว (มี guard กันสร้างซ้ำ + โชว์ toast เองถ้ามี error อยู่ใน lib/recurring.ts)
+    processDueRecurring()
   }, [])
 
   return null
@@ -79,8 +36,16 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
+      <head>
+        <meta name="theme-color" content="#1D9E75" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-title" content={APP_NAME} />
+        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+      </head>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         <RecurringProcessor />
+        <ServiceWorkerRegister />
         <Sidebar>{children}</Sidebar>
         <Toast />
       </body>

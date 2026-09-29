@@ -2,10 +2,12 @@
 
 import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
-import { Plus, Loader2 } from "lucide-react"
+import { Plus, Loader2, X } from "lucide-react"
 import { showToast } from "./Toast"
+import CategoryIcon from "./CategoryIcon"
+import { todayLocal } from "@/lib/recurring"
 
-type Category = { id: string; name: string; type: string; icon: string }
+type Category = { id: string; name: string; type: string; icon: string; color?: string }
 type Cycle = { id: string; name: string }
 
 type Props = {
@@ -14,12 +16,15 @@ type Props = {
   mode: "simple" | "full"
   categories: Category[]
   cycles: Cycle[]
+  // ค่าเริ่มต้นจากปุ่มบันทึกด่วน (ไม่ส่ง = เปิดจาก FAB แบบปกติ)
+  initialAmount?: number | null
+  initialType?: "expense" | "income"
 }
 
-export default function QuickAddModal({ open, onClose, mode, categories, cycles }: Props) {
+export default function QuickAddModal({ open, onClose, mode, categories, cycles, initialAmount, initialType }: Props) {
   const [name, setName] = useState("")
   const [amount, setAmount] = useState("")
-  const [date, setDate] = useState(new Date().toISOString().split("T")[0])
+  const [date, setDate] = useState(todayLocal())
   const [type, setType] = useState<"expense" | "income">("expense")
   const [category, setCategory] = useState("")
   const [cycleId, setCycleId] = useState("")
@@ -52,9 +57,18 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles 
     loadUsage()
   }, [open, mode])
 
+  // เปิดพร้อมค่าเริ่มต้น -> ไปแท็บฟอร์ม ใส่ประเภท/จำนวนให้ (ไม่ focus อะไร)
+  useEffect(() => {
+    if (!open) return
+    if (initialType === undefined && (initialAmount === undefined || initialAmount === null)) return
+    setInputMode("form")
+    if (initialType) setType(initialType)
+    if (initialAmount !== undefined && initialAmount !== null) setAmount(String(initialAmount))
+  }, [open, initialAmount, initialType])
+
   useEffect(() => {
     if (open) return
-    setName(""); setAmount(""); setDate(new Date().toISOString().split("T")[0])
+    setName(""); setAmount(""); setDate(todayLocal())
     setType("expense"); setCategory(""); setCycleId("")
     setInputMode("form"); setAiText(""); setAiError(""); setShowAllCategories(false)
     setCategorySearch(""); setCategoryDropdownOpen(false)
@@ -118,7 +132,7 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles 
       setLoading(false)
       return
     }
-    await supabase.from("transactions").insert({
+    const { error } = await supabase.from("transactions").insert({
       user_id: user.id,
       name,
       amount: Number(amount),
@@ -127,6 +141,11 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles 
       category: category || null,
       cycle_id: cycleId || null,
     })
+    if (error) {
+      showToast("บันทึกไม่สำเร็จ ลองใหม่อีกครั้ง", "error")
+      setLoading(false)
+      return
+    }
     window.dispatchEvent(new CustomEvent("transactionAdded"))
     setLoading(false)
     onClose()
@@ -138,7 +157,7 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles 
       <div className="bg-white rounded-2xl w-full max-w-md shadow-xl">
         <div className="flex items-center justify-between px-6 pt-5 pb-3">
           <h2 className="text-lg font-semibold text-gray-800">บันทึกรายการ</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl">✕</button>
+          <button onClick={onClose} aria-label="ปิด" className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
         </div>
 
         <div className="px-6 flex gap-2 mb-3">
@@ -223,7 +242,7 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles 
                       onClick={() => setCategory(category === c.name ? "" : c.name)}
                       className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-sm border transition-colors ${category === c.name ? "bg-[#1D9E75] text-white border-[#1D9E75]" : "border-gray-200 text-gray-600"}`}
                     >
-                      <span>{c.icon || "•"}</span>
+                      <CategoryIcon icon={c.icon} color={c.color} size="sm" selected={category === c.name} />
                       <span>{c.name}</span>
                     </button>
                   ))}
@@ -265,7 +284,7 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles 
                               }}
                               className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center gap-2 ${category === c.name ? "bg-green-50 text-[#1D9E75]" : "text-gray-700"}`}
                             >
-                              <span>{c.icon || "•"}</span>
+                              <CategoryIcon icon={c.icon} color={c.color} size="sm" />
                               <span>{c.name}</span>
                             </button>
                           ))

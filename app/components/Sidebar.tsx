@@ -2,9 +2,10 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
-import { LayoutDashboard, ListOrdered, CalendarDays, Scale, Briefcase, MessageCircle, GraduationCap, Settings, LogOut, Menu, Wallet, ChevronLeft } from "lucide-react"
+import { removePushSubscriptionOnSignOut } from "@/lib/push-client"
+import { LayoutDashboard, ListOrdered, CalendarDays, Scale, MessageCircle, Settings, LogOut, Menu, Wallet, ChevronLeft } from "lucide-react"
 import QuickAddModal from "./QuickAddModal"
 import BottomNav from "./BottomNav"
 import MoreMenu from "./MoreMenu"
@@ -15,9 +16,10 @@ const menuItems = [
   { href: "/transaction", label: "รายการ", icon: ListOrdered },
   { href: "/planning", label: "วางแผน", icon: CalendarDays },
   { href: "/balance-sheet", label: "งบการเงิน", icon: Scale },
-  { href: "/business", label: "ธุรกิจ", icon: Briefcase },
+  // ซ่อนไว้ชั่วคราว (เฟส 0 ข้อ 7) — route /business และ /courses ยังอยู่ เอา comment ออกเพื่อแสดงกลับ
+  // { href: "/business", label: "ธุรกิจ", icon: Briefcase },
   { href: "/ai", label: "ปรึกษาการเงิน", icon: MessageCircle },
-  { href: "/courses", label: "คอร์สการเงิน", icon: GraduationCap },
+  // { href: "/courses", label: "คอร์สการเงิน", icon: GraduationCap },
   { href: "/settings", label: "Settings", icon: Settings },
 ]
 
@@ -33,15 +35,18 @@ const MOBILE_PAGE_TITLES: Record<string, string> = {
 export default function Sidebar({ children }: { children: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(false)
   const [showQuickAdd, setShowQuickAdd] = useState(false)
+  // ค่าเริ่มต้นที่ส่งมาจากปุ่มบันทึกด่วนบน Dashboard (event openQuickAdd) — เคลียร์ตอนปิด modal
+  const [quickAddInitial, setQuickAddInitial] = useState<{ amount: number | null; type: "expense" | "income" } | null>(null)
   const [showMoreMenu, setShowMoreMenu] = useState(false)
   const pathname = usePathname()
+  const router = useRouter()
 
-  const [categories, setCategories] = useState<{ id: string; name: string; type: string; icon: string }[]>([])
+  const [categories, setCategories] = useState<{ id: string; name: string; type: string; icon: string; color?: string }[]>([])
   const [cycles, setCycles] = useState<{ id: string; name: string }[]>([])
   const [profileMode, setProfileMode] = useState<"simple" | "full">("full")
   const [showFloatingMenu, setShowFloatingMenu] = useState(true)
 
-  const hideSidebar = pathname === "/login" || pathname === "/register" || pathname === "/forgot-password" || pathname === "/reset-password"
+  const hideSidebar = pathname === "/login" || pathname === "/register" || pathname === "/forgot-password" || pathname === "/reset-password" || pathname === "/onboarding"
 
   useEffect(() => {
     setShowMoreMenu(false)
@@ -57,21 +62,57 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
   }, [])
 
   useEffect(() => {
+    const handler = (e: Event) => {
+      // หน้า business ใช้ modal ของตัวเอง — ไม่สนใจ event นี้
+      if (pathname === "/business") return
+      const detail = (e as CustomEvent<{ amount: number | null; type: "expense" | "income" }>).detail
+      setQuickAddInitial({ amount: detail?.amount ?? null, type: detail?.type === "income" ? "income" : "expense" })
+      setShowQuickAdd(true)
+    }
+    window.addEventListener("openQuickAdd", handler)
+    return () => window.removeEventListener("openQuickAdd", handler)
+  }, [pathname])
+
+  // เปิดจากการแจ้งเตือน (?quickadd=1) — ลบ param ออกแล้วเปิด QuickAdd (ต้องอยู่หลัง effect ที่ฟัง openQuickAdd)
+  useEffect(() => {
+    if (hideSidebar) return
+    const params = new URLSearchParams(window.location.search)
+    if (params.get("quickadd") !== "1") return
+    params.delete("quickadd")
+    const qs = params.toString()
+    window.history.replaceState(null, "", window.location.pathname + (qs ? `?${qs}` : "") + window.location.hash)
+    window.dispatchEvent(new CustomEvent("openQuickAdd", { detail: { amount: null, type: "expense" } }))
+  }, [pathname, hideSidebar])
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<{ mode: "simple" | "full" }>).detail
+      setProfileMode(detail.mode)
+    }
+    window.addEventListener("profileModeChanged", handler)
+    return () => window.removeEventListener("profileModeChanged", handler)
+  }, [])
+
+  useEffect(() => {
     const fetchData = async () => {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
-      const [{ data: catData }, { data: cycleData }, { data: profileData }] = await Promise.all([
+      const [{ data: catData }, { data: cycleData }, { data: profileData, error: profileError }] = await Promise.all([
         supabase.from("categories").select("*").eq("user_id", user.id),
         supabase.from("pay_cycles").select("*").eq("user_id", user.id),
         supabase.from("financial_profile").select("mode, show_floating_menu").eq("user_id", user.id).maybeSingle(),
       ])
+      // ผู้ใช้ใหม่ยังไม่มีแถว financial_profile -> พาไปหน้าเลือกโหมด (ไม่ redirect ถ้า query error)
+      if (!profileError && !profileData && window.location.pathname !== "/onboarding") {
+        router.replace("/onboarding")
+      }
       setCategories(catData || [])
       setCycles(cycleData || [])
       setProfileMode(profileData?.mode === "simple" ? "simple" : "full")
       setShowFloatingMenu(profileData?.show_floating_menu !== false)
     }
     fetchData()
-  }, [])
+  }, [router])
 
   useEffect(() => {
     if (hideSidebar) return
@@ -147,6 +188,7 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
       <div className="p-2 mb-2 border-t border-gray-100">
         <button
           onClick={async () => {
+            await removePushSubscriptionOnSignOut()
             await supabase.auth.signOut()
             window.location.href = "/login"
           }}
@@ -221,10 +263,12 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
 
         <QuickAddModal
           open={showQuickAdd}
-          onClose={() => setShowQuickAdd(false)}
+          onClose={() => { setShowQuickAdd(false); setQuickAddInitial(null) }}
           mode={profileMode}
           categories={categories}
           cycles={cycles}
+          initialAmount={quickAddInitial?.amount}
+          initialType={quickAddInitial?.type}
         />
 
       </div>
