@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
+import { removePushSubscriptionOnSignOut } from "@/lib/push-client"
 import { LayoutDashboard, ListOrdered, CalendarDays, Scale, MessageCircle, Settings, LogOut, Menu, Wallet, ChevronLeft } from "lucide-react"
 import QuickAddModal from "./QuickAddModal"
 import BottomNav from "./BottomNav"
@@ -71,6 +72,17 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
     window.addEventListener("openQuickAdd", handler)
     return () => window.removeEventListener("openQuickAdd", handler)
   }, [pathname])
+
+  // เปิดจากการแจ้งเตือน (?quickadd=1) — ลบ param ออกแล้วเปิด QuickAdd (ต้องอยู่หลัง effect ที่ฟัง openQuickAdd)
+  useEffect(() => {
+    if (hideSidebar) return
+    const params = new URLSearchParams(window.location.search)
+    if (params.get("quickadd") !== "1") return
+    params.delete("quickadd")
+    const qs = params.toString()
+    window.history.replaceState(null, "", window.location.pathname + (qs ? `?${qs}` : "") + window.location.hash)
+    window.dispatchEvent(new CustomEvent("openQuickAdd", { detail: { amount: null, type: "expense" } }))
+  }, [pathname, hideSidebar])
 
   useEffect(() => {
     const handler = (e: Event) => {
@@ -176,6 +188,7 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
       <div className="p-2 mb-2 border-t border-gray-100">
         <button
           onClick={async () => {
+            await removePushSubscriptionOnSignOut()
             await supabase.auth.signOut()
             window.location.href = "/login"
           }}

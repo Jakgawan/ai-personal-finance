@@ -2,8 +2,9 @@ import { createServerClient } from "@supabase/ssr"
 import type { NextRequest } from "next/server"
 import type { User } from "@supabase/supabase-js"
 
-export async function getAuthUser(req: NextRequest): Promise<User | null> {
-  const supabase = createServerClient(
+// Supabase client ที่ทำงานในฐานะผู้ใช้ (ใช้ cookie ของ request) — RLS จึงมีผล
+export function createUserClient(req: NextRequest) {
+  return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
@@ -16,6 +17,10 @@ export async function getAuthUser(req: NextRequest): Promise<User | null> {
       },
     }
   )
+}
+
+export async function getAuthUser(req: NextRequest): Promise<User | null> {
+  const supabase = createUserClient(req)
 
   const { data: { user }, error } = await supabase.auth.getUser()
   if (error || !user) return null

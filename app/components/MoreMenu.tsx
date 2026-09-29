@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react"
 import Link from "next/link"
 import { supabase } from "@/lib/supabase"
+import { removePushSubscriptionOnSignOut } from "@/lib/push-client"
 import {
   CalendarDays, Scale, MessageCircle,
   Settings, LogOut, MoreHorizontal, ChevronLeft, X,
@@ -70,6 +71,7 @@ export default function MoreMenu({ open, onClose, mode }: Props) {
   if (!open) return null
 
   const handleSignOut = async () => {
+    await removePushSubscriptionOnSignOut()
     await supabase.auth.signOut()
     window.location.href = "/login"
   }
