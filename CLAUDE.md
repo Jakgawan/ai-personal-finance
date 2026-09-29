@@ -97,7 +97,10 @@ Next.js (App Router), TypeScript, Tailwind CSS v4, Supabase (auth + database), V
 
 ### เฟส 1 — คนใช้ซ้ำ
 - Backlog ข้อ 4 (Onboarding + mode toggle, เริ่มที่ simple), ข้อ 10 (Core loop บน Dashboard), ข้อ 6 (แจ้งเตือน — ต้องทำ manifest + service worker ก่อน, iOS ต้อง "เพิ่มลงหน้าจอโฮม" ก่อนจึงรับ push ได้)
-- 3a PWA ติดตั้งได้ — เสร็จแล้ว (2026-09-29): `app/manifest.ts` (**ชื่อแอปชั่วคราว** `APP_NAME = "Finance"` ผู้ใช้ยังไม่ได้ตั้งชื่อจริง), **ไอคอนร่าง** จาก `public/icons/icon.svg` → `npm run icons` (ใช้ sharp ที่มากับ Next ยังไม่ได้ใส่ใน devDependencies), meta tag ใน `<head>` ของ `app/layout.tsx`, `public/sw.js` ขั้นต่ำ (ไม่มี fetch handler/ไม่ cache ข้อมูล — ตั้งใจ) ลงทะเบียนเฉพาะ production, `proxy.ts` ยกเว้น manifest/sw.js/icons/apple-icon — ถัดไป 3b push notification
+- 3a PWA ติดตั้งได้ — เสร็จแล้ว (2026-09-29): `app/manifest.ts` (**ชื่อแอปชั่วคราว** `APP_NAME = "Finance"` ผู้ใช้ยังไม่ได้ตั้งชื่อจริง), **ไอคอนร่าง** จาก `public/icons/icon.svg` → `npm run icons` (ใช้ sharp ที่มากับ Next ยังไม่ได้ใส่ใน devDependencies), meta tag ใน `<head>` ของ `app/layout.tsx`, `public/sw.js` ขั้นต่ำ (ไม่มี fetch handler/ไม่ cache ข้อมูล — ตั้งใจ) ลงทะเบียนเฉพาะ production, `proxy.ts` ยกเว้น manifest/sw.js/icons/apple-icon
+- 3b Web Push — โค้ดเสร็จ (2026-09-29) **ยังรอ:** ผู้ใช้รัน SQL ตาราง `push_subscriptions` (unique(user_id,endpoint), RLS own rows) + ตั้ง env ใน Vercel (`NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`, `SUPABASE_SERVICE_ROLE_KEY`, `CRON_SECRET`) + ทดสอบบนมือถือจริง (sandbox ของ Claude ต่อ push service ของ Google ไม่ได้ ทดสอบ subscribe จริงไม่ได้)
+  - 3b-1: ตั้งค่า > แจ้งเตือน (`NotificationsSection.tsx`) เปิด/ปิด + ปุ่มส่งทดสอบ (`POST /api/push/test`), `public/sw.js` มี push/notificationclick → เปิด `/?quickadd=1` (Sidebar เปิด QuickAdd แล้วลบ param), ออกจากระบบลบ subscription ของเครื่องก่อน (`lib/push-client.ts`)
+  - 3b-2: Vercel Cron (`vercel.json`, `0 13 * * *` = ~20:00 ไทย, Hobby ยิงได้วันละครั้งและคลาดในชั่วโมงนั้น) → `/api/cron/daily-reminder` เช็ค `CRON_SECRET`, ใช้ `lib/supabase-admin.ts` (service role — ใช้ใน cron เท่านั้น) เตือนเฉพาะคนที่วันนี้ (เวลาไทย) ยังไม่มีรายการ; custom reminder/เลือกเวลาเองยังไม่ทำ (ต้องใช้ Supabase pg_cron ถ้าจะรายชั่วโมง)
 - วัดผลด้วย SQL จากตาราง transactions เมื่อเริ่มมีผู้ใช้
 
 ### เฟส 2 — รายได้
