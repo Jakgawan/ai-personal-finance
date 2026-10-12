@@ -57,7 +57,7 @@ const MORE_SIMPLE: Tile[] = [
 
 const SETTINGS_TILES: Tile[] = [
   { kind: "link", label: "โปรไฟล์", icon: User, href: "/settings?tab=profile" },
-  { kind: "placeholder", label: "แจ้งเตือน", icon: Bell },
+  { kind: "link", label: "แจ้งเตือน", icon: Bell, href: "/settings?tab=notifications" },
   { kind: "link", label: "การแสดงผล", icon: Globe, href: "/settings?tab=display" },
 ]
 
