@@ -3,6 +3,8 @@
 import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
 import ConfirmModal from "@/app/components/ConfirmModal"
+import { showToast } from "@/app/components/Toast"
+import { Lightbulb } from "lucide-react"
 
 type Asset = {
   id: string
@@ -98,10 +100,14 @@ export default function BalanceSheetPage() {
   const totalLiabilities = shortTermDebt + longTermDebt
   const netWorth = totalAssets - totalLiabilities
   const debtRatio = totalAssets > 0 ? (totalLiabilities / totalAssets) * 100 : 0
+  // มีหนี้แต่ไม่มีสินทรัพย์เลย → หารด้วย 0 ไม่ได้ ห้ามแสดงเป็น 0% (ดูเหมือนไม่มีหนี้เลย)
+  const noAssetWithDebt = totalAssets === 0 && totalLiabilities > 0
 
  const savingRate = monthlyIncome > 0 ? (monthlySaving / monthlyIncome) * 100 : 0
   // สัดส่วนหนี้ต่อรายได้ทั้งปี (หนี้สินรวม เทียบ รายได้ทั้งปี)
   const debtToIncome = monthlyIncome > 0 ? (totalLiabilities / (monthlyIncome * 12)) * 100 : 0
+  // ยังไม่กรอกรายได้แต่มีหนี้ → หารด้วย 0 ไม่ได้ ห้ามแสดงเป็น 0% สีเขียว (ดูเหมือนไม่มีภาระหนี้)
+  const debtToIncomeMissing = monthlyIncome === 0 && totalLiabilities > 0
   const emergencyMonths = monthlyExpense > 0
     ? assets.filter(a => a.asset_group === "liquid").reduce((s, a) => s + Number(a.value), 0) / monthlyExpense
     : 0
@@ -112,12 +118,14 @@ export default function BalanceSheetPage() {
       sub: "อัตราการออม (เป้า ≥ 10%)",
       value: savingRate, target: 10, unit: "%", higherIsBetter: true,
       tip: savingRate >= 10 ? "ดีมาก! คุณออมเงินได้ตามเป้า" : "ลองลดรายจ่ายเพื่อเพิ่มอัตราออม",
+      missing: false,
     },
     {
       label: "คุณแบกหนี้หนักเกินไปไหม?",
       sub: "สัดส่วนหนี้ต่อรายได้ (เป้า < 35%)",
       value: debtToIncome, target: 35, unit: "%", higherIsBetter: false,
-      tip: debtToIncome < 35 ? "ภาระหนี้อยู่ในระดับที่จัดการได้" : "ภาระหนี้สูงเกินไป ควรเร่งปิดหนี้",
+      tip: debtToIncomeMissing ? "กรอกรายได้ต่อเดือนเพื่อดูสัดส่วนหนี้" : debtToIncome < 35 ? "ภาระหนี้อยู่ในระดับที่จัดการได้" : "ภาระหนี้สูงเกินไป ควรเร่งปิดหนี้",
+      missing: debtToIncomeMissing,
     },
     {
   label: "ถ้าขาดรายได้จะอยู่ได้นานแค่ไหน?",
@@ -128,12 +136,14 @@ export default function BalanceSheetPage() {
   tip: emergencyMonths >= (occupation === "freelance" ? 8 : 6)
     ? "มีเงินสำรองเพียงพอแล้ว"
     : `ควรสะสมเงินสำรองให้ถึง ${occupation === "freelance" ? "8-12" : "6-10"} เดือน`,
+  missing: false,
 },
     {
       label: "โดยรวมแล้วรวยขึ้นไหม?",
       sub: "ความมั่งคั่งสุทธิ",
       value: netWorth, target: 0, unit: " ฿", higherIsBetter: true,
       tip: netWorth >= 0 ? "สินทรัพย์มากกว่าหนี้สิน ดีมาก!" : "หนี้สินมากกว่าสินทรัพย์ ควรเร่งลดหนี้",
+      missing: false,
     },
   ]
 
@@ -170,10 +180,15 @@ export default function BalanceSheetPage() {
     if (!assetName || !assetValue) return
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
+    let writeError: { message: string } | null
     if (editAsset) {
-      await supabase.from("assets").update({ name: assetName, asset_group: assetGroup, value: Number(assetValue), updated_at: new Date().toISOString() }).eq("id", editAsset.id)
+      ({ error: writeError } = await supabase.from("assets").update({ name: assetName, asset_group: assetGroup, value: Number(assetValue), updated_at: new Date().toISOString() }).eq("id", editAsset.id))
     } else {
-      await supabase.from("assets").insert({ user_id: user.id, name: assetName, asset_group: assetGroup, value: Number(assetValue) })
+      ({ error: writeError } = await supabase.from("assets").insert({ user_id: user.id, name: assetName, asset_group: assetGroup, value: Number(assetValue) }))
+    }
+    if (writeError) {
+      showToast("บันทึกไม่สำเร็จ ลองใหม่อีกครั้ง", "error")
+      return
     }
     setShowAssetModal(false)
     await fetchAll()
@@ -184,7 +199,11 @@ export default function BalanceSheetPage() {
       message: "ลบสินทรัพย์นี้?",
       onConfirm: async () => {
         setConfirmState(null)
-        await supabase.from("assets").delete().eq("id", id)
+        const { error } = await supabase.from("assets").delete().eq("id", id)
+        if (error) {
+          showToast("ลบไม่สำเร็จ ลองใหม่อีกครั้ง", "error")
+          return
+        }
         await fetchAll()
       },
     })
@@ -208,15 +227,20 @@ export default function BalanceSheetPage() {
     if (!user) {
       return
     }
+    let writeError: { message: string } | null
     if (editLiab) {
-      await supabase.from("liabilities_long").update({
+      ({ error: writeError } = await supabase.from("liabilities_long").update({
         name: liabName, term: liabTerm,
         balance: Number(liabBalance), updated_at: new Date().toISOString()
-      }).eq("id", editLiab.id)
+      }).eq("id", editLiab.id))
     } else {
-      await supabase.from("liabilities_long").insert({
+      ({ error: writeError } = await supabase.from("liabilities_long").insert({
         user_id: user.id, name: liabName, term: liabTerm, balance: Number(liabBalance)
-      })
+      }))
+    }
+    if (writeError) {
+      showToast("บันทึกไม่สำเร็จ ลองใหม่อีกครั้ง", "error")
+      return
     }
     setShowLiabModal(false)
     await fetchAll()
@@ -227,7 +251,11 @@ export default function BalanceSheetPage() {
       message: "ลบหนี้สินนี้?",
       onConfirm: async () => {
         setConfirmState(null)
-        await supabase.from("liabilities_long").delete().eq("id", id)
+        const { error } = await supabase.from("liabilities_long").delete().eq("id", id)
+        if (error) {
+          showToast("ลบไม่สำเร็จ ลองใหม่อีกครั้ง", "error")
+          return
+        }
         await fetchAll()
       },
     })
@@ -246,7 +274,7 @@ export default function BalanceSheetPage() {
   const saveProfile = async () => {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return
-  await supabase.from("financial_profile").upsert({
+  const { error } = await supabase.from("financial_profile").upsert({
     user_id: user.id,
     monthly_income: Number(incomeInput) || 0,
     monthly_expense: Number(expenseInput) || 0,
@@ -254,6 +282,10 @@ export default function BalanceSheetPage() {
     occupation: occupationInput,
     updated_at: new Date().toISOString(),
   })
+  if (error) {
+    showToast("บันทึกไม่สำเร็จ ลองใหม่อีกครั้ง", "error")
+    return
+  }
   setShowProfileModal(false)
   await fetchAll()
 }
@@ -391,33 +423,41 @@ export default function BalanceSheetPage() {
           { label: "หนี้สิน", value: totalLiabilities, color: "text-[#D85A30]" },
           { label: "มั่งคั่งสุทธิ", value: netWorth, color: netWorth >= 0 ? "text-[#1D9E75]" : "text-[#D85A30]" },
           { label: "หนี้/สินทรัพย์", value: debtRatio, color: "text-[#378ADD]", unit: "%" },
-        ].map(card => (
-          <div key={card.label} className="bg-white rounded-xl p-3 md:p-4 shadow-sm">
-            <p className="text-xs text-gray-500 mb-1">{card.label}</p>
-            <p className={`text-base md:text-xl font-bold ${card.color} truncate`}>
-              {card.unit ? `${debtRatio.toFixed(1)}%` : `฿${Number(card.value).toLocaleString()}`}
-            </p>
-          </div>
-        ))}
+        ].map(card => {
+          // การ์ด "หนี้/สินทรัพย์" เมื่อไม่มีสินทรัพย์เลยแต่มีหนี้ ห้ามโชว์ 0% (เข้าใจผิดว่าไม่มีหนี้)
+          const isDebtRatioCard = card.label === "หนี้/สินทรัพย์"
+          const showNoAsset = isDebtRatioCard && noAssetWithDebt
+          return (
+            <div key={card.label} className="bg-white rounded-xl p-3 md:p-4 shadow-sm">
+              <p className="text-xs text-gray-500 mb-1">{card.label}</p>
+              <p className={`text-base md:text-xl font-bold ${showNoAsset ? "text-[#D85A30]" : card.color} truncate`}>
+                {showNoAsset
+                  ? "ไม่มีสินทรัพย์"
+                  : card.unit ? `${debtRatio.toFixed(1)}%` : `฿${Number(card.value).toLocaleString()}`}
+              </p>
+            </div>
+          )
+        })}
       </div>
 
       {/* Health Indicators */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         {healthIndicators.map((ind) => {
-          const signal = getSignalColor(ind.value, ind.target, ind.higherIsBetter)
-          const barColor = getBarColor(ind.value, ind.target, ind.higherIsBetter)
+          // ค่าที่คำนวณไม่ได้จริง (เช่น ยังไม่กรอกรายได้) ให้ใช้สีเทาเป็นกลาง ไม่ตัดสินว่าดี/ไม่ดี
+          const signal = ind.missing ? { text: "#6B7280", bg: "#F3F4F6" } : getSignalColor(ind.value, ind.target, ind.higherIsBetter)
+          const barColor = ind.missing ? "#9CA3AF" : getBarColor(ind.value, ind.target, ind.higherIsBetter)
           return (
             <div key={ind.label} className="rounded-xl p-4 shadow-sm" style={{ color: signal.text, backgroundColor: signal.bg }}>
               <p className="text-sm font-semibold mb-1">{ind.label}</p>
               <p className="text-xs opacity-70 mb-2">{ind.sub}</p>
               <p className="text-2xl font-bold mb-2">
-                {ind.unit === " ฿" ? `฿${ind.value.toLocaleString(undefined, { maximumFractionDigits: 0 })}` : `${ind.value.toFixed(1)}${ind.unit}`}
+                {ind.missing ? "—" : ind.unit === " ฿" ? `฿${ind.value.toLocaleString(undefined, { maximumFractionDigits: 0 })}` : `${ind.value.toFixed(1)}${ind.unit}`}
               </p>
               <div className="h-2 bg-white/50 rounded-full mb-2">
                 <div
                   className="h-2 rounded-full"
                   style={{
-                    width: `${Math.min(100, ind.unit === " ฿" ? (ind.value > 0 ? 100 : 0) : (ind.value / (ind.target * 2)) * 100)}%`,
+                    width: `${ind.missing ? 0 : Math.min(100, ind.unit === " ฿" ? (ind.value > 0 ? 100 : 0) : (ind.value / (ind.target * 2)) * 100)}%`,
                     backgroundColor: barColor,
                   }}
                 />
@@ -463,17 +503,31 @@ export default function BalanceSheetPage() {
   <h2 className="text-sm font-semibold text-gray-700 mb-3">ประเภทอาชีพ</h2>
   <div className="flex gap-3">
     <button onClick={async () => {
+      const prevOccupation = occupation
       setOccupation("salaried")
       const { data: { user } } = await supabase.auth.getUser()
-      if (user) await supabase.from("financial_profile").upsert({ user_id: user.id, occupation: "salaried", updated_at: new Date().toISOString() })
+      if (user) {
+        const { error } = await supabase.from("financial_profile").upsert({ user_id: user.id, occupation: "salaried", updated_at: new Date().toISOString() })
+        if (error) {
+          setOccupation(prevOccupation)
+          showToast("บันทึกไม่สำเร็จ ลองใหม่อีกครั้ง", "error")
+        }
+      }
     }}
       className={`flex-1 py-2.5 rounded-lg text-sm font-medium border transition-colors ${occupation === "salaried" ? "bg-[#1D9E75] text-white border-[#1D9E75]" : "border-gray-200 text-gray-600"}`}>
       งานประจำ
     </button>
     <button onClick={async () => {
+      const prevOccupation = occupation
       setOccupation("freelance")
       const { data: { user } } = await supabase.auth.getUser()
-      if (user) await supabase.from("financial_profile").upsert({ user_id: user.id, occupation: "freelance", updated_at: new Date().toISOString() })
+      if (user) {
+        const { error } = await supabase.from("financial_profile").upsert({ user_id: user.id, occupation: "freelance", updated_at: new Date().toISOString() })
+        if (error) {
+          setOccupation(prevOccupation)
+          showToast("บันทึกไม่สำเร็จ ลองใหม่อีกครั้ง", "error")
+        }
+      }
     }}
       className={`flex-1 py-2.5 rounded-lg text-sm font-medium border transition-colors ${occupation === "freelance" ? "bg-[#378ADD] text-white border-[#378ADD]" : "border-gray-200 text-gray-600"}`}>
       ฟรีแลนซ์
@@ -560,7 +614,7 @@ export default function BalanceSheetPage() {
 
               {/* ข้อความแนะนำว่าหนี้แบบไหนคือสั้น/ยาว */}
               <div className="bg-blue-50 rounded-lg p-3 text-xs text-gray-600 leading-relaxed">
-                <p className="font-semibold text-[#378ADD] mb-1">💡 หนี้ระยะไหน?</p>
+                <p className="font-semibold text-[#378ADD] mb-1 inline-flex items-center gap-1"><Lightbulb size={14} className="text-[#378ADD]" /> หนี้ระยะไหน?</p>
                 <p><span className="font-medium">ระยะสั้น</span> = ผ่อนหมดภายใน 1 ปี เช่น บัตรเครดิต, หนี้นอกระบบ, ผ่อนสินค้า</p>
                 <p><span className="font-medium">ระยะยาว</span> = ผ่อนนานกว่า 1 ปี เช่น บ้าน, รถ, กยศ.</p>
               </div>
@@ -603,7 +657,7 @@ export default function BalanceSheetPage() {
     className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75] text-gray-800" />
   {incomeInput && Number(incomeInput) > 0 && (
     <div className="bg-green-50 rounded-lg p-2 mt-2 text-xs text-gray-600">
-      <p className="font-semibold text-[#1D9E75] mb-1">💡 แนะนำเป้าออม</p>
+      <p className="font-semibold text-[#1D9E75] mb-1 inline-flex items-center gap-1"><Lightbulb size={14} className="text-[#1D9E75]" /> แนะนำเป้าออม</p>
       <p>ขั้นต่ำ 10% = ฿{(Number(incomeInput) * 0.1).toLocaleString()}/เดือน</p>
       <p>เหมาะสม 20% = ฿{(Number(incomeInput) * 0.2).toLocaleString()}/เดือน</p>
       {savingInput && Number(savingInput) > 0 && (

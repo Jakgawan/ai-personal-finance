@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
-import { Lightbulb } from "lucide-react"
+import { Lightbulb, Check } from "lucide-react"
+import { showToast } from "@/app/components/Toast"
 
 type PayCycle = {
   id: string
@@ -39,17 +40,27 @@ export default function PayCyclesSection() {
     if (!user) return
 
     if (editId) {
-      await supabase.from("pay_cycles").update({
+      const { error } = await supabase.from("pay_cycles").update({
         name, start_day: Number(startDay), end_day: Number(endDay)
       }).eq("id", editId)
+      if (error) {
+        showToast("บันทึกไม่สำเร็จ ลองใหม่อีกครั้ง", "error")
+        setLoading(false)
+        return
+      }
       setEditId(null)
     } else {
-      await supabase.from("pay_cycles").insert({
+      const { error } = await supabase.from("pay_cycles").insert({
         user_id: user.id,
         name,
         start_day: Number(startDay),
         end_day: Number(endDay)
       })
+      if (error) {
+        showToast("บันทึกไม่สำเร็จ ลองใหม่อีกครั้ง", "error")
+        setLoading(false)
+        return
+      }
     }
 
     setName(""); setStartDay(""); setEndDay("")
@@ -65,7 +76,11 @@ export default function PayCyclesSection() {
   }
 
   const handleDelete = async (id: string) => {
-    await supabase.from("pay_cycles").delete().eq("id", id)
+    const { error } = await supabase.from("pay_cycles").delete().eq("id", id)
+    if (error) {
+      showToast("ลบไม่สำเร็จ ลองใหม่อีกครั้ง", "error")
+      return
+    }
     fetchCycles()
   }
 
@@ -153,7 +168,7 @@ export default function PayCyclesSection() {
           {/* Preview — แสดงทันทีเมื่อกรอกวันที่ */}
           {preview && (
             <div className="bg-green-50 border border-green-100 rounded-lg px-3 py-2">
-              <p className="text-xs text-[#1D9E75]">✓ {preview}</p>
+              <p className="text-xs text-[#1D9E75] inline-flex items-center gap-1"><Check size={12} /> {preview}</p>
             </div>
           )}
 

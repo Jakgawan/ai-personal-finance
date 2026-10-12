@@ -1,9 +1,13 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { supabase } from "@/lib/supabase"
 import Link from "next/link"
 import { formatDate } from "@/lib/utils"
+import { Plus, Lightbulb } from "lucide-react"
+import CategoryIcon from "@/app/components/CategoryIcon"
+import { todayLocal } from "@/lib/recurring"
+import { calcDailyBudget, pickInsight, formatMoney, resolveCycleRange } from "@/lib/daily-budget"
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend
@@ -23,6 +27,12 @@ type PayCycle = {
   name: string
   start_day: number
   end_day: number
+}
+
+type CategoryInfo = {
+  name: string
+  icon: string
+  color?: string
 }
 
 type Asset = {
@@ -54,11 +64,15 @@ function calcFinancialScore(
   score += savingScore
 
   const annualIncome = cycleIncome * 12
+  // ยังไม่มีรายรับในรอบนี้แต่มีหนี้ → หารด้วย 0 ไม่ได้ ให้คะแนนหนี้เป็น 0 แทนการแสดงว่าดีเยี่ยม
+  const noIncomeWithDebt = annualIncome === 0 && liabilities > 0
   const debtRate = annualIncome > 0 ? (liabilities / annualIncome) * 100 : 0
-  const debtScore = debtRate <= 35 ? 25 : debtRate <= 50 ? 15 : debtRate <= 70 ? 8 : 0
+  const debtScore = noIncomeWithDebt ? 0 : debtRate <= 35 ? 25 : debtRate <= 50 ? 15 : debtRate <= 70 ? 8 : 0
   details.push({
   label: "ภาระหนี้สิน", score: debtScore, max: 25,
-  tip: debtRate <= 35 ? "ภาระหนี้อยู่ในเกณฑ์ดี" : `หนี้ ${debtRate.toFixed(1)}% ของรายได้ทั้งปี เป้า < 35%`
+  tip: noIncomeWithDebt
+    ? "มีหนี้แต่ยังไม่มีรายรับในรอบนี้ บันทึกรายรับเพื่อคำนวณภาระหนี้"
+    : debtRate <= 35 ? "ภาระหนี้อยู่ในเกณฑ์ดี" : `หนี้ ${debtRate.toFixed(1)}% ของรายได้ทั้งปี เป้า < 35%`
 })
   score += debtScore
 
@@ -108,25 +122,37 @@ export default function Dashboard() {
   const [liabilities, setLiabilities] = useState<{balance: number}[]>([])  // เพิ่มบรรทัดนี้
   const [chartMode, setChartMode] = useState<"bar" | "donut" | "column" | "table">("bar")
   const [loading, setLoading] = useState(true)
+  const [categories, setCategories] = useState<CategoryInfo[]>([])
+
+  // ดึงข้อมูลทั้งหมด — แยกเป็น callback เพื่อเรียกซ้ำได้ตอนบันทึกรายการใหม่ (event transactionAdded)
+  const fetchData = useCallback(async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+    const [{ data: txData }, { data: cycleData }, { data: assetData }, { data: liabData }, { data: catData }] = await Promise.all([
+      supabase.from("transactions").select("*").eq("user_id", user.id).order("date", { ascending: false }),
+      supabase.from("pay_cycles").select("*").eq("user_id", user.id),
+      supabase.from("assets").select("*").eq("user_id", user.id),
+      supabase.from("liabilities_long").select("balance").eq("user_id", user.id),
+      supabase.from("categories").select("name, icon, color").eq("user_id", user.id),
+    ])
+    setTransactions(txData || [])
+    setCycles(cycleData || [])
+    setAssets(assetData || [])
+    setLiabilities(liabData || [])
+    setCategories((catData || []) as CategoryInfo[])
+    setLoading(false)
+  }, [])
 
   useEffect(() => {
-    const fetchData = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-      const [{ data: txData }, { data: cycleData }, { data: assetData }, { data: liabData }] = await Promise.all([
-  supabase.from("transactions").select("*").eq("user_id", user.id).order("date", { ascending: false }),
-  supabase.from("pay_cycles").select("*").eq("user_id", user.id),
-  supabase.from("assets").select("*").eq("user_id", user.id),
-  supabase.from("liabilities_long").select("balance").eq("user_id", user.id),  // เพิ่มบรรทัดนี้
-])
-      setTransactions(txData || [])
-setCycles(cycleData || [])
-setAssets(assetData || [])
-setLiabilities(liabData || [])
-      setLoading(false)
-    }
     fetchData()
-  }, [])
+  }, [fetchData])
+
+  // บันทึกรายการจาก FAB/ปุ่มด่วน -> โหลดใหม่ให้การ์ด "ใช้ได้วันนี้" อัปเดตทันที
+  useEffect(() => {
+    const handler = () => { fetchData() }
+    window.addEventListener("transactionAdded", handler)
+    return () => window.removeEventListener("transactionAdded", handler)
+  }, [fetchData])
 
   const today = new Date()
   const currentDay = today.getDate()
@@ -138,37 +164,29 @@ setLiabilities(liabData || [])
     return currentDay >= c.start_day && currentDay <= c.end_day
   }) || cycles[0] || null
 
-  let daysLeft = 0
-  let cycleStart: Date | null = null
-  let cycleEnd: Date | null = null
+  // ---- ตัดสินช่วงรอบ "ที่เดียว" ให้ทุกส่วนของ Dashboard ใช้ร่วมกัน ----
+  // ถ้ามีรอบเงินเดือนและวันนี้อยู่ในช่วงของรอบนั้นจริง ใช้รอบนั้น ไม่งั้น (ไม่มีรอบ / fallback cycles[0] ที่วันนี้ไม่อยู่ในช่วง) ใช้เดือนปฏิทิน
+  const todayStr = todayLocal()
+  const cycleRange = activeCycle ? resolveCycleRange(activeCycle.start_day, activeCycle.end_day, todayStr) : null
+  const budget = calcDailyBudget(
+    transactions,
+    cycleRange ? cycleRange.start : null,
+    cycleRange ? cycleRange.end : null,
+    todayStr
+  )
 
-  if (activeCycle) {
-    const s = activeCycle.start_day
-    const e = activeCycle.end_day
-    if (s > e) {
-      if (currentDay >= s) {
-        cycleStart = new Date(currentYear, currentMonth, s)
-        cycleEnd = new Date(currentYear, currentMonth + 1, e)
-      } else {
-        cycleStart = new Date(currentYear, currentMonth - 1, s)
-        cycleEnd = new Date(currentYear, currentMonth, e)
-      }
-    } else {
-      cycleStart = new Date(currentYear, currentMonth, s)
-      cycleEnd = new Date(currentYear, currentMonth, e)
-    }
-    const diff = cycleEnd.getTime() - today.getTime()
-    daysLeft = Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)))
-  }
+  // รายการในรอบ — ใช้ช่วงวันที่เดียวกับ hero ทุกส่วนของ Dashboard จึงตัวเลขตรงกัน
+  const cycleTransactions = transactions.filter(t => t.date >= budget.cycleStart && t.date <= budget.cycleEnd)
 
-  const cycleTransactions = cycleStart && cycleEnd
-    ? transactions.filter(t => { const d = new Date(t.date); return d >= cycleStart! && d <= cycleEnd! })
-    : transactions.filter(t => t.date?.startsWith(`${currentYear}-${String(currentMonth + 1).padStart(2, "0")}`))
+  const cycleIncome = budget.cycleIncome
+  const cycleExpense = budget.cycleExpense
+  const cycleBalance = budget.cycleBalance
 
-  const cycleIncome = cycleTransactions.filter(t => t.type === "income").reduce((s, t) => s + Number(t.amount), 0)
-  const cycleExpense = cycleTransactions.filter(t => t.type === "expense").reduce((s, t) => s + Number(t.amount), 0)
-  const cycleBalance = cycleIncome - cycleExpense
-  const dailyBudget = daysLeft > 0 ? cycleBalance / daysLeft : 0
+  const insight = pickInsight(transactions, budget, todayStr)
+  const todayTransactions = transactions.filter(t => t.date === todayStr)
+  const todayTop5 = todayTransactions.slice(0, 5)
+  const categoryByName = new Map(categories.map(c => [c.name, c]))
+  const spentPct = budget.todayBudget > 0 ? Math.min(100, (budget.todayExpense / budget.todayBudget) * 100) : 100
 
   const totalLiabilities = liabilities.reduce((s, l) => s + Number(l.balance), 0)
   const { score: financialScore, details: scoreDetails } = calcFinancialScore(cycleIncome, cycleExpense, cycleBalance, assets, transactions, totalLiabilities)
@@ -224,8 +242,19 @@ setLiabilities(liabData || [])
     return (
       <div className="p-4 md:p-6 bg-gray-50 min-h-screen animate-pulse">
         <div className="h-7 w-32 bg-gray-200 rounded mb-6" />
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6">
-          {Array.from({ length: 4 }).map((_, i) => (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4 mb-3 md:mb-4">
+          <div className="bg-gray-200 rounded-2xl h-44" />
+          <div className="bg-white rounded-xl shadow-sm p-4 h-44">
+            <div className="h-3 w-32 bg-gray-200 rounded mb-4" />
+            <div className="grid grid-cols-4 gap-2">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="h-12 bg-gray-200 rounded-lg" />
+              ))}
+            </div>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-3 md:gap-4 mb-6">
+          {Array.from({ length: 2 }).map((_, i) => (
             <div key={i} className="bg-white rounded-xl p-3 md:p-4 shadow-sm h-20">
               <div className="h-3 w-16 bg-gray-200 rounded mb-2" />
               <div className="h-5 w-20 bg-gray-200 rounded" />
@@ -248,20 +277,116 @@ setLiabilities(liabData || [])
     <div className="p-4 md:p-6 bg-gray-50 min-h-screen">
       <h1 className="text-2xl font-bold text-gray-800 mb-6">ภาพรวม</h1>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6">
+      {/* Hero + บันทึกด่วน — mobile เรียงบนลงล่าง, desktop (md+) แบ่ง 2 คอลัมน์ */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4 mb-3 md:mb-4">
+        {/* Hero: ใช้ได้วันนี้ */}
+        <div
+          className="rounded-2xl p-4 md:p-6 text-white shadow-sm flex flex-col justify-between"
+          style={{ backgroundColor: budget.state === "over" || budget.state === "cycle-negative" ? "#D85A30" : budget.state === "no-income" ? "#378ADD" : "#1D9E75" }}
+        >
+          {budget.state === "no-income" ? (
+            <>
+              <p className="text-sm opacity-90">ใช้ได้วันนี้</p>
+              <p className="text-[2rem] leading-tight font-bold mt-1">ยังคำนวณไม่ได้</p>
+              <p className="text-sm opacity-90 mt-2">บันทึกรายรับ (เช่น เงินเดือน) เพื่อดูว่าวันนี้ใช้ได้เท่าไร</p>
+            </>
+          ) : budget.state === "cycle-negative" ? (
+            <>
+              <p className="text-sm opacity-90">เงินรอบนี้ติดลบ</p>
+              <p className="text-[2.5rem] leading-tight font-bold tabular-nums mt-1">
+                {Math.round(budget.cycleBalance) < 0 ? "-" : ""}฿{formatMoney(Math.abs(budget.cycleBalance))}
+              </p>
+              <p className="text-sm mt-3">
+                {Math.round(budget.cycleBalance) < 0 ? (
+                  <>รายจ่ายรอบนี้มากกว่ารายรับ <span className="font-semibold tabular-nums">฿{formatMoney(Math.abs(budget.cycleBalance))}</span></>
+                ) : (
+                  "เงินรอบนี้หมดแล้ว"
+                )}
+              </p>
+              <p className="text-sm opacity-90 mt-1">เหลืออีก {budget.daysLeftInclToday} วันในรอบ</p>
+            </>
+          ) : (
+            <>
+              <p className="text-sm opacity-90">{budget.state === "over" ? "วันนี้ใช้เกินไป" : "ใช้ได้วันนี้"}</p>
+              <p className="text-[2.5rem] leading-tight font-bold tabular-nums mt-1">
+                {budget.state === "over"
+                  ? `-฿${formatMoney(Math.max(1, Math.abs(budget.availableToday)))}`
+                  : `฿${formatMoney(Math.abs(budget.availableToday))}`}
+              </p>
+              <div className="h-2 bg-white/30 rounded-full mt-3" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(spentPct)}>
+                <div className="h-2 rounded-full bg-white transition-all" style={{ width: `${spentPct}%` }} />
+              </div>
+              <p className="text-sm mt-3">
+                วันนี้ใช้ไป <span className="font-semibold tabular-nums">฿{formatMoney(budget.todayExpense)}</span>
+                {" "}จาก <span className="font-semibold tabular-nums">฿{formatMoney(Math.max(0, budget.todayBudget))}</span>
+              </p>
+              <p className="text-sm opacity-90 mt-1">
+                {budget.state === "over" && (
+                  budget.tomorrowBudget === null
+                    ? "วันนี้เป็นวันสุดท้ายของรอบ · "
+                    : budget.tomorrowBudget > 0
+                      ? <>พรุ่งนี้ใช้ได้ <span className="font-semibold tabular-nums">฿{formatMoney(budget.tomorrowBudget)}</span> · </>
+                      : "พรุ่งนี้ยังไม่มีงบเหลือ · "
+                )}
+                เหลืออีก {budget.daysLeftInclToday} วันในรอบ
+              </p>
+            </>
+          )}
+        </div>
+
+        <div className="flex flex-col gap-3 md:gap-4">
+          {/* บันทึกรายจ่ายด่วน */}
+          <div className="bg-white rounded-xl p-4 shadow-sm">
+            <p className="text-sm font-semibold text-gray-700 mb-3">บันทึกรายจ่ายด่วน</p>
+            <div className="grid grid-cols-4 gap-2">
+              {[50, 100, 200].map(amt => (
+                <button
+                  key={amt}
+                  type="button"
+                  onClick={() => window.dispatchEvent(new CustomEvent("openQuickAdd", { detail: { amount: amt, type: "expense" } }))}
+                  className="min-h-12 rounded-lg bg-gray-50 border border-gray-200 text-sm font-semibold text-gray-800 tabular-nums hover:bg-gray-100 transition-colors"
+                >
+                  ฿{amt}
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={() => window.dispatchEvent(new CustomEvent("openQuickAdd", { detail: { amount: null, type: "expense" } }))}
+                className="min-h-12 rounded-lg border border-[#1D9E75] text-[#1D9E75] text-sm font-semibold flex items-center justify-center gap-1 hover:bg-green-50 transition-colors"
+              >
+                <Plus size={16} /> อื่นๆ
+              </button>
+            </div>
+          </div>
+
+          {/* Insight */}
+          {insight && (
+            <div className="bg-white rounded-xl p-4 shadow-sm flex items-start gap-3">
+              <span className="w-9 h-9 rounded-full bg-blue-50 text-[#378ADD] flex items-center justify-center shrink-0">
+                <Lightbulb size={18} />
+              </span>
+              <div className="min-w-0">
+                <p className="text-sm text-gray-700">
+                  {insight.parts.map((p, i) => (
+                    p.bold ? <span key={i} className="font-bold text-gray-900">{p.text}</span> : <span key={i}>{p.text}</span>
+                  ))}
+                </p>
+                {insight.caption && <p className="text-xs text-gray-400 mt-1">{insight.caption}</p>}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* รายรับ/รายจ่ายรอบนี้ */}
+      <div className="grid grid-cols-2 gap-3 md:gap-4 mb-6">
         {[
-          { label: "รายรับรอบนี้", value: cycleIncome, color: "text-[#1D9E75]", pct: pctChange(cycleIncome, prevIncome) },
-          { label: "รายจ่ายรอบนี้", value: cycleExpense, color: "text-[#D85A30]", pct: pctChange(cycleExpense, prevExpense) },
-          { label: "คงเหลือสุทธิ", value: cycleBalance, color: cycleBalance >= 0 ? "text-[#1D9E75]" : "text-[#D85A30]", pct: null },
-          { label: "ใช้ได้/วัน", value: dailyBudget, color: "text-[#378ADD]", pct: null, suffix: "/วัน" },
+          { label: "รายรับรอบนี้", value: budget.cycleIncome, color: "text-[#1D9E75]", pct: pctChange(budget.cycleIncome, prevIncome) },
+          { label: "รายจ่ายรอบนี้", value: budget.cycleExpense, color: "text-[#D85A30]", pct: pctChange(budget.cycleExpense, prevExpense) },
         ].map((card) => (
           <div key={card.label} className="bg-white rounded-xl p-3 md:p-4 shadow-sm">
             <p className="text-xs text-gray-500 mb-1">{card.label}</p>
-            <p className={`text-lg md:text-xl font-bold ${card.color}`}>
-              ฿{Number(card.value).toLocaleString(undefined, { maximumFractionDigits: 0 })}
-              {card.suffix && <span className="text-xs font-normal">{card.suffix}</span>}
-            </p>
+            <p className={`text-lg md:text-xl font-bold tabular-nums ${card.color}`}>฿{formatMoney(card.value)}</p>
             {card.pct !== null && (
               <p className={`text-xs mt-1 ${Number(card.pct) >= 0 ? "text-[#1D9E75]" : "text-[#D85A30]"}`}>
                 {Number(card.pct) >= 0 ? "▲" : "▼"} {Math.abs(Number(card.pct))}% จากรอบก่อน
@@ -270,6 +395,33 @@ setLiabilities(liabData || [])
           </div>
         ))}
       </div>
+
+      {/* รายการวันนี้ (ไม่มีรายการ -> ไม่แสดง เพราะ insight บอกอยู่แล้ว) */}
+      {todayTop5.length > 0 && (
+        <div className="bg-white rounded-xl shadow-sm overflow-hidden mb-6">
+          <div className="flex items-center justify-between px-4 md:px-5 py-3 border-b border-gray-100">
+            <h2 className="text-sm font-semibold text-gray-700">รายการวันนี้</h2>
+            <Link href="/transaction" className="text-xs text-[#378ADD] hover:underline">ดูทั้งหมด</Link>
+          </div>
+          <div className="divide-y divide-gray-100">
+            {todayTop5.map(t => {
+              const cat = t.category ? categoryByName.get(t.category) : undefined
+              return (
+                <div key={t.id} className="flex items-center gap-3 px-4 md:px-5 py-3">
+                  <CategoryIcon icon={cat?.icon} color={cat?.color} size="md" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-800 truncate">{t.name || t.category || (t.type === "income" ? "รายรับ" : "รายจ่าย")}</p>
+                    {t.category && <p className="text-xs text-gray-400 truncate">{t.category}</p>}
+                  </div>
+                  <p className={`text-sm font-semibold tabular-nums ${t.type === "income" ? "text-[#1D9E75]" : "text-[#D85A30]"}`}>
+                    {t.type === "income" ? "+" : "-"}฿{formatMoney(Number(t.amount))}
+                  </p>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Financial Score — แก้ให้ fit มือถือ */}
       <div className="bg-white rounded-xl shadow-sm p-4 md:p-5 mb-6">
@@ -406,18 +558,22 @@ setLiabilities(liabData || [])
           {activeCycle ? (
             <>
               <div className="text-center py-4">
-                <p className="text-5xl font-bold text-[#378ADD]">{daysLeft}</p>
+                <p className="text-5xl font-bold text-[#378ADD]">{budget.daysLeftInclToday}</p>
                 <p className="text-sm text-gray-500 mt-1">วันที่เหลือ</p>
-                <p className="text-xs text-gray-400 mt-1">รอบ {activeCycle.name} (วันที่ {activeCycle.start_day}–{activeCycle.end_day})</p>
+                <p className="text-xs text-gray-400 mt-1">
+                  {cycleRange
+                    ? <>รอบ {activeCycle.name} (วันที่ {activeCycle.start_day}–{activeCycle.end_day})</>
+                    : <>วันนี้ไม่อยู่ในรอบ {activeCycle.name} จึงคำนวณจากเดือนปฏิทิน</>}
+                </p>
               </div>
               <div className="mt-4 bg-gray-50 rounded-xl p-3 text-sm">
                 <div className="flex justify-between text-gray-600 mb-1">
                   <span>คงเหลือ</span>
-                  <span className="font-semibold text-[#1D9E75]">฿{cycleBalance.toLocaleString()}</span>
+                  <span className="font-semibold text-[#1D9E75]">฿{formatMoney(cycleBalance)}</span>
                 </div>
                 <div className="flex justify-between text-gray-600">
                   <span>ใช้ได้/วัน</span>
-                  <span className="font-semibold text-[#378ADD]">฿{dailyBudget.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+                  <span className="font-semibold text-[#378ADD]">฿{formatMoney(Math.max(0, budget.todayBudget))}</span>
                 </div>
               </div>
             </>

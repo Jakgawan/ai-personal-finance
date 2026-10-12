@@ -2,7 +2,7 @@
 import { Suspense, useState } from "react"
 import { supabase } from "@/lib/supabase"
 import { useRouter, useSearchParams } from "next/navigation"
-import { LockKeyhole, CheckCircle2, AlertTriangle } from "lucide-react"
+import { LockKeyhole, CheckCircle2, AlertTriangle, CircleCheck, Circle, Check } from "lucide-react"
 
 function ResetPasswordForm() {
   const searchParams = useSearchParams()
@@ -125,7 +125,7 @@ function ResetPasswordForm() {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl shadow-sm p-8 w-full max-w-md text-center">
-          <p className="text-5xl mb-4">✅</p>
+          <CircleCheck size={48} className="text-[#1D9E75] mx-auto mb-4" />
           <h2 className="text-xl font-bold text-gray-800 mb-2">เปลี่ยนรหัสผ่านสำเร็จ!</h2>
           <p className="text-sm text-gray-500 mb-6">กำลังพาไปหน้าเข้าสู่ระบบ...</p>
           <a href="/login" className="block w-full bg-[#1D9E75] text-white rounded-lg py-3 text-sm font-medium hover:bg-[#178a64] transition-colors text-center">
@@ -177,7 +177,7 @@ function ResetPasswordForm() {
                   { label: "อักขระพิเศษ (!@#$% หรือ -)", pass: /[!@#$%^&*\-]/.test(password) },
                 ].map(({ label, pass }) => (
                   <p key={label} className={`text-xs flex items-center gap-1 ${pass ? "text-[#1D9E75]" : "text-gray-400"}`}>
-                    {pass ? "✓" : "○"} {label}
+                    {pass ? <Check size={12} /> : <Circle size={12} />} {label}
                   </p>
                 ))}
               </div>

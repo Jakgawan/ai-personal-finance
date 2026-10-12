@@ -8,6 +8,7 @@ import PayCyclesSection from "./components/PayCyclesSection"
 import CategoriesSection from "./components/CategoriesSection"
 import RecurringSection from "./components/RecurringSection"
 import DisplaySection from "./components/DisplaySection"
+import NotificationsSection from "./components/NotificationsSection"
 import { ChevronLeft, User, CalendarDays, Tag, RefreshCw, Target, Bell, Globe } from "lucide-react"
 
 const menuItems = [
@@ -72,7 +73,8 @@ function SettingsContent() {
         {active === "categories" && <CategoriesSection />}
         {active === "recurring" && <RecurringSection />}
         {active === "display" && <DisplaySection />}
-        {["goals", "notifications"].includes(active) && (
+        {active === "notifications" && <NotificationsSection />}
+        {active === "goals" && (
           <div className="text-gray-400 text-sm">Coming soon...</div>
         )}
       </main>

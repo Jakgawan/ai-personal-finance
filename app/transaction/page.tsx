@@ -6,7 +6,8 @@ import ExportPDF from "@/app/components/ExportPDF"
 import { formatDate } from "@/lib/utils"
 import ScanSlip from "@/app/components/ScanSlip"
 import ConfirmModal from "@/app/components/ConfirmModal"
-import { BarChart2, CalendarDays } from "lucide-react"
+import { showToast } from "@/app/components/Toast"
+import { BarChart2, CalendarDays, List, ChevronLeft, ChevronRight } from "lucide-react"
 
 type Transaction = {
   id: string
@@ -86,7 +87,6 @@ export default function TransactionPage() {
     ])
 
     // setTransactions trigger re-render ทันทีที่ได้ข้อมูลใหม่
-    console.log("จำนวนที่ดึงมาได้:", txData?.length, txData)
     setTransactions(txData || [])
     setCategories(catData || [])
     setCycles(cycleData || [])
@@ -152,7 +152,6 @@ export default function TransactionPage() {
   // ทำให้ข้อมูลใหม่โหลดเสร็จก่อนที่ modal จะปิด
   // ผู้ใช้เห็นรายการใหม่ทันทีโดยไม่ต้องรีเพจ
   const handleSubmit = async () => {
-  console.log("กดบันทึกแล้ว!")
   if (!name || !amount || !date) return
     setLoading(true)
 
@@ -169,11 +168,18 @@ export default function TransactionPage() {
 
    if (editId) {
       const { error } = await supabase.from("transactions").update(payload).eq("id", editId)
-      if (error) console.log("update error:", error)
+      if (error) {
+        showToast("บันทึกไม่สำเร็จ ลองใหม่อีกครั้ง", "error")
+        setLoading(false)
+        return
+      }
     } else {
-      const { data, error } = await supabase.from("transactions").insert(payload).select()
-      if (error) console.log("insert error:", error)
-      else console.log("insert สำเร็จ:", data)
+      const { error } = await supabase.from("transactions").insert(payload)
+      if (error) {
+        showToast("บันทึกไม่สำเร็จ ลองใหม่อีกครั้ง", "error")
+        setLoading(false)
+        return
+      }
     }
 
     await fetchAll()
@@ -186,7 +192,11 @@ export default function TransactionPage() {
       message: "ลบรายการนี้?",
       onConfirm: async () => {
         setConfirmState(null)
-        await supabase.from("transactions").delete().eq("id", id)
+        const { error } = await supabase.from("transactions").delete().eq("id", id)
+        if (error) {
+          showToast("ลบไม่สำเร็จ ลองใหม่อีกครั้ง", "error")
+          return
+        }
         await fetchAll()
       },
     })
@@ -301,15 +311,15 @@ export default function TransactionPage() {
           <div className="flex bg-white border border-gray-200 rounded-lg overflow-hidden">
             <button
               onClick={() => setView("list")}
-              className={`px-3 py-2 text-sm transition-colors ${view === "list" ? "bg-[#1D9E75] text-white" : "text-gray-500 hover:bg-gray-50"}`}
+              className={`px-3 py-2 text-sm inline-flex items-center gap-1 transition-colors ${view === "list" ? "bg-[#1D9E75] text-white" : "text-gray-500 hover:bg-gray-50"}`}
             >
-              ☰ รายการ
+              <List size={14} /> รายการ
             </button>
             <button
               onClick={() => setView("calendar")}
-              className={`px-3 py-2 text-sm transition-colors ${view === "calendar" ? "bg-[#1D9E75] text-white" : "text-gray-500 hover:bg-gray-50"}`}
+              className={`px-3 py-2 text-sm inline-flex items-center gap-1 transition-colors ${view === "calendar" ? "bg-[#1D9E75] text-white" : "text-gray-500 hover:bg-gray-50"}`}
             >
-              <CalendarDays size={14} className="inline mr-1" /> ปฏิทิน
+              <CalendarDays size={14} /> ปฏิทิน
             </button>
           </div>
 
@@ -426,10 +436,10 @@ export default function TransactionPage() {
           {totalPages > 1 && (
             <div className="flex justify-center gap-2">
               <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
-                className="px-3 py-1 text-sm border rounded-lg disabled:opacity-40 hover:bg-gray-100">← ก่อนหน้า</button>
+                className="px-3 py-1 text-sm border rounded-lg disabled:opacity-40 hover:bg-gray-100 inline-flex items-center gap-1"><ChevronLeft size={14} /> ก่อนหน้า</button>
               <span className="px-3 py-1 text-sm text-gray-600">{page} / {totalPages}</span>
               <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}
-                className="px-3 py-1 text-sm border rounded-lg disabled:opacity-40 hover:bg-gray-100">ถัดไป →</button>
+                className="px-3 py-1 text-sm border rounded-lg disabled:opacity-40 hover:bg-gray-100 inline-flex items-center gap-1">ถัดไป <ChevronRight size={14} /></button>
             </div>
           )}
         </>
@@ -440,11 +450,11 @@ export default function TransactionPage() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="md:col-span-2 bg-white rounded-xl shadow-sm p-5">
             <div className="flex items-center justify-between mb-4">
-              <button onClick={prevMonth} className="px-3 py-1 border rounded-lg text-sm hover:bg-gray-100">←</button>
+              <button onClick={prevMonth} aria-label="เดือนก่อน" className="px-3 py-1 border rounded-lg text-sm hover:bg-gray-100 inline-flex items-center justify-center h-8 min-w-8"><ChevronLeft size={18} /></button>
               <h2 className="text-sm font-semibold text-gray-700">
                 {calendarDate.toLocaleDateString("th-TH", { month: "long", year: "numeric" })}
               </h2>
-              <button onClick={nextMonth} className="px-3 py-1 border rounded-lg text-sm hover:bg-gray-100">→</button>
+              <button onClick={nextMonth} aria-label="เดือนถัดไป" className="px-3 py-1 border rounded-lg text-sm hover:bg-gray-100 inline-flex items-center justify-center h-8 min-w-8"><ChevronRight size={18} /></button>
             </div>
             <div className="grid grid-cols-7 mb-2">
               {["อา", "จ", "อ", "พ", "พฤ", "ศ", "ส"].map(d => (
@@ -565,7 +575,7 @@ export default function TransactionPage() {
                 className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none text-gray-800">
                   <option value="">-- หมวดหมู่ --</option>
                 {categories.filter(c => !c.type || c.type === type).map(c => (
-                  <option key={c.id} value={c.name}>{c.icon} {c.name}</option>
+                  <option key={c.id} value={c.name}>{c.name}</option>
                 ))}
               </select>
               <select value={cycleId} onChange={(e) => setCycleId(e.target.value)}

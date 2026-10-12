@@ -5,6 +5,8 @@ import { supabase } from "@/lib/supabase"
 import Link from "next/link"
 import ReactMarkdown from "react-markdown"
 import ConfirmModal from "@/app/components/ConfirmModal"
+import { showToast } from "@/app/components/Toast"
+import { MessageCircle } from "lucide-react"
 
 type Message = {
   id?: string
@@ -81,11 +83,16 @@ export default function AIChatPage() {
 
     const { data: { user } } = await supabase.auth.getUser()
 
-    await supabase.from("chat_history").insert({
+    const { error: userSaveError } = await supabase.from("chat_history").insert({
       user_id: user?.id,
       role: "user",
       content: userMsg.content,
     })
+    // แจ้งเตือนแค่ครั้งเดียวต่อการสนทนา 1 รอบ (กัน toast ซ้ำถ้าบันทึกข้อความ AI พลาดด้วย)
+    const saveFailedToastShown: boolean = !!userSaveError
+    if (userSaveError) {
+      showToast("บันทึกประวัติแชทไม่สำเร็จ", "error")
+    }
 
     try {
       const res = await fetch("/api/chat", {
@@ -102,11 +109,14 @@ export default function AIChatPage() {
 
       setMessages(prev => [...prev, assistantMsg])
 
-      await supabase.from("chat_history").insert({
+      const { error: assistantSaveError } = await supabase.from("chat_history").insert({
         user_id: user?.id,
         role: "assistant",
         content: data.reply,
       })
+      if (assistantSaveError && !saveFailedToastShown) {
+        showToast("บันทึกประวัติแชทไม่สำเร็จ", "error")
+      }
     } catch {
       setMessages(prev => [...prev, { role: "assistant", content: "เกิดข้อผิดพลาด กรุณาลองใหม่" }])
     }
@@ -121,7 +131,11 @@ export default function AIChatPage() {
         setConfirmState(null)
         const { data: { user } } = await supabase.auth.getUser()
         if (!user) return
-        await supabase.from("chat_history").delete().eq("user_id", user.id)
+        const { error } = await supabase.from("chat_history").delete().eq("user_id", user.id)
+        if (error) {
+          showToast("ล้างประวัติไม่สำเร็จ ลองใหม่อีกครั้ง", "error")
+          return
+        }
         setMessages([])
       },
     })
@@ -144,7 +158,7 @@ export default function AIChatPage() {
       <div className="flex-1 overflow-y-auto px-4 py-6 flex flex-col gap-4">
         {messages.length === 0 && (
           <div className="text-center py-12">
-            <p className="text-4xl mb-3">💬</p>
+            <MessageCircle size={36} className="text-gray-400 mx-auto mb-3" />
             <p className="text-gray-500 text-sm font-medium">ถามเรื่องการเงินได้เลย</p>
             <p className="text-gray-400 text-xs mt-1">AI รู้ข้อมูลรายรับ รายจ่าย และสินทรัพย์ของคุณ</p>
             <div className="flex flex-wrap gap-2 justify-center mt-4">

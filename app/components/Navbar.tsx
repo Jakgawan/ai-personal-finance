@@ -3,12 +3,14 @@ import { usePathname } from "next/navigation"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { supabase } from "@/lib/supabase"
+import { removePushSubscriptionOnSignOut } from "@/lib/push-client"
 
 export default function Navbar() {
     const pathname = usePathname()
     const router = useRouter()
 
     const handleLogout = async () => {
+        await removePushSubscriptionOnSignOut()
         await supabase.auth.signOut()
         router.push("/login")
     }

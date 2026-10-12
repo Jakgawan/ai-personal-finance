@@ -48,15 +48,16 @@ Next.js (App Router), TypeScript, Tailwind CSS v4, Supabase (auth + database), V
 - **FloatingMenuButton**: ปุ่ม pill เล็ก ชิดขอบขวาจอ (`right` คงที่) ลากได้แค่แนวตั้งเท่านั้น (ห้ามลากอิสระทั่วจอ เพื่อไม่ชนกับ AssistiveTouch ของ iOS) เปิด overlay กลางจอ (ไม่ใช่ popup มุมจอ)
 - **MoreMenu overlay**: 2 ชั้น (root panel → "เพิ่มเติม"/"ตั้งค่า" sub-panel มีปุ่มย้อนกลับ ←) root panel เริ่มต้นเสมอทุกครั้งที่เปิดใหม่
 - Toggle "แสดงปุ่มเมนูลอย" ใน Settings (คอลัมน์ `financial_profile.show_floating_menu`) — ถ้าปิด ไอคอนเมนูเล็กจะโผล่ที่มุมบนขวาของ top bar แทน (bottom bar ไม่เปลี่ยนจำนวนปุ่ม)
-- หน้าที่เข้าถึงผ่าน MoreMenu (วางแผน/งบการเงิน/ธุรกิจ/คอร์ส/AI) มีปุ่ม back (←) ที่ header กลับไปหน้า Dashboard ตรงๆ (ไม่ต้องจำ panel ที่มา)
+- หน้าที่เข้าถึงผ่าน MoreMenu (วางแผน/งบการเงิน/AI — ธุรกิจ/คอร์สซ่อนจากเมนูแล้วแต่ยังเข้า URL ตรงได้) มีปุ่ม back (←) ที่ header กลับไปหน้า Dashboard ตรงๆ (ไม่ต้องจำ panel ที่มา)
 - Settings: **mobile = full-page ทีละหัวข้อ + back button**, **desktop = tab bar แนวนอนเดิม** — ต้องแยก breakpoint ให้ถูก (เคยมี regression ที่ desktop ดันกลายเป็น mobile layout มาแล้ว ระวังซ้ำ)
 
 ## Mode ผู้ใช้ (financial_profile.mode)
 
 - `mode = 'simple' | 'full'` (CHECK constraint มีอยู่แล้วใน DB)
 - simple → MoreMenu เหลือแค่ "ตั้งค่า" + "ออกจากระบบ"
-- full → MoreMenu เห็นครบ: วางแผน/งบการเงิน/ปรึกษาการเงิน/คอร์สการเงิน/เพิ่มเติม/ตั้งค่า/ออกจากระบบ
-- **ยังไม่มี UI ให้ user สลับ mode เอง** (ค้างใน backlog — ดูข้อ 4 ด้านล่าง)
+- full → MoreMenu root panel 6 ปุ่ม (grid 3 คอลัมน์): วางแผน/งบการเงิน/ปรึกษาการเงิน/เพิ่มเติม/ตั้งค่า/ออกจากระบบ — "ธุรกิจ"/"คอร์สการเงิน" ถูก comment ไว้ใน `MoreMenu.tsx`/`Sidebar.tsx` (เอา comment ออกเพื่อแสดงกลับ)
+- สลับ mode ได้ที่ ตั้งค่า > การแสดงผล (`DisplaySection.tsx`, ส่ง event `profileModeChanged` ให้ Sidebar/MoreMenu เปลี่ยนทันที)
+- Onboarding: ผู้ใช้ที่ยังไม่มีแถว `financial_profile` ถูก Sidebar พาไป `/onboarding` เลือก simple (ค่าเริ่มต้น)/full แล้วบันทึกแถว → ไม่ถามซ้ำ (ไม่ใช้คอลัมน์ใหม่) — ถ้า query profile error จะไม่ redirect; แถวเก่าที่ `mode` เป็น null ถือเป็น full
 
 ## สถานะปัจจุบัน (ทำเสร็จแล้ว — อัปเดตทุกครั้งที่งานใหญ่เสร็จ)
 
@@ -75,7 +76,8 @@ Next.js (App Router), TypeScript, Tailwind CSS v4, Supabase (auth + database), V
 - 3b: Helper text ใต้ dropdown รอบเงินเดือน (FAB modal)
 - 3c: Disabled button ผูก required field ครบ 8 จุด
 - 3d: Combobox หมวดหมู่ (พิมพ์ค้นหาแทน `<select>` เต็มรายการ)
-- Lucide icons แทน emoji เกือบครบ — ยังเหลือ 7 จุด (ดูเฟส 0 ข้อ 8)
+- Lucide icons แทน emoji ครบทั้งแอป (เฟส 0 ข้อ 8) — ยกเว้นหน้า business/courses ที่ซ่อนอยู่ และลูกศรในข้อความธรรมดา
+- ไอคอนหมวดหมู่: เลือกจากชุด Lucide 24 ตัว (`lib/category-icons.ts`) แสดงผ่าน `CategoryIcon.tsx` (ไอคอนขาวบนวงกลมสีหมวด) เก็บ key ในคอลัมน์ `categories.icon` เดิม — emoji เก่าในข้อมูลยังแสดงได้, ค่าว่าง → ไอคอน Tag
 - 1: Loading State + Empty State — skeleton ตอนโหลด Dashboard/Transaction list, empty state พร้อมคำแนะนำใน Dashboard/Balance Sheet/Business, loading indicator ตอน AI parse ข้อความ (QuickAddModal) และตอนสแกนสลิป OCR (ScanSlip)
 
 ## แผนตามเฟส (ตกลง 2026-09-27 — ลำดับทำจริงยึดหัวข้อนี้)
@@ -84,18 +86,34 @@ Next.js (App Router), TypeScript, Tailwind CSS v4, Supabase (auth + database), V
 หลักคิด: เสถียร/เชื่อถือได้ → คนใช้ซ้ำ → รายได้
 
 ### เฟส 0 — ทำให้ข้อมูลเชื่อถือได้ (ตรวจโค้ดจริง 2026-09-27 — ตำแหน่งบรรทัดอาจขยับ ให้ตรวจซ้ำก่อนเขียน spec)
-1. Supabase insert/update/delete ~50 จุดไม่เช็ค `error` แต่ขึ้น "สำเร็จ" เสมอ (เช่น `QuickAddModal.tsx`, `balance-sheet`, `RecurringSection.tsx`, `business`, `planning`, `CategoriesSection.tsx`, `PayCyclesSection.tsx`, `ai`, `ScanSlip.tsx`; `transaction/page.tsx` มีแค่ `console.log`)
-2. Recurring บันทึกซ้ำ: 2 จุดประมวลผลพร้อมกันไม่มี guard — `RecurringProcessor` ใน `app/layout.tsx` กับ `processRecurring()` ใน `RecurringSection.tsx`
-3. Debt ratio = 0% เมื่อไม่มี asset แต่มีหนี้ (`balance-sheet/page.tsx` สูตร `totalAssets > 0 ? ... : 0`) — ต้องถามผู้ใช้ว่ากรณีนี้ควรแสดงอะไร
-4. API Gemini 3 ตัว (`app/api/chat`, `ocr`, `parse-transaction`) ไม่เช็ค login และ `proxy.ts` matcher ยกเว้น `/api`
-5. RLS: ไม่มี migration/SQL ใน repo — ให้ coder เขียน SQL ตรวจสถานะ RLS ทุก table ให้ผู้ใช้รัน
-6. ติดตั้ง Sentry (backlog ข้อ 11) — ผู้ใช้ต้องสร้างบัญชี/DSN เอง
-7. ซ่อนเมนู "ธุรกิจ" (`MoreMenu.tsx`, `Sidebar.tsx`) และหน้า "คอร์ส" (mock data ทั้งหมด) จาก UI — **ห้ามลบโค้ด/route** — ต้องถามผู้ใช้ว่าจะกันการเข้า URL ตรงด้วยไหม, หลังซ่อนแล้วอัปเดตหัวข้อ Mobile Navigation/Mode ในไฟล์นี้
-8. Emoji ที่เหลือ: `forgot-password/page.tsx`, `reset-password/page.tsx`, `ai/page.tsx`, `balance-sheet/page.tsx` (2 จุด), `CategoriesSection.tsx`, `ProfileSection.tsx`, `RecurringSection.tsx`
+1. ~~เช็ค error ตอนเขียนข้อมูล~~ — เสร็จแล้ว (2026-09-28): ทุก insert/update/delete/upsert (39 จุด 10 ไฟล์) เช็ค `error` → Toast แดง, ฟอร์มไม่ปิด/ข้อมูลที่กรอกไม่หาย, ไม่ขึ้นสำเร็จ, UI แบบ optimistic ถูก rollback, loop (copy/reset planning) หยุดที่ error แรกแล้วบอกถ้าสำเร็จบางส่วน; ลบหมวดหมู่มีหน้าต่างยืนยันแล้ว; ลบ console.log ที่พิมพ์ข้อมูลการเงิน — **ยังไม่ทำ:** หน้า business (ซ่อนอยู่), การอ่านข้อมูล (select) ส่วนใหญ่ยังไม่เช็ค error — **กฎต่อจากนี้: ทุก write ใหม่ต้องเช็ค `error` + `showToast(..., "error")` แบบเดียวกัน**
+2. ~~Recurring บันทึกซ้ำ~~ — เสร็จแล้ว (2026-09-28): ประมวลผลที่เดียวใน `lib/recurring.ts` (`processDueRecurring`) เรียกจาก `RecurringProcessor` ใน `app/layout.tsx` และ `RecurringSection.tsx` — "จองงวด" ด้วย conditional update ของ `next_date` ก่อน insert (insert พลาดคืนค่าเดิม), สร้างงวดค้างครบทุกงวด (เพดาน 24/รายการ/รอบ), วันสิ้นเดือนยึดวันจาก `start_date` แล้ว clamp, วันนี้ใช้เวลาเครื่อง (`todayLocal()`), error ขึ้น Toast — ทดสอบเปิด 3 แท็บพร้อมกัน: โค้ดเก่าสร้างซ้ำ 4 รายการ โค้ดใหม่ได้ครบ 3 งวดไม่ซ้ำ
+3. ~~Debt ratio หารด้วยศูนย์~~ — เสร็จแล้ว (2026-09-28): มีหนี้แต่ไม่มีสินทรัพย์ → การ์ด "หนี้/สินทรัพย์" แสดง "ไม่มีสินทรัพย์" สีแดง; มีหนี้แต่ไม่กรอกรายได้ → ตัวชี้วัดหนี้ต่อรายได้แสดง "—" สีเทา + ชวนกรอกรายได้; Dashboard มีหนี้แต่รอบนี้ไม่มีรายรับ → คะแนนหนี้ 0/25 พร้อม tip (เดิมได้เต็ม 25) — ยังไม่กันค่าติดลบ (ใช้ `=== 0`)
+4. ~~API Gemini ไม่เช็ค login~~ — เสร็จแล้ว (`getAuthUser` ใน `lib/supabase-server.ts`, ตอบ 401 ก่อนเรียก Gemini, ทดสอบ login จริงแล้วทั้ง desktop/mobile)
+5. ~~RLS~~ — ตรวจแล้ว 2026-09-27 ไม่ต้องแก้: ทุก table ใน `public` เปิด RLS, policy `ALL` ใช้ `auth.uid() = user_id` (ไม่มี `with_check` → Postgres ใช้เงื่อนไขเดียวกันตอนเขียน), `courses` อ่านได้ทุกคน (ไม่มีข้อมูลผู้ใช้), table `planning` เก่าไม่ได้ใช้ในแอปแต่มี RLS แล้ว — table ใหม่ทุกตัวต้องเปิด RLS + policy แบบเดียวกัน
+6. ~~Sentry~~ — ติดตั้งแล้ว (`@sentry/nextjs` v11, จับแค่ error, ปิดเก็บข้อมูลส่วนตัว/request body ทั้งหมดใน `dataCollection`, tunnel `/monitoring`, ยังไม่อัปโหลด source map) ทดสอบบน Vercel Preview แล้ว `/monitoring` ตอบ 200 — **ตอน merge เข้า main ต้องติ๊ก Production ให้ `NEXT_PUBLIC_SENTRY_DSN` ใน Vercel ด้วย** (ตอนนี้ตั้งแค่ Preview)
+7. ~~ซ่อนเมนูธุรกิจ/คอร์ส~~ — เสร็จแล้ว: ซ่อนแค่เมนู (ผู้ใช้เลือกไม่กัน URL ตรง), route/โค้ดยังอยู่ครบ
+8. ~~Emoji ที่เหลือ~~ — เสร็จแล้ว: 8a แทน emoji + สัญลักษณ์ในปุ่ม (✕ ← → ☰ ✓ ○) ด้วย Lucide, 8b ตัวเลือกไอคอนหมวดหมู่ (ดูสถานะปัจจุบัน)
 
 ### เฟส 1 — คนใช้ซ้ำ
 - Backlog ข้อ 4 (Onboarding + mode toggle, เริ่มที่ simple), ข้อ 10 (Core loop บน Dashboard), ข้อ 6 (แจ้งเตือน — ต้องทำ manifest + service worker ก่อน, iOS ต้อง "เพิ่มลงหน้าจอโฮม" ก่อนจึงรับ push ได้)
+- 3a PWA ติดตั้งได้ — เสร็จแล้ว (2026-09-29): `app/manifest.ts` (**ชื่อแอปชั่วคราว** `APP_NAME = "Finance"` ผู้ใช้ยังไม่ได้ตั้งชื่อจริง), **ไอคอนร่าง** จาก `public/icons/icon.svg` → `npm run icons` (ใช้ sharp ที่มากับ Next ยังไม่ได้ใส่ใน devDependencies), meta tag ใน `<head>` ของ `app/layout.tsx`, `public/sw.js` ขั้นต่ำ (ไม่มี fetch handler/ไม่ cache ข้อมูล — ตั้งใจ) ลงทะเบียนเฉพาะ production, `proxy.ts` ยกเว้น manifest/sw.js/icons/apple-icon
+- 3b Web Push — เสร็จ (2026-09-29, ทดสอบจริง 2026-10-12): SQL `push_subscriptions` รันแล้ว, env 5 ตัวตั้งใน Vercel แล้ว (`NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`, `SUPABASE_SERVICE_ROLE_KEY`, `CRON_SECRET` — VAPID สร้างด้วย openssl บน Mac), ผู้ใช้ทดสอบแจ้งเตือนทดสอบเด้งบน Safari (Mac) และมือถือแล้ว — **ยังไม่ได้ทดสอบ:** cron 2 ทุ่ม (ทำงานเฉพาะ Production ต้อง merge เข้า main ก่อน); sandbox ของ Claude ต่อ push service ไม่ได้ ต้องให้ผู้ใช้ทดสอบเอง; เคยมีบั๊กปุ่ม "แจ้งเตือน" ใน MoreMenu เป็น placeholder (แก้แล้ว) — ทดสอบหน้าใหม่ต้องกดผ่านเมนูจริงบนจอมือถือ ไม่ใช่เปิด URL ตรง
+  - 3b-1: ตั้งค่า > แจ้งเตือน (`NotificationsSection.tsx`) เปิด/ปิด + ปุ่มส่งทดสอบ (`POST /api/push/test`), `public/sw.js` มี push/notificationclick → เปิด `/?quickadd=1` (Sidebar เปิด QuickAdd แล้วลบ param), ออกจากระบบลบ subscription ของเครื่องก่อน (`lib/push-client.ts`)
+  - 3b-2: Vercel Cron (`vercel.json`, `0 13 * * *` = ~20:00 ไทย, Hobby ยิงได้วันละครั้งและคลาดในชั่วโมงนั้น) → `/api/cron/daily-reminder` เช็ค `CRON_SECRET`, ใช้ `lib/supabase-admin.ts` (service role — ใช้ใน cron เท่านั้น) เตือนเฉพาะคนที่วันนี้ (เวลาไทย) ยังไม่มีรายการ; custom reminder/เลือกเวลาเองยังไม่ทำ (ต้องใช้ Supabase pg_cron ถ้าจะรายชั่วโมง)
 - วัดผลด้วย SQL จากตาราง transactions เมื่อเริ่มมีผู้ใช้
+
+### เฟส 1.5 — "เริ่มจดได้ทันที" (อนุมัติ 2026-10-12 — ลำดับทำจริงยึดหัวข้อนี้)
+ปัญหา: ผู้ใช้รู้สึกต้องรอวันเงินเดือนออกถึงจะเริ่มจด และตัวเลข "วันนี้ใช้ได้อีกเท่าไหร่" ไม่ขึ้นถ้ารอบนี้ยังไม่มีรายรับ — เป้าหมาย: ผู้ใช้ใหม่เห็นตัวเลขนี้ภายใน 1 นาทีหลังสมัคร ไม่ว่าจะเริ่มตรงไหนของรอบ
+กติกาเพิ่ม: ทำทีละงาน → สรุปแผนให้ผู้ใช้อนุมัติก่อนเริ่ม → เสร็จแล้วหยุดรอผู้ใช้ทดสอบบนมือถือ; ห้ามเพิ่มฟีเจอร์นอกรายการ (เจอปัญหาอื่นให้แจ้ง); เปลี่ยน DB เป็นไฟล์ใน `supabase/migrations/` (ผู้ใช้รันเอง) + RLS; การอ่าน/เขียนใหม่เช็ค error; คำนวณวันที่ใช้ Asia/Bangkok; lint: ไฟล์ที่แก้ห้ามมี error ใหม่ (error เก่า 19 จุดแยกเก็บทีหลัง); unit test: ติดตั้งตัวรัน test ตอนงาน 3 (ขออนุมัติ)
+ลำดับ: 1 → 2 → merge เข้า main → 3 → 4 → 5
+1. **วัดผลพื้นฐาน** — view `analytics.user_activation` (schema แยก ไม่เปิดให้ API) ต่อผู้ใช้: วันสมัคร, รายการแรก, จำนวนวันที่บันทึกใน 7 วันแรก (นับจาก `created_at` เวลาไทย ไม่นับรายการอัตโนมัติจาก recurring), active = ≥3 วัน
+2. **ทดสอบแจ้งเตือน 2 ทุ่ม** บน Android + iOS (PWA) — ต้องตั้ง env ใน Vercel ก่อน (ดู 3b)
+3. **income_sources** เฉพาะ `monthly_days` (array วันที่ เช่น [5,20], วันที่ไม่มีในเดือน → วันสุดท้าย) + `target_date` (ไม่มีรายได้ประจำ → ค่าเริ่มต้นสิ้นเดือน); อยู่คู่กับ `pay_cycles` — `getNextIncomeDate(today)` อ่าน income_sources ก่อน ไม่มีค่อยอ่าน pay_cycles, `cycle_id` ยังใช้จัดกลุ่มรายการตามเดิม; UI ตัวเลือกสำเร็จรูป + "กำหนดเอง"; weekly/every_n_days/daily ทำทีหลังเมื่อเลือกกลุ่มนักเรียน
+4. **opening_balance + onboarding "เริ่มได้เลย"** — ตัดคำถามโหมดออก (ทุกคนเริ่มแบบง่าย), ถาม "เงินที่จะใช้ได้จนถึงเงินเข้าครั้งหน้า" (คำแนะนำใต้ช่อง: "ไม่ต้องรวมเงินเก็บ และหักค่าเช่าหรือค่าที่ต้องจ่ายก่อนเงินเข้าออกไปด้วย") + "เงินก้อนถัดไปเข้าวันไหน"; ทางเลือกย้อนจดจากวันเงินเดือนออก; ปุ่ม "ปรับยอดเงิน"; เพิ่มคอลัมน์วัดเวลาสมัคร→ตั้งยอดเสร็จใน view งาน 1
+5. **สูตรใหม่** — ยอดใช้ได้ = opening_balance + รายรับ − รายจ่าย (date ≥ opening_date), วันนี้ใช้ได้ = (ยอดใช้ได้ไม่รวมรายจ่ายวันนี้) ÷ วันจากวันนี้ถึงก่อน getNextIncomeDate − รายจ่ายวันนี้; ยกยอดอัตโนมัติ; เลยวันเงินเข้า → ถาม "เงินเข้าแล้วหรือยัง"; ติดลบ → "ใช้เกินไปแล้ว X บาท"; unit test ตามแผน
+สถานะ: งาน 1 SQL รันแล้ว (รอผู้ใช้ส่งผลเช็คตัวเลข), งาน 2 ผ่าน (ยกเว้น cron รอ Production) — **ปัญหาค้าง:** push 2026-10-12 แล้ว Vercel ไม่ deploy อัตโนมัติ (ผู้ใช้กด deploy เอง) ต้องตรวจ Vercel Settings → Git
+ผู้ใช้หาผู้ทดลองชุดใหม่เอง (หลังงาน 5) — งานถัดไปที่จดไว้ (ยังไม่ทำ): หักค่าใช้จ่ายประจำที่จะถึงก่อนเงินเข้าออกจากยอดใช้ได้
 
 ### เฟส 2 — รายได้
 - Free/Pro แบ่งตามโควต้า AI (ต้องมี auth API จากเฟส 0 ข้อ 4 ก่อน), Export ข้อมูลฟรีเสมอ, ทดสอบการจ่ายด้วย PromptPay QR + เปิด Pro ด้วยมือก่อนต่อ Omise, Backlog ข้อ 7 เป็นตัวเลือกของ Pro
@@ -107,18 +125,18 @@ Next.js (App Router), TypeScript, Tailwind CSS v4, Supabase (auth + database), V
 1. ~~**Loading State + Empty State**~~ — เสร็จแล้ว ดูหัวข้อ "สถานะปัจจุบัน" ด้านบน
 2. **Sticky Action Button** — ปุ่ม "บันทึก" ใน FAB Modal sticky อยู่ล่างสุดของ modal เสมอ
 3. **UX Writing Guideline** — ทบทวนข้อความทั้งแอปให้เป็น active voice บอกผลลัพธ์ตรงๆ
-4. **Onboarding + mode toggle ใน Settings** — เพิ่ม toggle สลับ mode (simple/full) ใน Settings + หน้า Onboarding ถามตอนสมัครครั้งแรก (ถ้าเคยเลือกแล้วไม่ถามซ้ำ)
+4. ~~**Onboarding + mode toggle ใน Settings**~~ — เสร็จแล้ว (เฟส 1 ข้อ 1, 2026-09-28) ดูหัวข้อ Mode ผู้ใช้
 5. **AI Chat แบบ Conversational Data Entry** — คุยประโยคยาวกับ AI Chat (เช่น "มีหนี้บัตรเครดิต 50000 รายได้เดือนละ 30000") ให้ AI แยกแยะไปกรอก `financial_profile`/`liabilities_long`/`assets` พร้อมขึ้นการ์ด preview ให้กดยืนยันก่อนบันทึกจริง (ไม่บันทึกอัตโนมัติ) เริ่ม scope เล็ก (2 table หลัก) ก่อนขยาย
 6. **แจ้งเตือน recurring bills ผ่าน Web Push** — เพิ่ม tables `notification_settings`, `custom_reminders`, ตั้งเวลาแจ้งเตือนประจำวันได้เอง + custom reminder เอง, backend ใช้ Vercel Cron/Supabase Edge Function เช็คทุกชั่วโมง, กดแจ้งเตือนเปิดตรงไปที่ FAB บันทึกด่วนทันที
 7. **ดึงยอดจริงจาก Transaction มาเทียบใน Planning** — match ตาม category+เดือน แสดงแผน vs จริง
 8. **Google/Facebook Login** — เปิดผ่าน Supabase Dashboard > Authentication > Providers (built-in ไม่ต้องเขียนโค้ดเยอะ) — ต้องเช็ค Secure Email Change เปิดใช้งานจริงก่อนด้วย
 9. **Export ข้อมูลเป็น JSON** — safety net ให้ผู้ใช้อุ่นใจเรื่องความเป็นเจ้าของข้อมูล
-10. **Core loop redesign บน Dashboard** — ยอดคงเหลือใช้ได้จริงวันนี้ใหญ่สุดชัดสุดอยู่บนสุด, ปุ่มเพิ่มรายการใกล้ตัวเลขนี้ที่สุด, ปุ่มจำนวนเงินด่วน (50/100/200) กดแทนพิมพ์, AI insight แบบ scripted ผูกข้อมูลจริงเท่านั้น (ห้ามชมลอยๆ ไม่มีข้อมูลรองรับ)
+10. ~~**Core loop redesign บน Dashboard**~~ — เสร็จแล้ว (เฟส 1 ข้อ 2, 2026-09-28): สูตรใน `lib/daily-budget.ts` — ใช้ได้วันนี้ = (รายรับรอบ − รายจ่ายก่อนวันนี้) ÷ วันที่เหลือรวมวันนี้ − รายจ่ายวันนี้; state ok/over (วันนี้ใช้เกิน)/cycle-negative (ติดลบจากวันก่อน วันนี้ยังไม่ใช้)/no-income; รอบเงินเดือนใช้ `resolveCycleRange` (clamp วันสิ้นเดือน, วันนี้ไม่อยู่ในรอบ → ใช้เดือนปฏิทิน) ทุกส่วนของ Dashboard ใช้ช่วงเดียวกัน; ปุ่มด่วน ส่ง event `openQuickAdd` {amount,type} → เปิด QuickAdd พร้อมจำนวน (ต้องกดบันทึก); insight แบบกฎ 1 ข้อ ไม่ใช้ AI
 11. **Error tracking (Sentry)** — ติดตั้งเพื่อจับบั๊กที่เกิดจริงบน production โดยอัตโนมัติ โดยเฉพาะบั๊กที่เกิดเฉพาะบางเครื่อง/เบราว์เซอร์ที่ทดสอบเองไม่เจอ (มีประวัติเจอบั๊กแบบนี้มาแล้วหลายครั้ง เช่น ปุ่มลอยพังเฉพาะมือถือ, session ไม่ sync บน Safari)
 
 ## Backlog ใหญ่ — โหมดธุรกิจแบบสลับได้ (ทำหลังทุกอย่างข้างบนเสร็จ)
 
-**หลักการ:** ไม่แยกเป็นแอปใหม่ ใช้ core เดียวกัน (auth, database, UI shell) — เพิ่ม toggle สลับ "ส่วนบุคคล/ธุรกิจ" อยู่บนสุดของ MoreMenu root panel (สลับได้ในบัญชีเดียว ไม่ใช่เลือกครั้งเดียวจบ) เมนู "ธุรกิจ" แบบเดิม: **พับแผนไว้ ซ่อนจาก UI แต่ห้ามลบโค้ด/route** (เก็บไว้พัฒนาต่อ) — ณ 2026-09-27 ยังแสดงอยู่ รอซ่อนในเฟส 0 ข้อ 7
+**หลักการ:** ไม่แยกเป็นแอปใหม่ ใช้ core เดียวกัน (auth, database, UI shell) — เพิ่ม toggle สลับ "ส่วนบุคคล/ธุรกิจ" อยู่บนสุดของ MoreMenu root panel (สลับได้ในบัญชีเดียว ไม่ใช่เลือกครั้งเดียวจบ) เมนู "ธุรกิจ" แบบเดิม: **พับแผนไว้ ซ่อนจาก UI แต่ห้ามลบโค้ด/route** (เก็บไว้พัฒนาต่อ) — ซ่อนจากเมนูแล้ว (เฟส 0 ข้อ 7)
 
 **โครงสร้าง mode 3 ชั้น:**
 ```

@@ -2,7 +2,8 @@
 
 import { useState, useRef, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
-import { Camera, CheckCircle2, Loader2 } from "lucide-react"
+import { Camera, CheckCircle2, Loader2, X } from "lucide-react"
+import { showToast } from "./Toast"
 
 type ScannedData = {
   name: string
@@ -68,9 +69,12 @@ useEffect(() => {
     if (!scanned) return
     setSaving(true)
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
+    if (!user) {
+      setSaving(false)
+      return
+    }
 
-    await supabase.from("transactions").insert({
+    const { error } = await supabase.from("transactions").insert({
       user_id: user.id,
       name: scanned.name,
       amount: Number(scanned.amount),
@@ -79,6 +83,12 @@ useEffect(() => {
       category: scanned.category,
       note: "สแกนจากสลิป",
     })
+
+    if (error) {
+      showToast("บันทึกไม่สำเร็จ ลองใหม่อีกครั้ง", "error")
+      setSaving(false)
+      return
+    }
 
     setSaving(false)
     setShowModal(false)
@@ -106,7 +116,7 @@ useEffect(() => {
             <div className="flex items-center justify-between px-6 pt-5 pb-3">
               <h2 className="text-lg font-semibold text-gray-800">สแกนสลิป</h2>
               <button onClick={() => { setShowModal(false); setScanned(null); setPreview(null) }}
-                className="text-gray-400 hover:text-gray-600 text-xl">✕</button>
+                aria-label="ปิด" className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
             </div>
 
             <div className="px-6 pb-6">
