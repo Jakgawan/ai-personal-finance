@@ -2,10 +2,8 @@
 
 import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
-import { User, Building2, AlertTriangle, CircleCheck, X } from "lucide-react"
+import { User, Building2, AlertTriangle } from "lucide-react"
 import ConfirmModal from "@/app/components/ConfirmModal"
-import { showToast } from "@/app/components/Toast"
-import { processDueRecurring, firstNextDate, todayLocal, type CreatedLog } from "@/lib/recurring"
 
 type Recurring = {
   id: string
@@ -23,6 +21,13 @@ type Recurring = {
 type Business = {
   id: string
   name: string
+}
+
+type CreatedLog = {
+  name: string
+  amount: number
+  type: string
+  date: string
 }
 
 const CYCLE_LABEL: Record<string, string> = {
@@ -47,7 +52,7 @@ export default function RecurringSection() {
   const [type, setType] = useState("expense")
   const [category, setCategory] = useState("")
   const [cycle, setCycle] = useState("monthly")
-  const [startDate, setStartDate] = useState(todayLocal())
+  const [startDate, setStartDate] = useState(new Date().toISOString().split("T")[0])
   const [businessId, setBusinessId] = useState<string>("")
 
   const fetchAll = async () => {
@@ -63,28 +68,84 @@ export default function RecurringSection() {
     setBusinesses(biz || [])
   }
 
-  const processRecurring = async () => {
-    // ใช้ฟังก์ชันกลางจาก lib/recurring.ts (มี guard กันสร้างซ้ำ ใช้ร่วมกับ RecurringProcessor ใน layout)
-    const { created } = await processDueRecurring()
+  useEffect(() => {
+    fetchAll()
+    processRecurring()
+  }, [])
 
-    if (created.length > 0) {
-      setCreatedLogs(created)
+  const calcNextDate = (date: string, cycle: string) => {
+    const d = new Date(date)
+    if (cycle === "monthly") d.setMonth(d.getMonth() + 1)
+    if (cycle === "weekly") d.setDate(d.getDate() + 7)
+    if (cycle === "yearly") d.setFullYear(d.getFullYear() + 1)
+    return d.toISOString().split("T")[0]
+  }
+
+  const processRecurring = async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+
+    const today = new Date().toISOString().split("T")[0]
+    const { data } = await supabase
+      .from("recurring_transactions")
+      .select("*")
+      .eq("user_id", user.id)
+      .eq("is_active", true)
+      .lte("next_date", today)
+
+    if (!data || data.length === 0) return
+
+    const logs: CreatedLog[] = []
+
+    for (const item of data) {
+      if (item.business_id) {
+        await supabase.from("business_transactions").insert({
+          user_id: user.id,
+          business_id: item.business_id,
+          name: item.name,
+          amount: item.amount,
+          type: item.type,
+          category: item.category,
+          date: item.next_date,
+        })
+      } else {
+        await supabase.from("transactions").insert({
+          user_id: user.id,
+          name: item.name,
+          amount: item.amount,
+          type: item.type,
+          category: item.category,
+          date: item.next_date,
+          note: "สร้างอัตโนมัติจากรายการซ้ำ",
+        })
+      }
+
+      logs.push({
+        name: item.name,
+        amount: item.amount,
+        type: item.type,
+        date: item.next_date,
+      })
+
+      await supabase
+        .from("recurring_transactions")
+        .update({ next_date: calcNextDate(item.next_date, item.cycle) })
+        .eq("id", item.id)
+    }
+
+    if (logs.length > 0) {
+      setCreatedLogs(logs)
       setShowLog(true)
     }
 
     fetchAll()
   }
 
-  useEffect(() => {
-    fetchAll()
-    processRecurring()
-  }, [])
-
   const openAdd = (bizId?: string) => {
     setEditItem(null)
     setName(""); setAmount(""); setType("expense")
     setCategory(""); setCycle("monthly")
-    setStartDate(todayLocal())
+    setStartDate(new Date().toISOString().split("T")[0])
     setBusinessId(bizId || "")
     setShowModal(true)
   }
@@ -104,21 +165,29 @@ export default function RecurringSection() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
 
+   const calcFirstNextDate = (date: string, cycle: string) => {
+  const today = new Date().toISOString().split("T")[0]
+  let d = new Date(date)
+ while (d.toISOString().split("T")[0] <= today) {
+    if (cycle === "monthly") d.setMonth(d.getMonth() + 1)
+    if (cycle === "weekly") d.setDate(d.getDate() + 7)
+    if (cycle === "yearly") d.setFullYear(d.getFullYear() + 1)
+  }
+  return d.toISOString().split("T")[0]
+}
+
     const payload = {
         name, amount: Number(amount), type, category,
         cycle, start_date: startDate,
-        next_date: firstNextDate(startDate, cycle),
+        next_date: calcFirstNextDate(startDate, cycle),
         user_id: user.id,
         business_id: businessId || null,
     }
 
-    const { error } = editItem
-      ? await supabase.from("recurring_transactions").update(payload).eq("id", editItem.id)
-      : await supabase.from("recurring_transactions").insert(payload)
-    if (error) {
-      showToast("บันทึกไม่สำเร็จ ลองใหม่อีกครั้ง", "error")
-      setLoading(false)
-      return
+    if (editItem) {
+      await supabase.from("recurring_transactions").update(payload).eq("id", editItem.id)
+    } else {
+      await supabase.from("recurring_transactions").insert(payload)
     }
 
     setShowModal(false)
@@ -127,11 +196,7 @@ export default function RecurringSection() {
   }
 
   const toggleActive = async (item: Recurring) => {
-    const { error } = await supabase.from("recurring_transactions").update({ is_active: !item.is_active }).eq("id", item.id)
-    if (error) {
-      showToast("บันทึกไม่สำเร็จ ลองใหม่อีกครั้ง", "error")
-      return
-    }
+    await supabase.from("recurring_transactions").update({ is_active: !item.is_active }).eq("id", item.id)
     fetchAll()
   }
 
@@ -140,11 +205,7 @@ export default function RecurringSection() {
       message: "ลบรายการซ้ำนี้?",
       onConfirm: async () => {
         setConfirmState(null)
-        const { error } = await supabase.from("recurring_transactions").delete().eq("id", id)
-        if (error) {
-          showToast("ลบไม่สำเร็จ ลองใหม่อีกครั้ง", "error")
-          return
-        }
+        await supabase.from("recurring_transactions").delete().eq("id", id)
         fetchAll()
       },
     })
@@ -174,10 +235,10 @@ export default function RecurringSection() {
       {showLog && createdLogs.length > 0 && (
         <div className="bg-green-50 border border-green-200 rounded-xl p-4 mb-6">
           <div className="flex items-center justify-between mb-2">
-            <p className="text-sm font-semibold text-[#1D9E75] inline-flex items-center gap-1">
-              <CircleCheck size={14} /> สร้างรายการอัตโนมัติ {createdLogs.length} รายการ
+            <p className="text-sm font-semibold text-[#1D9E75]">
+              ✅ สร้างรายการอัตโนมัติ {createdLogs.length} รายการ
             </p>
-            <button onClick={() => setShowLog(false)} aria-label="ปิด" className="text-gray-400 hover:text-gray-600"><X size={16} /></button>
+            <button onClick={() => setShowLog(false)} className="text-gray-400 hover:text-gray-600 text-sm">✕</button>
           </div>
           {createdLogs.map((log, i) => (
             <div key={i} className="flex justify-between text-xs text-gray-600 py-1 border-t border-green-100">
@@ -296,7 +357,7 @@ export default function RecurringSection() {
               <h2 className="text-lg font-semibold text-gray-800">
                 {editItem ? "แก้ไขรายการซ้ำ" : "เพิ่มรายการซ้ำ"}
               </h2>
-              <button onClick={() => setShowModal(false)} aria-label="ปิด" className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
+              <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-gray-600 text-xl">✕</button>
             </div>
             <div className="px-6 pb-6 flex flex-col gap-3">
               <div className="flex gap-3">

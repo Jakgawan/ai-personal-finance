@@ -2,14 +2,12 @@
 
 import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
-import { CircleCheck } from "lucide-react"
 
 export default function ProfileSection() {
   const [name, setName] = useState("")
   const [email, setEmail] = useState("")
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState("")
-  const [isError, setIsError] = useState(false)
 
   useEffect(() => {
     const getProfile = async () => {
@@ -27,8 +25,7 @@ export default function ProfileSection() {
     const { error } = await supabase.auth.updateUser({
       data: { name }
     })
-    setIsError(!!error)
-    setMessage(error ? "เกิดข้อผิดพลาด" : "บันทึกสำเร็จ")
+    setMessage(error ? "เกิดข้อผิดพลาด" : "บันทึกสำเร็จ ✅")
     setLoading(false)
   }
 
@@ -59,10 +56,7 @@ export default function ProfileSection() {
         </div>
 
         {message && (
-          <p className={`text-sm flex items-center gap-1 ${isError ? "text-[#D85A30]" : "text-[#1D9E75]"}`}>
-            {!isError && <CircleCheck size={14} />}
-            {message}
-          </p>
+          <p className="text-sm text-[#1D9E75]">{message}</p>
         )}
 
         <button

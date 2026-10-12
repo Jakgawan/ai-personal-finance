@@ -3,9 +3,8 @@
 import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
 import React from "react"
-import { ClipboardList, BarChart2, Copy, Trash2, ChevronLeft, ChevronRight, X, ArrowRight } from "lucide-react"
+import { ClipboardList, BarChart2, Copy, Trash2 } from "lucide-react"
 import ConfirmModal from "@/app/components/ConfirmModal"
-import { showToast } from "@/app/components/Toast"
 
 type PlanItem = {
   id: string
@@ -75,7 +74,7 @@ export default function PlanningPage() {
 
   const fetchItems = async () => {
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) { setLoading(false); return }
+  if (!user) return
   const [{ data }, { data: catData }] = await Promise.all([
     supabase.from("planning_items").select("*").eq("user_id", user.id).eq("year", year).order("section"),
     supabase.from("categories").select("*").eq("user_id", user.id),
@@ -97,14 +96,10 @@ export default function PlanningPage() {
   if (!addName) return
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return
-  const { error } = await supabase.from("planning_items").insert({
+  await supabase.from("planning_items").insert({
     user_id: user.id, year, section: addSection,
     name: addName, category: addCategory || null, monthly_amount: {},
   })
-  if (error) {
-    showToast("บันทึกไม่สำเร็จ ลองใหม่อีกครั้ง", "error")
-    return
-  }
   setShowAddModal(false)
   fetchItems()
 }
@@ -125,22 +120,8 @@ const doCopyMonth = async () => {
   // ถ้า copy ข้ามปี ต้องดึง items ของปีต้นทาง
   let sourceItems = items
   if (copyFromYear !== year) {
-    const { data, error: srcError } = await supabase.from("planning_items").select("*").eq("user_id", user.id).eq("year", copyFromYear)
-    if (srcError) {
-      showToast("คัดลอกไม่สำเร็จ ลองใหม่อีกครั้ง", "error")
-      return
-    }
+    const { data } = await supabase.from("planning_items").select("*").eq("user_id", user.id).eq("year", copyFromYear)
     sourceItems = (data || []) as PlanItem[]
-  }
-
-  let savedCount = 0 // นับจำนวนที่เขียนสำเร็จแล้ว เพื่อบอกได้ว่าสำเร็จบางส่วนหรือไม่
-  let failed = false
-  const reportCopyError = () => {
-    failed = true
-    showToast(
-      savedCount > 0 ? "คัดลอกได้บางส่วน แล้วเกิดข้อผิดพลาด ลองใหม่อีกครั้ง" : "คัดลอกไม่สำเร็จ ลองใหม่อีกครั้ง",
-      "error"
-    )
   }
 
   if (copyFromYear === copyToYear) {
@@ -150,17 +131,11 @@ const doCopyMonth = async () => {
       if (sourceValue === 0) continue
       const updated = { ...item.monthly_amount }
       copyToMonths.forEach(m => { updated[String(m)] = sourceValue })
-      const { error } = await supabase.from("planning_items").update({ monthly_amount: updated }).eq("id", item.id)
-      if (error) { reportCopyError(); break }
-      savedCount++
+      await supabase.from("planning_items").update({ monthly_amount: updated }).eq("id", item.id)
     }
   } else {
     // copy ข้ามปี — สร้างรายการใหม่ในปีปลายทางถ้ายังไม่มี
-    const { data: targetItems, error: tgtError } = await supabase.from("planning_items").select("*").eq("user_id", user.id).eq("year", copyToYear)
-    if (tgtError) {
-      showToast("คัดลอกไม่สำเร็จ ลองใหม่อีกครั้ง", "error")
-      return
-    }
+    const { data: targetItems } = await supabase.from("planning_items").select("*").eq("user_id", user.id).eq("year", copyToYear)
     const existingNames = (targetItems || []).map((t: PlanItem) => t.name)
 
     for (const item of sourceItems) {
@@ -174,26 +149,20 @@ const doCopyMonth = async () => {
         const target = (targetItems as PlanItem[]).find(t => t.name === item.name)
         if (target) {
           const merged = { ...target.monthly_amount, ...newAmounts }
-          const { error } = await supabase.from("planning_items").update({ monthly_amount: merged }).eq("id", target.id)
-          if (error) { reportCopyError(); break }
-          savedCount++
+          await supabase.from("planning_items").update({ monthly_amount: merged }).eq("id", target.id)
         }
       } else {
         // ยังไม่มี → insert ใหม่
-        const { error } = await supabase.from("planning_items").insert({
+        await supabase.from("planning_items").insert({
           user_id: user.id, year: copyToYear, section: item.section,
           name: item.name, category: item.category, monthly_amount: newAmounts,
         })
-        if (error) { reportCopyError(); break }
-        savedCount++
       }
     }
   }
 
-  if (!failed) {
-    setShowCopyModal(false)
-    setCopyToMonths([])
-  }
+  setShowCopyModal(false)
+  setCopyToMonths([])
   fetchItems()
 }
  const resetMonth = () => {
@@ -211,8 +180,6 @@ const doResetMonth = async () => {
     ? items.filter(i => resetItems.includes(i.id))
     : items
 
-  let savedCount = 0
-  let failed = false
   for (const item of targetItems) {
     const updated = { ...item.monthly_amount }
     let changed = false
@@ -223,24 +190,13 @@ const doResetMonth = async () => {
       }
     })
     if (changed) {
-      const { error } = await supabase.from("planning_items").update({ monthly_amount: updated }).eq("id", item.id)
-      if (error) {
-        failed = true
-        showToast(
-          savedCount > 0 ? "รีเซ็ตได้บางส่วน แล้วเกิดข้อผิดพลาด ลองใหม่อีกครั้ง" : "รีเซ็ตไม่สำเร็จ ลองใหม่อีกครั้ง",
-          "error"
-        )
-        break
-      }
-      savedCount++
+      await supabase.from("planning_items").update({ monthly_amount: updated }).eq("id", item.id)
     }
   }
 
-  if (!failed) {
-    setShowResetModal(false)
-    setResetMonths([])
-    setResetItems([])
-  }
+  setShowResetModal(false)
+  setResetMonths([])
+  setResetItems([])
   fetchItems()
 }
   const deleteItem = (id: string) => {
@@ -248,33 +204,21 @@ const doResetMonth = async () => {
       message: "ลบรายการนี้?",
       onConfirm: async () => {
         setConfirmState(null)
-        const { error } = await supabase.from("planning_items").delete().eq("id", id)
-        if (error) {
-          showToast("ลบไม่สำเร็จ ลองใหม่อีกครั้ง", "error")
-          return
-        }
+        await supabase.from("planning_items").delete().eq("id", id)
         fetchItems()
       },
     })
   }
 
   const updateName = async (id: string, name: string) => {
-    const { error } = await supabase.from("planning_items").update({ name }).eq("id", id)
-    if (error) {
-      showToast("บันทึกไม่สำเร็จ ลองใหม่อีกครั้ง", "error")
-      return
-    }
+    await supabase.from("planning_items").update({ name }).eq("id", id)
     setEditingName(null)
     fetchItems()
   }
 
   const updateAmount = async (item: PlanItem, month: number, value: string) => {
     const updated = { ...item.monthly_amount, [String(month)]: Number(value) || 0 }
-    const { error } = await supabase.from("planning_items").update({ monthly_amount: updated }).eq("id", item.id)
-    if (error) {
-      showToast("บันทึกไม่สำเร็จ ลองใหม่อีกครั้ง", "error")
-      return
-    }
+    await supabase.from("planning_items").update({ monthly_amount: updated }).eq("id", item.id)
     setEditingCell(null)
     fetchItems()
   }
@@ -286,16 +230,12 @@ const doResetMonth = async () => {
         setConfirmState(null)
         const { data: { user } } = await supabase.auth.getUser()
         if (!user) return
-        const { error } = await supabase.from("planning_items").insert(
+        await supabase.from("planning_items").insert(
           TEMPLATE_ITEMS.map(item => ({
             user_id: user.id, year,
             section: item.section, name: item.name, category: item.category, monthly_amount: {},
           }))
         )
-        if (error) {
-          showToast("โหลด template ไม่สำเร็จ ลองใหม่อีกครั้ง", "error")
-          return
-        }
         fetchItems()
       },
     })
@@ -313,11 +253,7 @@ const doResetMonth = async () => {
         for (let m = 1; m <= 12; m++) {
           if (!updated[String(m)]) updated[String(m)] = firstValue
         }
-        const { error } = await supabase.from("planning_items").update({ monthly_amount: updated }).eq("id", item.id)
-        if (error) {
-          showToast("บันทึกไม่สำเร็จ ลองใหม่อีกครั้ง", "error")
-          return
-        }
+        await supabase.from("planning_items").update({ monthly_amount: updated }).eq("id", item.id)
         fetchItems()
       },
     })
@@ -488,9 +424,9 @@ const doResetMonth = async () => {
         </div>
         {/* ปุ่มเลือกปี อยู่แถวล่าง ไม่เบียดกัน */}
         <div className="flex items-center gap-2">
-          <button onClick={() => setYear(y => y - 1)} aria-label="ปีก่อน" className="px-3 py-1.5 border rounded-lg text-sm hover:bg-gray-100 inline-flex items-center justify-center h-8 min-w-8"><ChevronLeft size={18} /></button>
+          <button onClick={() => setYear(y => y - 1)} className="px-3 py-1.5 border rounded-lg text-sm hover:bg-gray-100">←</button>
           <span className="text-sm font-semibold text-gray-700">พ.ศ. {year + 543}</span>
-          <button onClick={() => setYear(y => y + 1)} aria-label="ปีถัดไป" className="px-3 py-1.5 border rounded-lg text-sm hover:bg-gray-100 inline-flex items-center justify-center h-8 min-w-8"><ChevronRight size={18} /></button>
+          <button onClick={() => setYear(y => y + 1)} className="px-3 py-1.5 border rounded-lg text-sm hover:bg-gray-100">→</button>
         </div>
       </div>
 
@@ -551,9 +487,8 @@ const doResetMonth = async () => {
                               </div>
                               <button
                                 onClick={() => deleteItem(item.id)}
-                                aria-label="ลบ"
-                                className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 ml-1"
-                              ><X size={12} /></button>
+                                className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 text-xs ml-1"
+                              >✕</button>
                             </div>
                           )}
                         </td>
@@ -588,10 +523,10 @@ const doResetMonth = async () => {
                         <td className="px-2 py-2">
                           <button
                             onClick={() => fillRow(item)}
-                            className="text-xs text-gray-400 hover:text-[#1D9E75] px-2 py-1 rounded hover:bg-green-50 transition-colors whitespace-nowrap inline-flex items-center gap-1"
+                            className="text-xs text-gray-400 hover:text-[#1D9E75] px-2 py-1 rounded hover:bg-green-50 transition-colors whitespace-nowrap"
                             title="copy ค่าเดือนแรกไปทุกเดือน"
                           >
-                            fill <ArrowRight size={12} />
+                            fill →
                           </button>
                         </td>
                       </tr>

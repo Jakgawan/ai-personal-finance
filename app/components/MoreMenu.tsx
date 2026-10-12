@@ -3,9 +3,8 @@
 import { useEffect, useState } from "react"
 import Link from "next/link"
 import { supabase } from "@/lib/supabase"
-import { removePushSubscriptionOnSignOut } from "@/lib/push-client"
 import {
-  CalendarDays, Scale, MessageCircle,
+  CalendarDays, Scale, Briefcase, MessageCircle, GraduationCap,
   Settings, LogOut, MoreHorizontal, ChevronLeft, X,
   Tag, RefreshCw, Target, User, Bell, Globe,
   type LucideIcon,
@@ -28,10 +27,9 @@ type Tile =
 const ROOT_FULL: Tile[] = [
   { kind: "link", label: "วางแผน", icon: CalendarDays, href: "/planning" },
   { kind: "link", label: "งบการเงิน", icon: Scale, href: "/balance-sheet" },
-  // ซ่อนไว้ชั่วคราว (เฟส 0 ข้อ 7) — route /business และ /courses ยังอยู่ เอา comment ออกเพื่อแสดงกลับ
-  // { kind: "link", label: "ธุรกิจ", icon: Briefcase, href: "/business" },
+  { kind: "link", label: "ธุรกิจ", icon: Briefcase, href: "/business" },
   { kind: "link", label: "ปรึกษาการเงิน", icon: MessageCircle, href: "/ai" },
-  // { kind: "link", label: "คอร์สการเงิน", icon: GraduationCap, href: "/courses" },
+  { kind: "link", label: "คอร์สการเงิน", icon: GraduationCap, href: "/courses" },
   { kind: "panel", label: "เพิ่มเติม", icon: MoreHorizontal, panel: "more" },
   { kind: "panel", label: "ตั้งค่า", icon: Settings, panel: "settings" },
   { kind: "signout" },
@@ -57,7 +55,7 @@ const MORE_SIMPLE: Tile[] = [
 
 const SETTINGS_TILES: Tile[] = [
   { kind: "link", label: "โปรไฟล์", icon: User, href: "/settings?tab=profile" },
-  { kind: "link", label: "แจ้งเตือน", icon: Bell, href: "/settings?tab=notifications" },
+  { kind: "placeholder", label: "แจ้งเตือน", icon: Bell },
   { kind: "link", label: "การแสดงผล", icon: Globe, href: "/settings?tab=display" },
 ]
 
@@ -71,7 +69,6 @@ export default function MoreMenu({ open, onClose, mode }: Props) {
   if (!open) return null
 
   const handleSignOut = async () => {
-    await removePushSubscriptionOnSignOut()
     await supabase.auth.signOut()
     window.location.href = "/login"
   }
@@ -101,7 +98,7 @@ export default function MoreMenu({ open, onClose, mode }: Props) {
           )}
         </div>
 
-        <div className={`grid ${panel === "root" && mode === "full" ? "grid-cols-3" : "grid-cols-4"} gap-4 p-5 pt-4`}>
+        <div className="grid grid-cols-4 gap-4 p-5 pt-4">
           {tiles.map((tile, i) => {
             if (tile.kind === "signout") {
               return (
