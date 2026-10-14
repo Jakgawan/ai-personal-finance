@@ -19,9 +19,10 @@ type Props = {
   // ค่าเริ่มต้นจากปุ่มบันทึกด่วน (ไม่ส่ง = เปิดจาก FAB แบบปกติ)
   initialAmount?: number | null
   initialType?: "expense" | "income"
+  initialDate?: string | null
 }
 
-export default function QuickAddModal({ open, onClose, mode, categories, cycles, initialAmount, initialType }: Props) {
+export default function QuickAddModal({ open, onClose, mode, categories, cycles, initialAmount, initialType, initialDate }: Props) {
   const [name, setName] = useState("")
   const [amount, setAmount] = useState("")
   const [date, setDate] = useState(todayLocal())
@@ -60,11 +61,12 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles,
   // เปิดพร้อมค่าเริ่มต้น -> ไปแท็บฟอร์ม ใส่ประเภท/จำนวนให้ (ไม่ focus อะไร)
   useEffect(() => {
     if (!open) return
-    if (initialType === undefined && (initialAmount === undefined || initialAmount === null)) return
+    if (initialType === undefined && (initialAmount === undefined || initialAmount === null) && !initialDate) return
     setInputMode("form")
     if (initialType) setType(initialType)
+    if (initialDate) setDate(initialDate)
     if (initialAmount !== undefined && initialAmount !== null) setAmount(String(initialAmount))
-  }, [open, initialAmount, initialType])
+  }, [open, initialAmount, initialType, initialDate])
 
   useEffect(() => {
     if (open) return

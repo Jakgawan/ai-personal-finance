@@ -1,11 +1,13 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { supabase } from "@/lib/supabase"
 import Link from "next/link"
 import { formatDate } from "@/lib/utils"
-import { Plus, Lightbulb, Scale, X } from "lucide-react"
+import { Plus, Lightbulb, Scale, X, Wallet, TriangleAlert } from "lucide-react"
 import AdjustBalanceModal from "@/app/components/AdjustBalanceModal"
+import CarryOverModal from "@/app/components/CarryOverModal"
+import { getPeriodTransition, type CarryoverPref, type PeriodTransition } from "@/lib/period-transition"
 import { showToast } from "@/app/components/Toast"
 import { pickActiveOpening } from "@/lib/opening-balance"
 import CategoryIcon from "@/app/components/CategoryIcon"
@@ -51,8 +53,18 @@ type OpeningRow = {
   amount: number
   opening_date: string
   source: string
+  leftover: number | null
+  leftover_from: string | null
   created_at: string
 }
+
+type ProfileState = {
+  carryover_pref: CarryoverPref | null
+  last_period_decided: string | null
+  income_prompt_dismissed: string | null
+}
+
+type IncomeSourceRow = IncomeSourceSchedule & { amount: number | string | null }
 
 const COLORS = ["#1D9E75", "#D85A30", "#378ADD", "#F59E0B", "#8B5CF6", "#EC4899", "#6B7280"]
 
@@ -139,7 +151,7 @@ export default function Dashboard() {
   const [chartMode, setChartMode] = useState<"bar" | "donut" | "column" | "table">("bar")
   const [loading, setLoading] = useState(true)
   const [categories, setCategories] = useState<CategoryInfo[]>([])
-  const [incomeSources, setIncomeSources] = useState<IncomeSourceSchedule[]>([])
+  const [incomeSources, setIncomeSources] = useState<IncomeSourceRow[]>([])
   const [targetDate, setTargetDate] = useState<string | null>(null)
   const [openingRows, setOpeningRows] = useState<OpeningRow[]>([])
   const [openingLoaded, setOpeningLoaded] = useState(false)
@@ -147,6 +159,13 @@ export default function Dashboard() {
   const [adjustOpen, setAdjustOpen] = useState(false)
   const [dismissedId, setDismissedId] = useState<string | null>(null)
   const [dismissCheckedKey, setDismissCheckedKey] = useState<string | null>(null)
+  const [profile, setProfile] = useState<ProfileState | null>(null)
+  const [carryModalClosedFor, setCarryModalClosedFor] = useState<string | null>(null)
+  const [carrySaving, setCarrySaving] = useState(false)
+  const [incomeCheckSaving, setIncomeCheckSaving] = useState(false)
+  const [noteDismissedKey, setNoteDismissedKey] = useState<string | null>(null)
+  const [noteCheckedKey, setNoteCheckedKey] = useState<string | null>(null)
+  const transitionBusy = useRef<boolean>(false)
 
   // โหลดยอดเงินตั้งต้น (งาน 4: เก็บข้อมูลและจุดเข้าปรับยอดเท่านั้น ยังไม่ใช้คำนวณ)
   const fetchOpening = useCallback(async () => {
@@ -155,14 +174,14 @@ export default function Dashboard() {
     setOpeningError(false)
     const { data, error } = await supabase
       .from("opening_balances")
-      .select("id, amount, opening_date, source, created_at")
+      .select("id, amount, opening_date, source, leftover, leftover_from, created_at")
       .eq("user_id", user.id)
     if (error) {
       showToast("โหลดยอดเงินตั้งต้นไม่สำเร็จ", "error")
       setOpeningError(true)
       return
     }
-    setOpeningRows(((data || []) as OpeningRow[]).map(r => ({ ...r, amount: Number(r.amount) })))
+    setOpeningRows(((data || []) as OpeningRow[]).map(r => ({ ...r, amount: Number(r.amount), leftover: r.leftover === null || r.leftover === undefined ? null : Number(r.leftover) })))
     setOpeningLoaded(true)
   }, [])
 
@@ -204,14 +223,23 @@ export default function Dashboard() {
       supabase.from("assets").select("*").eq("user_id", user.id),
       supabase.from("liabilities_long").select("balance").eq("user_id", user.id),
       supabase.from("categories").select("name, icon, color").eq("user_id", user.id),
-      supabase.from("income_sources").select("schedule_type, monthly_days").eq("user_id", user.id),
-      supabase.from("financial_profile").select("target_date").eq("user_id", user.id).maybeSingle(),
+      supabase.from("income_sources").select("schedule_type, monthly_days, amount").eq("user_id", user.id),
+      supabase.from("financial_profile").select("target_date, carryover_pref, last_period_decided, income_prompt_dismissed").eq("user_id", user.id).maybeSingle(),
     ])
     if (srcError || profError) {
       showToast("โหลดข้อมูลไม่สำเร็จ", "error")
     }
-    setIncomeSources((srcData || []) as IncomeSourceSchedule[])
-    setTargetDate((profData as { target_date: string | null } | null)?.target_date ?? null)
+    setIncomeSources((srcData || []) as IncomeSourceRow[])
+    const prof = profData as (ProfileState & { target_date: string | null }) | null
+    setTargetDate(prof?.target_date ?? null)
+    // อ่านโปรไฟล์ไม่สำเร็จ -> ปล่อย profile เดิม (ไม่เดาว่าเคยตัดสินใจหรือยัง)
+    if (!profError) {
+      setProfile({
+        carryover_pref: prof?.carryover_pref ?? null,
+        last_period_decided: prof?.last_period_decided ?? null,
+        income_prompt_dismissed: prof?.income_prompt_dismissed ?? null,
+      })
+    }
     setTransactions(txData || [])
     setCycles(cycleData || [])
     setAssets(assetData || [])
@@ -248,6 +276,165 @@ export default function Dashboard() {
         nextIncomeDate: next.date,
       })
     : null
+
+  // ---- ขึ้นรอบใหม่ (งาน 5c) ----
+  const prevPaydayDate = prev?.date ?? null
+  const prevPeriodStart = prevPaydayDate
+    ? getPreviousIncomeDate(addDays(prevPaydayDate, -1), { incomeSources, payCycles: cycles })?.date ?? null
+    : null
+  const transition: PeriodTransition = useMemo(() => {
+    // ยังโหลดไม่ครบ (ยอดตั้งต้น/โปรไฟล์/รายการ) -> ไม่ทำอะไร
+    if (loading || !openingLoaded || !profile || !activeOpening) return { kind: "none" }
+    return getPeriodTransition({
+      today,
+      prevIncomeDate: prevPaydayDate,
+      prevPeriodStart,
+      opening: { amount: activeOpening.amount, opening_date: activeOpening.opening_date },
+      transactions,
+      lastPeriodDecided: profile.last_period_decided,
+      incomePromptDismissed: profile.income_prompt_dismissed,
+      pref: profile.carryover_pref,
+    })
+  }, [loading, openingLoaded, profile, activeOpening, today, prevPaydayDate, prevPeriodStart, transactions])
+
+  // บันทึกการตัดสินใจเรื่องยกยอด: mode "reset" = ไม่ยก (เพิ่มแถว carryover ยอด 0), "mark" = แค่จดว่าตัดสินแล้ว
+  // คืน true เมื่อสำเร็จทั้งหมด; error ใดๆ แจ้ง toast แล้วคืน false
+  const applyDecision = useCallback(async (
+    payday: string,
+    leftover: number,
+    prevStart: string,
+    mode: "reset" | "mark",
+    remember: CarryoverPref | null
+  ): Promise<boolean> => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      showToast("บันทึกไม่สำเร็จ ลองใหม่อีกครั้ง", "error")
+      return false
+    }
+    if (mode === "reset") {
+      // กันเพิ่มแถวซ้ำ: ถ้าเคยเพิ่มแถว carryover ของวันเงินเข้านี้แล้ว (แต่บันทึกโปรไฟล์พลาด) ข้ามการเพิ่ม
+      const { data: existing, error: exError } = await supabase
+        .from("opening_balances")
+        .select("id")
+        .eq("user_id", user.id)
+        .eq("source", "carryover")
+        .eq("opening_date", payday)
+        .limit(1)
+      if (exError) {
+        showToast("บันทึกไม่สำเร็จ ลองใหม่อีกครั้ง", "error")
+        return false
+      }
+      if (!existing || existing.length === 0) {
+        const { error: insError } = await supabase.from("opening_balances").insert({
+          user_id: user.id,
+          amount: 0,
+          entered_amount: 0,
+          opening_date: payday,
+          source: "carryover",
+          leftover,
+          leftover_from: prevStart,
+        })
+        if (insError) {
+          showToast("บันทึกไม่สำเร็จ ลองใหม่อีกครั้ง", "error")
+          return false
+        }
+        window.dispatchEvent(new CustomEvent("openingBalanceChanged"))
+      }
+    }
+    const patch: { last_period_decided: string; carryover_pref?: CarryoverPref } = { last_period_decided: payday }
+    if (remember) patch.carryover_pref = remember
+    const { error: profUpError } = await supabase.from("financial_profile").upsert(
+      { user_id: user.id, ...patch, updated_at: new Date().toISOString() },
+      { onConflict: "user_id" }
+    )
+    if (profUpError) {
+      showToast("บันทึกไม่สำเร็จ ลองใหม่อีกครั้ง", "error")
+      return false
+    }
+    setProfile(p => ({
+      carryover_pref: remember ?? p?.carryover_pref ?? null,
+      last_period_decided: payday,
+      income_prompt_dismissed: p?.income_prompt_dismissed ?? null,
+    }))
+    return true
+  }, [])
+
+  // การกระทำอัตโนมัติ (ไม่ต้องถามผู้ใช้): ยกยอดเสมอ / ไม่ยกเสมอ / ติดลบ / ศูนย์
+  useEffect(() => {
+    if (transition.kind !== "carry" || transition.action === "ask") return
+    if (transitionBusy.current) return
+    transitionBusy.current = true
+    const mode = transition.action === "auto-reset" || transition.action === "negative" ? "reset" : "mark"
+    applyDecision(transition.payday, transition.leftover, transition.prevStart, mode, null).finally(() => {
+      transitionBusy.current = false
+    })
+  }, [transition, applyDecision])
+
+  const askCarry = transition.kind === "carry" && transition.action === "ask" ? transition : null
+
+  const handleCarryChoice = async (mode: "reset" | "mark", remember: boolean) => {
+    if (!askCarry || transitionBusy.current) return
+    transitionBusy.current = true
+    setCarrySaving(true)
+    const ok = await applyDecision(askCarry.payday, askCarry.leftover, askCarry.prevStart, mode, remember ? (mode === "reset" ? "reset" : "carry") : null)
+    transitionBusy.current = false
+    setCarrySaving(false)
+    if (ok) showToast(mode === "reset" ? "เริ่มรอบใหม่โดยไม่ยกยอด" : "ยกยอดไปรอบนี้แล้ว", "success")
+  }
+
+  // ขั้น "เงินเข้าแล้วหรือยัง"
+  const incomeCheck = transition.kind === "income-check" ? transition : null
+  const handleIncomeNotYet = async () => {
+    if (!incomeCheck || incomeCheckSaving) return
+    setIncomeCheckSaving(true)
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      setIncomeCheckSaving(false)
+      showToast("บันทึกไม่สำเร็จ ลองใหม่อีกครั้ง", "error")
+      return
+    }
+    const { error } = await supabase.from("financial_profile").upsert(
+      { user_id: user.id, income_prompt_dismissed: incomeCheck.payday, updated_at: new Date().toISOString() },
+      { onConflict: "user_id" }
+    )
+    setIncomeCheckSaving(false)
+    if (error) {
+      showToast("บันทึกไม่สำเร็จ ลองใหม่อีกครั้ง", "error")
+      return
+    }
+    setProfile(p => ({
+      carryover_pref: p?.carryover_pref ?? null,
+      last_period_decided: p?.last_period_decided ?? null,
+      income_prompt_dismissed: incomeCheck.payday,
+    }))
+  }
+  const handleIncomeRecord = () => {
+    if (!incomeCheck) return
+    window.dispatchEvent(new CustomEvent("openQuickAdd", {
+      detail: { amount: null, type: "income", date: incomeCheck.payday },
+    }))
+  }
+
+  // รอบก่อนติดลบ: แสดงหมายเหตุที่ปิดได้ (เก็บการปิดใน localStorage ตามวันเริ่มรอบ)
+  const negNoteKey =
+    activeOpening && activeOpening.source === "carryover" && activeOpening.leftover !== null && activeOpening.leftover < 0
+      ? `negativeNoteDismissed:${activeOpening.opening_date}`
+      : null
+  useEffect(() => {
+    if (!negNoteKey) return
+    const t = setTimeout(() => {
+      let dismissed = false
+      try {
+        dismissed = !!localStorage.getItem(negNoteKey)
+      } catch {
+        // localStorage ใช้ไม่ได้ -> ถือว่ายังไม่เคยปิด
+      }
+      setNoteDismissedKey(dismissed ? negNoteKey : null)
+      setNoteCheckedKey(negNoteKey)
+    }, 0)
+    return () => clearTimeout(t)
+  }, [negNoteKey])
+  const showNegNote = !!negNoteKey && !!activeOpening && activeOpening.opening_date === period.start && noteCheckedKey === negNoteKey && noteDismissedKey !== negNoteKey
 
   // รายการในรอบ — ใช้ช่วงวันที่เดียวกับ hero ทุกส่วนของ Dashboard จึงตัวเลขตรงกัน
   const cycleTransactions = transactions.filter(t => t.date >= period.start && t.date <= period.end && t.date <= today)
@@ -356,6 +543,60 @@ export default function Dashboard() {
     <div className="p-4 md:p-6 bg-gray-50 min-h-screen">
       <h1 className="text-2xl font-bold text-gray-800 mb-6">ภาพรวม</h1>
 
+      {/* ถึงวันเงินเข้าแล้วแต่ยังไม่มีรายรับ -> ถามว่าเงินเข้าแล้วหรือยัง */}
+      {incomeCheck && (
+        <div className="bg-white rounded-xl p-4 shadow-sm mb-3 md:mb-4 flex flex-col md:flex-row md:items-center gap-3">
+          <p className="flex-1 text-sm text-gray-700 inline-flex items-center gap-2">
+            <Wallet size={18} className="text-[#1D9E75] shrink-0" />
+            วันที่ {formatThaiShortDate(incomeCheck.payday)} เงินเข้าแล้วหรือยัง?
+          </p>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={handleIncomeRecord}
+              className="flex-1 md:flex-none bg-[#1D9E75] text-white rounded-lg px-4 min-h-11 text-sm font-medium hover:bg-[#178a64] transition-colors"
+            >
+              บันทึกรายรับ
+            </button>
+            <button
+              type="button"
+              onClick={handleIncomeNotYet}
+              disabled={incomeCheckSaving}
+              className="flex-1 md:flex-none border border-gray-200 rounded-lg px-4 min-h-11 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+            >
+              ยังไม่เข้า
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* รอบก่อนติดลบ (ไม่หักจากรอบใหม่) */}
+      {showNegNote && activeOpening && activeOpening.leftover !== null && (
+        <div className="bg-white rounded-xl p-4 shadow-sm mb-3 md:mb-4 flex items-start gap-3">
+          <TriangleAlert size={18} className="text-[#D85A30] shrink-0 mt-0.5" />
+          <p className="flex-1 text-sm text-gray-700">
+            รอบก่อนติดลบ ฿{formatMoney(Math.abs(activeOpening.leftover))} อาจลืมจดรายรับ
+          </p>
+          <button
+            type="button"
+            aria-label="ปิด"
+            onClick={() => {
+              if (negNoteKey) {
+                try {
+                  localStorage.setItem(negNoteKey, "1")
+                } catch {
+                  // บันทึกไม่ได้ก็ปิดแค่ในรอบนี้
+                }
+              }
+              setNoteDismissedKey(negNoteKey)
+            }}
+            className="p-2 -mr-2 -mt-2 text-gray-400 hover:text-gray-600 rounded-lg shrink-0"
+          >
+            <X size={18} />
+          </button>
+        </div>
+      )}
+
       {/* จดย้อนหลังเสร็จแล้ว ให้เช็คยอดจริง */}
       {showBackfillCard && (
         <div className="bg-white rounded-xl p-4 shadow-sm mb-3 md:mb-4 flex items-start md:items-center gap-3">
@@ -456,6 +697,12 @@ export default function Dashboard() {
                 </p>
               )}
             </>
+          )}
+          {spend && activeOpening && activeOpening.source === "carryover" && activeOpening.leftover !== null && activeOpening.leftover > 0 && activeOpening.opening_date === period.start && (
+            <p className="text-xs opacity-90 mt-3">
+              เหลือจากรอบที่แล้ว ({formatThaiShortDate(activeOpening.leftover_from ?? prevStart)} – {formatThaiShortDate(prevEnd)}){" "}
+              <span className="font-semibold tabular-nums">฿{formatMoney(activeOpening.leftover)}</span>
+            </p>
           )}
           {spend && (
             <p className="text-xs opacity-90 mt-3">
@@ -807,6 +1054,16 @@ export default function Dashboard() {
       </div>
 
       <AdjustBalanceModal open={adjustOpen} onClose={() => setAdjustOpen(false)} />
+
+      <CarryOverModal
+        open={!!askCarry && carryModalClosedFor !== askCarry.payday}
+        leftover={askCarry?.leftover ?? 0}
+        prevRangeLabel={askCarry ? `${formatThaiShortDate(askCarry.prevStart)} – ${formatThaiShortDate(askCarry.prevEnd)}` : ""}
+        saving={carrySaving}
+        onCarry={(remember) => handleCarryChoice("mark", remember)}
+        onReset={(remember) => handleCarryChoice("reset", remember)}
+        onClose={() => { if (askCarry) setCarryModalClosedFor(askCarry.payday) }}
+      />
     </div>
   )
 }
