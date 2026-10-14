@@ -580,7 +580,7 @@ export default function Dashboard() {
           ) : (
             <div className="text-center py-8">
               <p className="text-sm text-gray-400">ยังไม่มีรอบเงินเดือน</p>
-              <Link href="/settings" className="text-xs text-[#378ADD] hover:underline mt-1 block">ตั้งค่ารอบเงินเดือน →</Link>
+              <Link href="/settings?tab=paycycles" className="text-xs text-[#378ADD] hover:underline mt-1 block">ตั้งค่ารายได้และรอบเงิน →</Link>
             </div>
           )}
         </div>

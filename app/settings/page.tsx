@@ -14,7 +14,7 @@ import { ChevronLeft, User, CalendarDays, Tag, RefreshCw, Target, Bell, Globe } 
 
 const menuItems = [
   { id: "profile", label: "โปรไฟล์", icon: User },
-  { id: "paycycles", label: "รอบเงินเดือน", icon: CalendarDays },
+  { id: "paycycles", label: "รายได้และรอบเงิน", icon: CalendarDays },
   { id: "categories", label: "หมวดหมู่", icon: Tag },
   { id: "recurring", label: "รายการซ้ำ", icon: RefreshCw },
   { id: "goals", label: "เป้าหมาย", icon: Target },

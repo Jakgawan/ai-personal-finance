@@ -44,14 +44,14 @@ const ROOT_SIMPLE: Tile[] = [
 ]
 
 const MORE_FULL: Tile[] = [
-  { kind: "link", label: "รอบเงินเดือน", icon: CalendarDays, href: "/settings?tab=paycycles" },
+  { kind: "link", label: "รายได้และรอบเงิน", icon: CalendarDays, href: "/settings?tab=paycycles" },
   { kind: "link", label: "หมวดหมู่", icon: Tag, href: "/settings?tab=categories" },
   { kind: "link", label: "รายการซ้ำ", icon: RefreshCw, href: "/settings?tab=recurring" },
   { kind: "placeholder", label: "เป้าหมาย", icon: Target },
 ]
 
 const MORE_SIMPLE: Tile[] = [
-  { kind: "link", label: "รอบเงินเดือน", icon: CalendarDays, href: "/settings?tab=paycycles" },
+  { kind: "link", label: "รายได้และรอบเงิน", icon: CalendarDays, href: "/settings?tab=paycycles" },
   { kind: "link", label: "หมวดหมู่", icon: Tag, href: "/settings?tab=categories" },
 ]
 
