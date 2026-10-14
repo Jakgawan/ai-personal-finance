@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest"
-import { getNextIncomeDate, nextMonthlyDate, todayInBangkok } from "./income-schedule"
+import {
+  getNextIncomeDate,
+  getPreviousIncomeDate,
+  nextMonthlyDate,
+  prevMonthlyDate,
+  todayInBangkok,
+} from "./income-schedule"
 
 const src = (days: number[]) => ({ schedule_type: "monthly_days", monthly_days: days })
 
@@ -65,6 +71,46 @@ describe("getNextIncomeDate", () => {
   it("month_end", () => {
     expect(getNextIncomeDate("2026-10-12", {})).toEqual({ date: "2026-11-01", source: "month_end" })
     expect(getNextIncomeDate("2026-12-31", {})).toEqual({ date: "2027-01-01", source: "month_end" })
+  })
+})
+
+describe("prevMonthlyDate", () => {
+  it("[5,20] picks latest <= today", () => {
+    expect(prevMonthlyDate([5, 20], "2026-10-22")).toBe("2026-10-20")
+    expect(prevMonthlyDate([5, 20], "2026-10-20")).toBe("2026-10-20") // วันนี้เงินเข้า
+    expect(prevMonthlyDate([5, 20], "2026-10-03")).toBe("2026-09-20")
+  })
+  it("[31] clamps to month length", () => {
+    expect(prevMonthlyDate([31], "2026-03-10")).toBe("2026-02-28")
+  })
+  it("clamps [30]/[29] into February", () => {
+    expect(prevMonthlyDate([30], "2026-03-01")).toBe("2026-02-28")
+    expect(prevMonthlyDate([29], "2028-03-01")).toBe("2028-02-29")
+  })
+  it("year rollover", () => {
+    expect(prevMonthlyDate([25], "2026-01-10")).toBe("2025-12-25")
+  })
+  it("no valid days -> null", () => {
+    expect(prevMonthlyDate([], "2026-10-10")).toBeNull()
+    expect(prevMonthlyDate([0, 32], "2026-10-10")).toBeNull()
+  })
+})
+
+describe("getPreviousIncomeDate", () => {
+  it("income_sources: max across sources", () => {
+    expect(getPreviousIncomeDate("2026-10-22", { incomeSources: [src([5]), src([20])] })).toEqual({
+      date: "2026-10-20",
+      source: "income_sources",
+    })
+  })
+  it("falls back to pay_cycles", () => {
+    expect(getPreviousIncomeDate("2026-10-22", { incomeSources: [], payCycles: [{ start_day: 25 }] })).toEqual({
+      date: "2026-09-25",
+      source: "pay_cycles",
+    })
+  })
+  it("none -> null", () => {
+    expect(getPreviousIncomeDate("2026-10-22", {})).toBeNull()
   })
 })
 

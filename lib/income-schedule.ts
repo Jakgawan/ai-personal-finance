@@ -47,6 +47,26 @@ export function nextMonthlyDate(days: number[], today: string): string | null {
   return best
 }
 
+// วันเงินเข้าแบบรายเดือน คืนวันที่ "ล่าสุดที่ไม่เกิน today" (วันนี้เงินเข้า = คืนวันนี้)
+// ดูย้อนหลัง 3 เดือน (เดือนนี้ เดือนก่อน และก่อนหน้านั้น) ข้ามปีได้; ไม่มีวันที่ใช้ได้ -> null
+export function prevMonthlyDate(days: number[], today: string): string | null {
+  const valid = days.filter(isValidDay)
+  if (valid.length === 0) return null
+  const [ty, tm] = today.split("-").map(Number)
+  let best: string | null = null
+  for (let offset = 0; offset <= 2; offset++) {
+    const idx = tm - 1 - offset
+    const y = ty + Math.floor(idx / 12) // idx ติดลบ -> floor ให้ปีลดลง
+    const m = (((idx % 12) + 12) % 12) + 1
+    const last = daysInMonth(y, m)
+    for (const day of valid) {
+      const date = `${y}-${pad2(m)}-${pad2(Math.min(day, last))}`
+      if (date <= today && (best === null || date > best)) best = date
+    }
+  }
+  return best
+}
+
 function isValidDateString(s: string | null | undefined): s is string {
   if (!s || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return false
   const [y, m, d] = s.split("-").map(Number)
@@ -92,6 +112,36 @@ export function getNextIncomeDate(
   const ny = m === 12 ? y + 1 : y
   const nm = m === 12 ? 1 : m + 1
   return { date: `${ny}-${pad2(nm)}-01`, source: "month_end" }
+}
+
+function maxDate(dates: (string | null)[]): string | null {
+  let best: string | null = null
+  for (const d of dates) {
+    if (d !== null && (best === null || d > best)) best = d
+  }
+  return best
+}
+
+// วันเงินเข้า "ครั้งล่าสุดที่ไม่เกินวันนี้" — ลำดับความสำคัญเหมือน getNextIncomeDate
+// ไม่มีทั้ง income_sources และ pay_cycles -> null (target_date / สิ้นเดือน ไม่มีความหมายของ "วันเงินเข้าครั้งก่อน")
+export function getPreviousIncomeDate(
+  today: string,
+  input: {
+    incomeSources?: IncomeSourceSchedule[] | null
+    payCycles?: PayCycleLike[] | null
+  }
+): { date: string; source: "income_sources" | "pay_cycles" } | null {
+  const fromSources = maxDate(
+    (input.incomeSources ?? [])
+      .filter((s) => s.schedule_type === "monthly_days")
+      .map((s) => prevMonthlyDate(s.monthly_days ?? [], today))
+  )
+  if (fromSources) return { date: fromSources, source: "income_sources" }
+
+  const fromCycles = maxDate((input.payCycles ?? []).map((c) => prevMonthlyDate([c.start_day], today)))
+  if (fromCycles) return { date: fromCycles, source: "pay_cycles" }
+
+  return null
 }
 
 // 'YYYY-MM-DD' -> '25 ต.ค. 2569' (ปี พ.ศ.) สร้าง Date ที่เที่ยง UTC กันวันเลื่อน
