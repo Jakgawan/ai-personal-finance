@@ -19,6 +19,8 @@ type IncomeSource = {
 
 type OpeningRow = { id: string; entered_amount: number; opening_date: string; source: string; created_at: string }
 
+type CarryPref = "ask" | "carry" | "reset"
+
 type Frequency = "once" | "twice" | "custom"
 
 const ALL_DAYS: number[] = Array.from({ length: 31 }, (_, i) => i + 1)
@@ -49,6 +51,8 @@ export default function IncomeSourcesSection() {
   const [payCycles, setPayCycles] = useState<{ start_day: number }[]>([])
   const [openingRows, setOpeningRows] = useState<OpeningRow[]>([])
   const [adjustOpen, setAdjustOpen] = useState(false)
+  const [carryPref, setCarryPref] = useState<CarryPref>("ask")
+  const [prefSaving, setPrefSaving] = useState(false)
 
   const [formOpen, setFormOpen] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
@@ -72,7 +76,7 @@ export default function IncomeSourcesSection() {
         .select("id, name, amount, schedule_type, monthly_days")
         .eq("user_id", user.id)
         .order("created_at"),
-      supabase.from("financial_profile").select("target_date").eq("user_id", user.id).maybeSingle(),
+      supabase.from("financial_profile").select("target_date, carryover_pref").eq("user_id", user.id).maybeSingle(),
       supabase.from("pay_cycles").select("start_day").eq("user_id", user.id),
       supabase.from("opening_balances").select("id, entered_amount, opening_date, source, created_at").eq("user_id", user.id),
     ])
@@ -97,6 +101,8 @@ export default function IncomeSourcesSection() {
       const td = (profRes.data?.target_date as string | null | undefined) ?? null
       setTargetDate(td)
       setTargetInput(td ?? "")
+      const cp = profRes.data?.carryover_pref as CarryPref | null | undefined
+      setCarryPref(cp === "carry" || cp === "reset" ? cp : "ask")
     }
     setLoaded(true)
   }, [])
@@ -243,6 +249,32 @@ export default function IncomeSourcesSection() {
     setTargetInput(value ?? "")
   }
 
+  // เปลี่ยนวิธีจัดการตอนขึ้นรอบใหม่ — "ask" เก็บเป็น null (ถามทุกครั้ง); บันทึกพลาดแล้วคืนค่าเดิม
+  const savePref = async (value: CarryPref) => {
+    if (prefSaving || value === carryPref) return
+    const before = carryPref
+    setCarryPref(value)
+    setPrefSaving(true)
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      setPrefSaving(false)
+      setCarryPref(before)
+      showToast("บันทึกไม่สำเร็จ ลองใหม่อีกครั้ง", "error")
+      return
+    }
+    const { error } = await supabase.from("financial_profile").upsert(
+      { user_id: user.id, carryover_pref: value === "ask" ? null : value, updated_at: new Date().toISOString() },
+      { onConflict: "user_id" }
+    )
+    setPrefSaving(false)
+    if (error) {
+      setCarryPref(before)
+      showToast("บันทึกไม่สำเร็จ ลองใหม่อีกครั้ง", "error")
+      return
+    }
+    showToast("บันทึกแล้ว", "success")
+  }
+
   const activeOpening = pickActiveOpening(openingRows)
   const today = todayInBangkok()
   const showContent = loaded && !loadFailed
@@ -281,7 +313,12 @@ export default function IncomeSourcesSection() {
         <div className="bg-white rounded-xl card-padding-token shadow-sm mb-4 flex items-center justify-between gap-3">
           <div className="min-w-0">
             <h3 className="text-sm font-medium text-gray-700">ยอดเงินตั้งต้น</h3>
-            {activeOpening ? (
+            {activeOpening && activeOpening.source === "carryover" ? (
+              <p className="text-sm text-gray-800 mt-1">
+                เริ่มรอบใหม่ {formatDateLabel(activeOpening.opening_date)}
+                <span className="text-xs text-gray-400"> (ไม่ยกยอด)</span>
+              </p>
+            ) : activeOpening ? (
               <p className="text-sm text-gray-800 mt-1">
                 <span className="font-semibold tabular-nums">฿{activeOpening.entered_amount.toLocaleString()}</span>
                 <span className="text-xs text-gray-400"> {activeOpening.source === "onboarding_backfill" ? `ยอด ณ ต้นวันที่ ${formatDateLabel(activeOpening.opening_date)}` : `ตั้งเมื่อ ${formatDateLabel(todayInBangkok(new Date(activeOpening.created_at)))}`}</span>
@@ -298,6 +335,34 @@ export default function IncomeSourcesSection() {
             <Scale size={16} />
             ปรับยอดเงิน
           </button>
+        </div>
+      )}
+
+      {showContent && (
+        <div className="bg-white rounded-xl card-padding-token shadow-sm mb-4">
+          <h3 className="text-sm font-medium text-gray-700">เมื่อขึ้นรอบใหม่</h3>
+          <p className="text-xs text-gray-400 mt-1 mb-3">เงินที่เหลือจากรอบก่อน จะให้ยกมารวมกับรอบใหม่ไหม</p>
+          <div role="radiogroup" aria-label="เมื่อขึ้นรอบใหม่" className="grid grid-cols-3 gap-1 p-1 bg-gray-100 rounded-lg">
+            {([
+              { value: "ask", label: "ถามทุกครั้ง" },
+              { value: "carry", label: "ยกยอดเสมอ" },
+              { value: "reset", label: "ไม่ยกยอดเสมอ" },
+            ] as const).map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                role="radio"
+                aria-checked={carryPref === opt.value}
+                disabled={prefSaving}
+                onClick={() => savePref(opt.value)}
+                className={`py-2 rounded-md text-xs sm:text-sm font-medium transition-colors ${
+                  carryPref === opt.value ? "bg-[#1D9E75] text-white" : "text-gray-600 hover:bg-white"
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
         </div>
       )}
 
