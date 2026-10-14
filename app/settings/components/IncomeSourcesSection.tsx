@@ -4,8 +4,10 @@ import { useState, useEffect, useCallback } from "react"
 import { supabase } from "@/lib/supabase"
 import { showToast } from "@/app/components/Toast"
 import ConfirmModal from "@/app/components/ConfirmModal"
-import { getNextIncomeDate, todayInBangkok } from "@/lib/income-schedule"
-import { Plus, Pencil, Trash2, CalendarClock } from "lucide-react"
+import { getNextIncomeDate, todayInBangkok, formatDateLabel } from "@/lib/income-schedule"
+import { Plus, Pencil, Trash2, CalendarClock, Scale } from "lucide-react"
+import AdjustBalanceModal from "@/app/components/AdjustBalanceModal"
+import { pickActiveOpening } from "@/lib/opening-balance"
 
 type IncomeSource = {
   id: string
@@ -15,20 +17,11 @@ type IncomeSource = {
   monthly_days: number[] | null
 }
 
+type OpeningRow = { id: string; entered_amount: number; opening_date: string; source: string; created_at: string }
+
 type Frequency = "once" | "twice" | "custom"
 
 const ALL_DAYS: number[] = Array.from({ length: 31 }, (_, i) => i + 1)
-
-// 'YYYY-MM-DD' -> '25 ต.ค. 2569' (ปี พ.ศ. ตรงกับส่วนอื่นของแอป) สร้าง Date ที่เที่ยง UTC กันวันเลื่อน
-function formatDateLabel(dateStr: string): string {
-  const [y, m, d] = dateStr.split("-").map(Number)
-  return new Date(Date.UTC(y, m - 1, d, 12)).toLocaleDateString("th-TH", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    timeZone: "Asia/Bangkok",
-  })
-}
 
 // [5,20] -> 'ทุกวันที่ 5 และ 20 ของเดือน'
 function describeDays(days: number[] | null): string {
@@ -54,6 +47,8 @@ export default function IncomeSourcesSection() {
   const [loaded, setLoaded] = useState(false)
   const [loadFailed, setLoadFailed] = useState(false)
   const [payCycles, setPayCycles] = useState<{ start_day: number }[]>([])
+  const [openingRows, setOpeningRows] = useState<OpeningRow[]>([])
+  const [adjustOpen, setAdjustOpen] = useState(false)
 
   const [formOpen, setFormOpen] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
@@ -71,7 +66,7 @@ export default function IncomeSourcesSection() {
   const load = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
-    const [srcRes, profRes, cycRes] = await Promise.all([
+    const [srcRes, profRes, cycRes, obRes] = await Promise.all([
       supabase
         .from("income_sources")
         .select("id, name, amount, schedule_type, monthly_days")
@@ -79,12 +74,16 @@ export default function IncomeSourcesSection() {
         .order("created_at"),
       supabase.from("financial_profile").select("target_date").eq("user_id", user.id).maybeSingle(),
       supabase.from("pay_cycles").select("start_day").eq("user_id", user.id),
+      supabase.from("opening_balances").select("id, entered_amount, opening_date, source, created_at").eq("user_id", user.id),
     ])
-    const failed = !!(srcRes.error || profRes.error || cycRes.error)
+    const failed = !!(srcRes.error || profRes.error || cycRes.error || obRes.error)
     if (failed) {
       showToast("โหลดข้อมูลไม่สำเร็จ", "error")
     }
     setLoadFailed(failed)
+    if (!obRes.error) {
+      setOpeningRows(((obRes.data ?? []) as OpeningRow[]).map((r) => ({ ...r, entered_amount: Number(r.entered_amount) })))
+    }
     if (!cycRes.error) setPayCycles((cycRes.data ?? []) as { start_day: number }[])
     if (!srcRes.error) {
       setSources(
@@ -244,6 +243,7 @@ export default function IncomeSourcesSection() {
     setTargetInput(value ?? "")
   }
 
+  const activeOpening = pickActiveOpening(openingRows)
   const today = todayInBangkok()
   const showContent = loaded && !loadFailed
   const next = showContent ? getNextIncomeDate(today, { incomeSources: sources, payCycles, targetDate }) : null
@@ -276,6 +276,30 @@ export default function IncomeSourcesSection() {
   return (
     <div className="max-w-lg">
       <h2 className="text-heading-token text-gray-800 mb-2">รายได้และรอบเงิน</h2>
+
+      {showContent && (
+        <div className="bg-white rounded-xl card-padding-token shadow-sm mb-4 flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <h3 className="text-sm font-medium text-gray-700">ยอดเงินตั้งต้น</h3>
+            {activeOpening ? (
+              <p className="text-sm text-gray-800 mt-1">
+                <span className="font-semibold tabular-nums">฿{activeOpening.entered_amount.toLocaleString()}</span>
+                <span className="text-xs text-gray-400"> {activeOpening.source === "onboarding_backfill" ? `ยอด ณ ต้นวันที่ ${formatDateLabel(activeOpening.opening_date)}` : `ตั้งเมื่อ ${formatDateLabel(todayInBangkok(new Date(activeOpening.created_at)))}`}</span>
+              </p>
+            ) : (
+              <p className="text-sm text-gray-400 mt-1">ยังไม่ได้ตั้ง</p>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => setAdjustOpen(true)}
+            className="shrink-0 inline-flex items-center gap-1.5 px-4 text-sm border border-[#1D9E75] text-[#1D9E75] rounded-lg btn-height-token hover:bg-green-50 transition-colors"
+          >
+            <Scale size={16} />
+            ปรับยอดเงิน
+          </button>
+        </div>
+      )}
 
       <div className="bg-white rounded-xl card-padding-token shadow-sm">
         <h3 className="text-sm font-medium text-gray-700">รายได้ประจำ</h3>
@@ -498,6 +522,8 @@ export default function IncomeSourcesSection() {
           </div>
         </div>
       )}
+
+      <AdjustBalanceModal open={adjustOpen} onClose={() => setAdjustOpen(false)} onSaved={() => load()} />
 
       <ConfirmModal
         open={deleteTarget !== null}

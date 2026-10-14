@@ -4,7 +4,10 @@ import { useState, useEffect, useCallback } from "react"
 import { supabase } from "@/lib/supabase"
 import Link from "next/link"
 import { formatDate } from "@/lib/utils"
-import { Plus, Lightbulb } from "lucide-react"
+import { Plus, Lightbulb, Scale, X } from "lucide-react"
+import AdjustBalanceModal from "@/app/components/AdjustBalanceModal"
+import { showToast } from "@/app/components/Toast"
+import { pickActiveOpening } from "@/lib/opening-balance"
 import CategoryIcon from "@/app/components/CategoryIcon"
 import { todayLocal } from "@/lib/recurring"
 import { calcDailyBudget, pickInsight, formatMoney, resolveCycleRange } from "@/lib/daily-budget"
@@ -40,6 +43,14 @@ type Asset = {
   name: string
   asset_group: string
   value: number
+}
+
+type OpeningRow = {
+  id: string
+  amount: number
+  opening_date: string
+  source: string
+  created_at: string
 }
 
 const COLORS = ["#1D9E75", "#D85A30", "#378ADD", "#F59E0B", "#8B5CF6", "#EC4899", "#6B7280"]
@@ -123,6 +134,55 @@ export default function Dashboard() {
   const [chartMode, setChartMode] = useState<"bar" | "donut" | "column" | "table">("bar")
   const [loading, setLoading] = useState(true)
   const [categories, setCategories] = useState<CategoryInfo[]>([])
+  const [openingRows, setOpeningRows] = useState<OpeningRow[]>([])
+  const [openingLoaded, setOpeningLoaded] = useState(false)
+  const [adjustOpen, setAdjustOpen] = useState(false)
+  const [dismissedId, setDismissedId] = useState<string | null>(null)
+  const [dismissCheckedKey, setDismissCheckedKey] = useState<string | null>(null)
+
+  // โหลดยอดเงินตั้งต้น (งาน 4: เก็บข้อมูลและจุดเข้าปรับยอดเท่านั้น ยังไม่ใช้คำนวณ)
+  const fetchOpening = useCallback(async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+    const { data, error } = await supabase
+      .from("opening_balances")
+      .select("id, amount, opening_date, source, created_at")
+      .eq("user_id", user.id)
+    if (error) {
+      showToast("โหลดยอดเงินตั้งต้นไม่สำเร็จ", "error")
+      return
+    }
+    setOpeningRows(((data || []) as OpeningRow[]).map(r => ({ ...r, amount: Number(r.amount) })))
+    setOpeningLoaded(true)
+  }, [])
+
+  useEffect(() => {
+    fetchOpening()
+  }, [fetchOpening])
+
+  useEffect(() => {
+    const handler = () => { fetchOpening() }
+    window.addEventListener("openingBalanceChanged", handler)
+    return () => window.removeEventListener("openingBalanceChanged", handler)
+  }, [fetchOpening])
+
+  const activeOpening = pickActiveOpening(openingRows)
+  const dismissKey = activeOpening ? `backfillCardDismissed:${activeOpening.id}` : null
+  useEffect(() => {
+    if (!dismissKey) return
+    const t = setTimeout(() => {
+      let dismissed = false
+      try {
+        dismissed = !!localStorage.getItem(dismissKey)
+      } catch {
+        // localStorage ใช้ไม่ได้ (เช่น โหมดส่วนตัว) -> ถือว่ายังไม่เคยปิด
+      }
+      setDismissedId(dismissed ? dismissKey : null)
+      setDismissCheckedKey(dismissKey)
+    }, 0)
+    return () => clearTimeout(t)
+  }, [dismissKey])
+  const showBackfillCard = !!activeOpening && activeOpening.source === "onboarding_backfill" && dismissCheckedKey === dismissKey && dismissedId !== dismissKey
 
   // ดึงข้อมูลทั้งหมด — แยกเป็น callback เพื่อเรียกซ้ำได้ตอนบันทึกรายการใหม่ (event transactionAdded)
   const fetchData = useCallback(async () => {
@@ -277,6 +337,59 @@ export default function Dashboard() {
     <div className="p-4 md:p-6 bg-gray-50 min-h-screen">
       <h1 className="text-2xl font-bold text-gray-800 mb-6">ภาพรวม</h1>
 
+      {/* ยังไม่เคยตั้งยอดเงิน (ผู้ใช้เดิม) */}
+      {openingLoaded && !activeOpening && (
+        <div className="bg-white rounded-xl p-4 shadow-sm mb-3 md:mb-4 flex flex-col md:flex-row md:items-center gap-3">
+          <span className="w-9 h-9 rounded-full bg-green-50 text-[#1D9E75] flex items-center justify-center shrink-0">
+            <Scale size={18} />
+          </span>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-gray-800">ตั้งยอดเงินตอนนี้</p>
+            <p className="text-xs text-gray-500 mt-0.5">บอกแอปว่าตอนนี้มีเงินใช้ได้เท่าไหร่ เพื่อดูว่าแต่ละวันใช้ได้เท่าไหร่</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setAdjustOpen(true)}
+            className="bg-[#1D9E75] text-white rounded-lg px-4 min-h-11 text-sm font-medium hover:bg-[#178a64] transition-colors"
+          >
+            ตั้งยอดเงิน
+          </button>
+        </div>
+      )}
+
+      {/* จดย้อนหลังเสร็จแล้ว ให้เช็คยอดจริง */}
+      {showBackfillCard && (
+        <div className="bg-white rounded-xl p-4 shadow-sm mb-3 md:mb-4 flex items-start md:items-center gap-3">
+          <div className="flex-1 min-w-0 flex flex-col md:flex-row md:items-center gap-3">
+            <p className="flex-1 text-sm text-gray-700">จดย้อนหลังเสร็จแล้ว? เช็คยอดจริงตอนนี้</p>
+            <button
+              type="button"
+              onClick={() => setAdjustOpen(true)}
+              className="self-start bg-[#1D9E75] text-white rounded-lg px-4 min-h-11 text-sm font-medium hover:bg-[#178a64] transition-colors"
+            >
+              ปรับยอดเงิน
+            </button>
+          </div>
+          <button
+            type="button"
+            aria-label="ปิด"
+            onClick={() => {
+              if (dismissKey) {
+                try {
+                  localStorage.setItem(dismissKey, "1")
+                } catch {
+                  // บันทึกไม่ได้ก็ปิดแค่ในรอบนี้
+                }
+              }
+              setDismissedId(dismissKey)
+            }}
+            className="p-2 -mr-2 -mt-1 md:mt-0 text-gray-400 hover:text-gray-600 rounded-lg shrink-0"
+          >
+            <X size={18} />
+          </button>
+        </div>
+      )}
+
       {/* Hero + บันทึกด่วน — mobile เรียงบนลงล่าง, desktop (md+) แบ่ง 2 คอลัมน์ */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4 mb-3 md:mb-4">
         {/* Hero: ใช้ได้วันนี้ */}
@@ -331,6 +444,15 @@ export default function Dashboard() {
                 เหลืออีก {budget.daysLeftInclToday} วันในรอบ
               </p>
             </>
+          )}
+          {activeOpening && (
+            <button
+              type="button"
+              onClick={() => setAdjustOpen(true)}
+              className="self-start mt-3 text-xs text-white/90 underline underline-offset-2 hover:text-white inline-flex items-center gap-1"
+            >
+              <Scale size={12} /> ปรับยอดเงิน
+            </button>
           )}
         </div>
 
@@ -665,6 +787,7 @@ export default function Dashboard() {
         )}
       </div>
 
+      <AdjustBalanceModal open={adjustOpen} onClose={() => setAdjustOpen(false)} />
     </div>
   )
 }
