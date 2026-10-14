@@ -93,3 +93,21 @@ export function getNextIncomeDate(
   const nm = m === 12 ? 1 : m + 1
   return { date: `${ny}-${pad2(nm)}-01`, source: "month_end" }
 }
+
+// 'YYYY-MM-DD' -> '25 ต.ค. 2569' (ปี พ.ศ.) สร้าง Date ที่เที่ยง UTC กันวันเลื่อน
+export function formatDateLabel(dateStr: string): string {
+  const [y, m, d] = dateStr.split("-").map(Number)
+  return new Date(Date.UTC(y, m - 1, d, 12)).toLocaleDateString("th-TH", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: "Asia/Bangkok",
+  })
+}
+
+// บวก/ลบวันจาก 'YYYY-MM-DD'
+export function addDays(dateStr: string, n: number): string {
+  const [y, m, d] = dateStr.split("-").map(Number)
+  const dt = new Date(Date.UTC(y, m - 1, d + n))
+  return `${dt.getUTCFullYear()}-${pad2(dt.getUTCMonth() + 1)}-${pad2(dt.getUTCDate())}`
+}
