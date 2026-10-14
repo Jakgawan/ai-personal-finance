@@ -3,6 +3,7 @@
 // วันที่เป็น string 'YYYY-MM-DD' เทียบด้วย string ตรงๆ ได้
 
 import { addDays } from "./income-schedule"
+import type { DailyBudget } from "./daily-budget"
 
 // รายการเงินเข้า-ออก (type เป็น "income" หรือ "expense")
 export type Tx = { date: string; type: string; amount: number | string }
@@ -40,7 +41,7 @@ function roundZero(x: number): number {
 }
 
 // จำนวนวันจาก b ถึง a (a − b) คำนวณผ่าน Date.UTC กัน timezone ทำวันเลื่อน
-function dayDiff(a: string, b: string): number {
+export function dayDiff(a: string, b: string): number {
   const [ay, am, ad] = a.split("-").map(Number)
   const [by, bm, bd] = b.split("-").map(Number)
   return Math.round((Date.UTC(ay, am - 1, ad) - Date.UTC(by, bm - 1, bd)) / 86400000)
@@ -139,5 +140,29 @@ export function getCurrentPeriod(
     start,
     end: addDays(nextIncomeDate, -1),
     daysLeftInclToday: Math.max(1, dayDiff(nextIncomeDate, today)),
+  }
+}
+
+// แปลงผลสูตรใหม่ให้เป็นรูปแบบ DailyBudget เดิม เพื่อใช้กับ pickInsight (ไม่ต้องแก้ฟังก์ชันนั้น)
+export function toLegacyBudget(
+  spend: Spendable,
+  period: { start: string; end: string },
+  cycle: { income: number; expense: number; balance: number }
+): DailyBudget {
+  const state = spend.state === "negative" ? "cycle-negative" : spend.state
+  return {
+    cycleStart: period.start,
+    cycleEnd: period.end,
+    daysLeftInclToday: spend.daysLeftInclToday,
+    cycleIncome: cycle.income,
+    cycleExpense: cycle.expense,
+    cycleBalance: cycle.balance,
+    todayExpense: spend.todayExpense,
+    expenseBeforeToday: spend.expenseBeforeToday,
+    startOfTodayBalance: spend.startOfTodayBalance,
+    todayBudget: spend.todayBudget,
+    availableToday: spend.availableToday,
+    state,
+    tomorrowBudget: spend.tomorrowBudget,
   }
 }

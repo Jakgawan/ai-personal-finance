@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { calcSpendable, getCurrentPeriod } from "./spendable"
+import { calcSpendable, getCurrentPeriod, toLegacyBudget } from "./spendable"
 
 const inc = (date: string, amount: number) => ({ date, type: "income", amount })
 const exp = (date: string, amount: number) => ({ date, type: "expense", amount })
@@ -188,5 +188,23 @@ describe("getCurrentPeriod", () => {
       end: "2026-10-31",
       daysLeftInclToday: 10,
     })
+  })
+})
+
+describe("toLegacyBudget", () => {
+  it("maps negative state and fields", () => {
+    const spend = calcSpendable({
+      today: "2026-10-14",
+      opening: { amount: 100, opening_date: "2026-10-14" },
+      transactions: [exp("2026-10-14", 300)],
+      nextIncomeDate: "2026-10-20",
+    })
+    const b = toLegacyBudget(spend, { start: "2026-10-05", end: "2026-10-19" }, { income: 0, expense: 300, balance: -300 })
+    expect(b.state).toBe("cycle-negative")
+    expect(b.cycleStart).toBe("2026-10-05")
+    expect(b.cycleEnd).toBe("2026-10-19")
+    expect(b.cycleExpense).toBe(300)
+    expect(b.daysLeftInclToday).toBe(spend.daysLeftInclToday)
+    expect(b.tomorrowBudget).toBe(spend.tomorrowBudget)
   })
 })

@@ -9,8 +9,9 @@ import AdjustBalanceModal from "@/app/components/AdjustBalanceModal"
 import { showToast } from "@/app/components/Toast"
 import { pickActiveOpening } from "@/lib/opening-balance"
 import CategoryIcon from "@/app/components/CategoryIcon"
-import { todayLocal } from "@/lib/recurring"
-import { calcDailyBudget, pickInsight, formatMoney, resolveCycleRange } from "@/lib/daily-budget"
+import { pickInsight, formatMoney, formatThaiShortDate } from "@/lib/daily-budget"
+import { todayInBangkok, addDays, getNextIncomeDate, getPreviousIncomeDate, type IncomeSourceSchedule } from "@/lib/income-schedule"
+import { calcSpendable, getCurrentPeriod, toLegacyBudget, dayDiff } from "@/lib/spendable"
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend
@@ -120,6 +121,10 @@ function calcFinancialScore(
   return { score: Math.max(0, Math.min(100, score)), details }
 }
 
+// แสดงเงินแบบมีเครื่องหมาย: ติดลบ -> -฿X, ใกล้ 0 (< 0.5) -> ฿0
+const signedMoney = (x: number): string =>
+  Math.abs(x) < 0.5 ? "฿0" : x < 0 ? `-฿${formatMoney(Math.abs(x))}` : `฿${formatMoney(x)}`
+
 const getScoreColor = (score: number) => {
   if (score >= 80) return { text: "text-[#1D9E75]", label: "ยอดเยี่ยม" }
   if (score >= 60) return { text: "text-[#378ADD]", label: "ดี" }
@@ -134,8 +139,11 @@ export default function Dashboard() {
   const [chartMode, setChartMode] = useState<"bar" | "donut" | "column" | "table">("bar")
   const [loading, setLoading] = useState(true)
   const [categories, setCategories] = useState<CategoryInfo[]>([])
+  const [incomeSources, setIncomeSources] = useState<IncomeSourceSchedule[]>([])
+  const [targetDate, setTargetDate] = useState<string | null>(null)
   const [openingRows, setOpeningRows] = useState<OpeningRow[]>([])
   const [openingLoaded, setOpeningLoaded] = useState(false)
+  const [openingError, setOpeningError] = useState(false)
   const [adjustOpen, setAdjustOpen] = useState(false)
   const [dismissedId, setDismissedId] = useState<string | null>(null)
   const [dismissCheckedKey, setDismissCheckedKey] = useState<string | null>(null)
@@ -144,12 +152,14 @@ export default function Dashboard() {
   const fetchOpening = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
+    setOpeningError(false)
     const { data, error } = await supabase
       .from("opening_balances")
       .select("id, amount, opening_date, source, created_at")
       .eq("user_id", user.id)
     if (error) {
       showToast("โหลดยอดเงินตั้งต้นไม่สำเร็จ", "error")
+      setOpeningError(true)
       return
     }
     setOpeningRows(((data || []) as OpeningRow[]).map(r => ({ ...r, amount: Number(r.amount) })))
@@ -188,13 +198,20 @@ export default function Dashboard() {
   const fetchData = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
-    const [{ data: txData }, { data: cycleData }, { data: assetData }, { data: liabData }, { data: catData }] = await Promise.all([
+    const [{ data: txData }, { data: cycleData }, { data: assetData }, { data: liabData }, { data: catData }, { data: srcData, error: srcError }, { data: profData, error: profError }] = await Promise.all([
       supabase.from("transactions").select("*").eq("user_id", user.id).order("date", { ascending: false }),
       supabase.from("pay_cycles").select("*").eq("user_id", user.id),
       supabase.from("assets").select("*").eq("user_id", user.id),
       supabase.from("liabilities_long").select("balance").eq("user_id", user.id),
       supabase.from("categories").select("name, icon, color").eq("user_id", user.id),
+      supabase.from("income_sources").select("schedule_type, monthly_days").eq("user_id", user.id),
+      supabase.from("financial_profile").select("target_date").eq("user_id", user.id).maybeSingle(),
     ])
+    if (srcError || profError) {
+      showToast("โหลดข้อมูลไม่สำเร็จ", "error")
+    }
+    setIncomeSources((srcData || []) as IncomeSourceSchedule[])
+    setTargetDate((profData as { target_date: string | null } | null)?.target_date ?? null)
     setTransactions(txData || [])
     setCycles(cycleData || [])
     setAssets(assetData || [])
@@ -214,49 +231,51 @@ export default function Dashboard() {
     return () => window.removeEventListener("transactionAdded", handler)
   }, [fetchData])
 
-  const today = new Date()
-  const currentDay = today.getDate()
-  const currentMonth = today.getMonth()
-  const currentYear = today.getFullYear()
+  const now = new Date()
+  const currentMonth = now.getMonth()
+  const currentYear = now.getFullYear()
 
-  const activeCycle = cycles.find(c => {
-    if (c.start_day > c.end_day) return currentDay >= c.start_day || currentDay <= c.end_day
-    return currentDay >= c.start_day && currentDay <= c.end_day
-  }) || cycles[0] || null
-
-  // ---- ตัดสินช่วงรอบ "ที่เดียว" ให้ทุกส่วนของ Dashboard ใช้ร่วมกัน ----
-  // ถ้ามีรอบเงินเดือนและวันนี้อยู่ในช่วงของรอบนั้นจริง ใช้รอบนั้น ไม่งั้น (ไม่มีรอบ / fallback cycles[0] ที่วันนี้ไม่อยู่ในช่วง) ใช้เดือนปฏิทิน
-  const todayStr = todayLocal()
-  const cycleRange = activeCycle ? resolveCycleRange(activeCycle.start_day, activeCycle.end_day, todayStr) : null
-  const budget = calcDailyBudget(
-    transactions,
-    cycleRange ? cycleRange.start : null,
-    cycleRange ? cycleRange.end : null,
-    todayStr
-  )
+  // ---- ตัดสินช่วงรอบ "ที่เดียว" ให้ทุกส่วนของ Dashboard ใช้ร่วมกัน (วันเงินเข้าล่าสุด ถึงวันก่อนเงินเข้าครั้งถัดไป) ----
+  const today = todayInBangkok()
+  const next = getNextIncomeDate(today, { incomeSources, payCycles: cycles, targetDate })
+  const prev = getPreviousIncomeDate(today, { incomeSources, payCycles: cycles })
+  const period = getCurrentPeriod(today, prev?.date ?? null, next.date, activeOpening?.opening_date ?? today)
+  const spend = activeOpening
+    ? calcSpendable({
+        today,
+        opening: { amount: activeOpening.amount, opening_date: activeOpening.opening_date },
+        transactions,
+        nextIncomeDate: next.date,
+      })
+    : null
 
   // รายการในรอบ — ใช้ช่วงวันที่เดียวกับ hero ทุกส่วนของ Dashboard จึงตัวเลขตรงกัน
-  const cycleTransactions = transactions.filter(t => t.date >= budget.cycleStart && t.date <= budget.cycleEnd)
+  const cycleTransactions = transactions.filter(t => t.date >= period.start && t.date <= period.end && t.date <= today)
+  const sumType = (txs: Transaction[], type: string): number =>
+    txs.filter(t => t.type === type).reduce((s, t) => s + Number(t.amount), 0)
 
-  const cycleIncome = budget.cycleIncome
-  const cycleExpense = budget.cycleExpense
-  const cycleBalance = budget.cycleBalance
+  const cycleIncome = sumType(cycleTransactions, "income")
+  const cycleExpense = sumType(cycleTransactions, "expense")
+  const cycleBalance = cycleIncome - cycleExpense
 
-  const insight = pickInsight(transactions, budget, todayStr)
-  const todayTransactions = transactions.filter(t => t.date === todayStr)
+  const insight = spend
+    ? pickInsight(transactions, toLegacyBudget(spend, period, { income: cycleIncome, expense: cycleExpense, balance: cycleBalance }), today)
+    : null
+  const todayTransactions = transactions.filter(t => t.date === today)
   const todayTop5 = todayTransactions.slice(0, 5)
   const categoryByName = new Map(categories.map(c => [c.name, c]))
-  const spentPct = budget.todayBudget > 0 ? Math.min(100, (budget.todayExpense / budget.todayBudget) * 100) : 100
+  const spentPct = spend && spend.todayBudget > 0 ? Math.min(100, (spend.todayExpense / spend.todayBudget) * 100) : 100
 
   const totalLiabilities = liabilities.reduce((s, l) => s + Number(l.balance), 0)
   const { score: financialScore, details: scoreDetails } = calcFinancialScore(cycleIncome, cycleExpense, cycleBalance, assets, transactions, totalLiabilities)
   const scoreColor = getScoreColor(financialScore)
 
-  const prevMonth = currentMonth === 0 ? 11 : currentMonth - 1
-  const prevYear = currentMonth === 0 ? currentYear - 1 : currentYear
-  const prevTx = transactions.filter(t => t.date?.startsWith(`${prevYear}-${String(prevMonth + 1).padStart(2, "0")}`))
-  const prevIncome = prevTx.filter(t => t.type === "income").reduce((s, t) => s + Number(t.amount), 0)
-  const prevExpense = prevTx.filter(t => t.type === "expense").reduce((s, t) => s + Number(t.amount), 0)
+  // รอบก่อนหน้า: จบวันก่อนเริ่มรอบนี้ เริ่มที่วันเงินเข้าครั้งก่อนหน้านั้น (ไม่มี -> วันแรกของเดือน)
+  const prevEnd = addDays(period.start, -1)
+  const prevStart = getPreviousIncomeDate(prevEnd, { incomeSources, payCycles: cycles })?.date ?? `${prevEnd.slice(0, 7)}-01`
+  const prevTx = transactions.filter(t => t.date >= prevStart && t.date <= prevEnd && t.date <= today)
+  const prevIncome = sumType(prevTx, "income")
+  const prevExpense = sumType(prevTx, "expense")
 
   const pctChange = (current: number, prev: number) => {
     if (prev === 0) return null
@@ -298,7 +317,7 @@ export default function Dashboard() {
     return { ...t, balance: bal }
   })
 
-  if (loading) {
+  if (loading || (!openingLoaded && !openingError)) {
     return (
       <div className="p-4 md:p-6 bg-gray-50 min-h-screen animate-pulse">
         <div className="h-7 w-32 bg-gray-200 rounded mb-6" />
@@ -336,26 +355,6 @@ export default function Dashboard() {
   return (
     <div className="p-4 md:p-6 bg-gray-50 min-h-screen">
       <h1 className="text-2xl font-bold text-gray-800 mb-6">ภาพรวม</h1>
-
-      {/* ยังไม่เคยตั้งยอดเงิน (ผู้ใช้เดิม) */}
-      {openingLoaded && !activeOpening && (
-        <div className="bg-white rounded-xl p-4 shadow-sm mb-3 md:mb-4 flex flex-col md:flex-row md:items-center gap-3">
-          <span className="w-9 h-9 rounded-full bg-green-50 text-[#1D9E75] flex items-center justify-center shrink-0">
-            <Scale size={18} />
-          </span>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-gray-800">ตั้งยอดเงินตอนนี้</p>
-            <p className="text-xs text-gray-500 mt-0.5">บอกแอปว่าตอนนี้มีเงินใช้ได้เท่าไหร่ เพื่อดูว่าแต่ละวันใช้ได้เท่าไหร่</p>
-          </div>
-          <button
-            type="button"
-            onClick={() => setAdjustOpen(true)}
-            className="bg-[#1D9E75] text-white rounded-lg px-4 min-h-11 text-sm font-medium hover:bg-[#178a64] transition-colors"
-          >
-            ตั้งยอดเงิน
-          </button>
-        </div>
-      )}
 
       {/* จดย้อนหลังเสร็จแล้ว ให้เช็คยอดจริง */}
       {showBackfillCard && (
@@ -395,55 +394,79 @@ export default function Dashboard() {
         {/* Hero: ใช้ได้วันนี้ */}
         <div
           className="rounded-2xl p-4 md:p-6 text-white shadow-sm flex flex-col justify-between"
-          style={{ backgroundColor: budget.state === "over" || budget.state === "cycle-negative" ? "#D85A30" : budget.state === "no-income" ? "#378ADD" : "#1D9E75" }}
+          style={{ backgroundColor: !spend ? (openingError ? "#6B7280" : "#378ADD") : spend.state === "ok" ? "#1D9E75" : "#D85A30" }}
         >
-          {budget.state === "no-income" ? (
+          {!spend && openingError ? (
             <>
               <p className="text-sm opacity-90">ใช้ได้วันนี้</p>
-              <p className="text-[2rem] leading-tight font-bold mt-1">ยังคำนวณไม่ได้</p>
-              <p className="text-sm opacity-90 mt-2">บันทึกรายรับ (เช่น เงินเดือน) เพื่อดูว่าวันนี้ใช้ได้เท่าไร</p>
+              <p className="text-[2rem] leading-tight font-bold mt-1">โหลดยอดเงินไม่สำเร็จ</p>
+              <button
+                type="button"
+                onClick={() => { setOpeningError(false); fetchOpening() }}
+                className="self-start mt-3 bg-white text-gray-700 rounded-lg px-4 min-h-11 text-sm font-semibold hover:bg-white/90 transition-colors"
+              >
+                ลองใหม่
+              </button>
             </>
-          ) : budget.state === "cycle-negative" ? (
+          ) : !spend ? (
             <>
-              <p className="text-sm opacity-90">เงินรอบนี้ติดลบ</p>
-              <p className="text-[2.5rem] leading-tight font-bold tabular-nums mt-1">
-                {Math.round(budget.cycleBalance) < 0 ? "-" : ""}฿{formatMoney(Math.abs(budget.cycleBalance))}
+              <p className="text-sm opacity-90">ใช้ได้วันนี้</p>
+              <p className="text-[2rem] leading-tight font-bold mt-1">ตั้งยอดเงินก่อน</p>
+              <p className="text-sm opacity-90 mt-2">ตั้งยอดเงินเพื่อดูว่าวันนี้ใช้ได้เท่าไหร่</p>
+              {openingLoaded && (
+                <button
+                  type="button"
+                  onClick={() => setAdjustOpen(true)}
+                  className="self-start mt-3 bg-white text-[#378ADD] rounded-lg px-4 min-h-11 text-sm font-semibold hover:bg-white/90 transition-colors"
+                >
+                  ตั้งยอดเงิน
+                </button>
+              )}
+            </>
+          ) : spend.state === "negative" ? (
+            <>
+              <p className="text-sm opacity-90">ใช้เกินไปแล้ว</p>
+              <p className={`${Math.round(spend.overBy) === 0 ? "text-[2rem]" : "text-[2.5rem] tabular-nums"} leading-tight font-bold mt-1`}>
+                {Math.round(spend.overBy) === 0 ? "เงินรอบนี้หมดแล้ว" : `฿${formatMoney(spend.overBy)}`}
               </p>
-              <p className="text-sm mt-3">
-                {Math.round(budget.cycleBalance) < 0 ? (
-                  <>รายจ่ายรอบนี้มากกว่ารายรับ <span className="font-semibold tabular-nums">฿{formatMoney(Math.abs(budget.cycleBalance))}</span></>
-                ) : (
-                  "เงินรอบนี้หมดแล้ว"
-                )}
-              </p>
-              <p className="text-sm opacity-90 mt-1">เหลืออีก {budget.daysLeftInclToday} วันในรอบ</p>
+              <p className="text-sm opacity-90 mt-3">ถ้าตัวเลขไม่ตรงกับเงินจริง กด ปรับยอดเงิน ได้</p>
             </>
           ) : (
             <>
-              <p className="text-sm opacity-90">{budget.state === "over" ? "วันนี้ใช้เกินไป" : "ใช้ได้วันนี้"}</p>
+              <p className="text-sm opacity-90">{spend.state === "over" ? "วันนี้ใช้เกินไป" : "ใช้ได้วันนี้"}</p>
               <p className="text-[2.5rem] leading-tight font-bold tabular-nums mt-1">
-                {budget.state === "over"
-                  ? `-฿${formatMoney(Math.max(1, Math.abs(budget.availableToday)))}`
-                  : `฿${formatMoney(Math.abs(budget.availableToday))}`}
+                {spend.state === "over"
+                  ? `-฿${formatMoney(Math.max(1, spend.overBy))}`
+                  : `฿${formatMoney(Math.max(0, spend.availableToday))}`}
               </p>
               <div className="h-2 bg-white/30 rounded-full mt-3" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(spentPct)}>
                 <div className="h-2 rounded-full bg-white transition-all" style={{ width: `${spentPct}%` }} />
               </div>
               <p className="text-sm mt-3">
-                วันนี้ใช้ไป <span className="font-semibold tabular-nums">฿{formatMoney(budget.todayExpense)}</span>
-                {" "}จาก <span className="font-semibold tabular-nums">฿{formatMoney(Math.max(0, budget.todayBudget))}</span>
+                วันนี้ใช้ไป <span className="font-semibold tabular-nums">฿{formatMoney(spend.todayExpense)}</span>
+                {" "}จาก <span className="font-semibold tabular-nums">฿{formatMoney(Math.max(0, spend.todayBudget))}</span>
               </p>
-              <p className="text-sm opacity-90 mt-1">
-                {budget.state === "over" && (
-                  budget.tomorrowBudget === null
-                    ? "วันนี้เป็นวันสุดท้ายของรอบ · "
-                    : budget.tomorrowBudget > 0
-                      ? <>พรุ่งนี้ใช้ได้ <span className="font-semibold tabular-nums">฿{formatMoney(budget.tomorrowBudget)}</span> · </>
-                      : "พรุ่งนี้ยังไม่มีงบเหลือ · "
-                )}
-                เหลืออีก {budget.daysLeftInclToday} วันในรอบ
-              </p>
+              {spend.state === "over" && (
+                <p className="text-sm opacity-90 mt-1">
+                  {spend.tomorrowBudget === null
+                    ? "วันนี้เป็นวันสุดท้ายของรอบ"
+                    : spend.tomorrowBudget > 0
+                      ? <>พรุ่งนี้ใช้ได้ <span className="font-semibold tabular-nums">฿{formatMoney(spend.tomorrowBudget)}</span>/วัน</>
+                      : "พรุ่งนี้ยังไม่มีงบเหลือ"}
+                </p>
+              )}
             </>
+          )}
+          {spend && (
+            <p className="text-xs opacity-90 mt-3">
+              รอบนี้ {formatThaiShortDate(period.start)} – {formatThaiShortDate(period.end)} (เหลือ {spend.daysLeftInclToday} วัน)
+              {next.source === "month_end" && (
+                <>
+                  {" · "}
+                  <Link href="/settings?tab=paycycles" className="underline underline-offset-2 hover:text-white">ยังไม่ได้ตั้งวันเงินเข้า</Link>
+                </>
+              )}
+            </p>
           )}
           {activeOpening && (
             <button
@@ -503,8 +526,8 @@ export default function Dashboard() {
       {/* รายรับ/รายจ่ายรอบนี้ */}
       <div className="grid grid-cols-2 gap-3 md:gap-4 mb-6">
         {[
-          { label: "รายรับรอบนี้", value: budget.cycleIncome, color: "text-[#1D9E75]", pct: pctChange(budget.cycleIncome, prevIncome) },
-          { label: "รายจ่ายรอบนี้", value: budget.cycleExpense, color: "text-[#D85A30]", pct: pctChange(budget.cycleExpense, prevExpense) },
+          { label: "รายรับรอบนี้", value: cycleIncome, color: "text-[#1D9E75]", pct: pctChange(cycleIncome, prevIncome) },
+          { label: "รายจ่ายรอบนี้", value: cycleExpense, color: "text-[#D85A30]", pct: pctChange(cycleExpense, prevExpense) },
         ].map((card) => (
           <div key={card.label} className="bg-white rounded-xl p-3 md:p-4 shadow-sm">
             <p className="text-xs text-gray-500 mb-1">{card.label}</p>
@@ -677,32 +700,28 @@ export default function Dashboard() {
         {/* นับถอยหลังรอบเงินเดือน */}
         <div className="bg-white rounded-xl p-4 md:p-5 shadow-sm flex flex-col justify-between">
           <h2 className="text-sm font-semibold text-gray-700 mb-3">รอบเงินเดือน</h2>
-          {activeCycle ? (
-            <>
-              <div className="text-center py-4">
-                <p className="text-5xl font-bold text-[#378ADD]">{budget.daysLeftInclToday}</p>
-                <p className="text-sm text-gray-500 mt-1">วันที่เหลือ</p>
-                <p className="text-xs text-gray-400 mt-1">
-                  {cycleRange
-                    ? <>รอบ {activeCycle.name} (วันที่ {activeCycle.start_day}–{activeCycle.end_day})</>
-                    : <>วันนี้ไม่อยู่ในรอบ {activeCycle.name} จึงคำนวณจากเดือนปฏิทิน</>}
-                </p>
+          <div className="text-center py-4">
+            <p className="text-5xl font-bold text-[#378ADD]">{dayDiff(next.date, today)}</p>
+            <p className="text-sm text-gray-500 mt-1">วันถึงเงินเข้า</p>
+            {next.source === "month_end" ? (
+              <p className="text-xs text-gray-400 mt-1">ยังไม่ได้ตั้งวันเงินเข้า</p>
+            ) : (
+              <p className="text-xs text-gray-400 mt-1">
+                เงินเข้าครั้งถัดไป {formatThaiShortDate(next.date)}
+              </p>
+            )}
+            <Link href="/settings?tab=paycycles" className="text-xs text-[#378ADD] hover:underline mt-2 block">ตั้งค่ารายได้และรอบเงิน →</Link>
+          </div>
+          {spend && (
+            <div className="mt-4 bg-gray-50 rounded-xl p-3 text-sm">
+              <div className="flex justify-between text-gray-600 mb-1">
+                <span>คงเหลือ</span>
+                <span className={`font-semibold ${spend.balanceNow >= 0 ? "text-[#1D9E75]" : "text-[#D85A30]"}`}>{signedMoney(spend.balanceNow)}</span>
               </div>
-              <div className="mt-4 bg-gray-50 rounded-xl p-3 text-sm">
-                <div className="flex justify-between text-gray-600 mb-1">
-                  <span>คงเหลือ</span>
-                  <span className="font-semibold text-[#1D9E75]">฿{formatMoney(cycleBalance)}</span>
-                </div>
-                <div className="flex justify-between text-gray-600">
-                  <span>ใช้ได้/วัน</span>
-                  <span className="font-semibold text-[#378ADD]">฿{formatMoney(Math.max(0, budget.todayBudget))}</span>
-                </div>
+              <div className="flex justify-between text-gray-600">
+                <span>ใช้ได้/วัน</span>
+                <span className="font-semibold text-[#378ADD]">฿{formatMoney(Math.max(0, spend.todayBudget))}</span>
               </div>
-            </>
-          ) : (
-            <div className="text-center py-8">
-              <p className="text-sm text-gray-400">ยังไม่มีรอบเงินเดือน</p>
-              <Link href="/settings?tab=paycycles" className="text-xs text-[#378ADD] hover:underline mt-1 block">ตั้งค่ารายได้และรอบเงิน →</Link>
             </div>
           )}
         </div>
