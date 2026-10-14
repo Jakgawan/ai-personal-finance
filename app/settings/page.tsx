@@ -4,6 +4,7 @@ import { Suspense } from "react"
 import { useSearchParams } from "next/navigation"
 import Link from "next/link"
 import ProfileSection from "./components/ProfileSection"
+import IncomeSourcesSection from "./components/IncomeSourcesSection"
 import PayCyclesSection from "./components/PayCyclesSection"
 import CategoriesSection from "./components/CategoriesSection"
 import RecurringSection from "./components/RecurringSection"
@@ -69,7 +70,12 @@ function SettingsContent() {
 
       <main className="p-4 md:p-8">
         {active === "profile" && <ProfileSection />}
-        {active === "paycycles" && <PayCyclesSection />}
+        {active === "paycycles" && (
+          <div className="flex flex-col gap-8">
+            <IncomeSourcesSection />
+            <PayCyclesSection />
+          </div>
+        )}
         {active === "categories" && <CategoriesSection />}
         {active === "recurring" && <RecurringSection />}
         {active === "display" && <DisplaySection />}
