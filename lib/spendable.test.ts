@@ -1,8 +1,8 @@
 import { describe, it, expect } from "vitest"
 import { calcSpendable, getCurrentPeriod, toLegacyBudget } from "./spendable"
 
-const inc = (date: string, amount: number) => ({ date, type: "income", amount })
-const exp = (date: string, amount: number) => ({ date, type: "expense", amount })
+const inc = (date: string, amount: number | string) => ({ date, type: "income", amount })
+const exp = (date: string, amount: number | string) => ({ date, type: "expense", amount })
 
 describe("calcSpendable", () => {
   it("start today equals backfill", () => {

@@ -49,7 +49,7 @@ export default function OnboardingPage() {
         .maybeSingle()
       // มีแถวอยู่แล้ว = เคยผ่าน onboarding แล้ว ไม่ต้องถามซ้ำ
       if (!error && data) {
-        window.location.href = "/"
+        window.location.assign("/")
         return
       }
       setChecking(false)
@@ -176,7 +176,7 @@ export default function OnboardingPage() {
     )
     if (profError) return fail()
     // โหลดหน้าใหม่ทั้งหน้า เพื่อให้ Sidebar อ่านค่าใหม่
-    window.location.href = "/"
+    window.location.assign("/")
   }
 
   if (checking) {
