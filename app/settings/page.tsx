@@ -4,6 +4,7 @@ import { Suspense } from "react"
 import { useSearchParams } from "next/navigation"
 import Link from "next/link"
 import ProfileSection from "./components/ProfileSection"
+import IncomeSourcesSection from "./components/IncomeSourcesSection"
 import PayCyclesSection from "./components/PayCyclesSection"
 import CategoriesSection from "./components/CategoriesSection"
 import RecurringSection from "./components/RecurringSection"
@@ -13,7 +14,7 @@ import { ChevronLeft, User, CalendarDays, Tag, RefreshCw, Target, Bell, Globe } 
 
 const menuItems = [
   { id: "profile", label: "โปรไฟล์", icon: User },
-  { id: "paycycles", label: "รอบเงินเดือน", icon: CalendarDays },
+  { id: "paycycles", label: "รายได้และรอบเงิน", icon: CalendarDays },
   { id: "categories", label: "หมวดหมู่", icon: Tag },
   { id: "recurring", label: "รายการซ้ำ", icon: RefreshCw },
   { id: "goals", label: "เป้าหมาย", icon: Target },
@@ -69,7 +70,12 @@ function SettingsContent() {
 
       <main className="p-4 md:p-8">
         {active === "profile" && <ProfileSection />}
-        {active === "paycycles" && <PayCyclesSection />}
+        {active === "paycycles" && (
+          <div className="flex flex-col gap-8">
+            <IncomeSourcesSection />
+            <PayCyclesSection />
+          </div>
+        )}
         {active === "categories" && <CategoriesSection />}
         {active === "recurring" && <RecurringSection />}
         {active === "display" && <DisplaySection />}

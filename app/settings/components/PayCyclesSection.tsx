@@ -105,7 +105,8 @@ export default function PayCyclesSection() {
 
   return (
     <div className="max-w-lg">
-      <h2 className="text-heading-token text-gray-800 mb-2">รอบเงินเดือน</h2>
+      <h2 className="text-base font-semibold text-gray-800">รอบเงินเดือนแบบเดิม (ไม่บังคับ)</h2>
+      <p className="text-xs text-gray-400 mt-1 mb-4">ใช้จัดกลุ่มรายการตามรอบ ถ้าตั้งรายได้ประจำด้านบนแล้วไม่ต้องตั้งส่วนนี้</p>
 
       {/* คำอธิบาย — บอกว่ารอบเงินเดือนคืออะไร */}
       <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 mb-6">

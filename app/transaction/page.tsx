@@ -7,7 +7,8 @@ import { formatDate } from "@/lib/utils"
 import ScanSlip from "@/app/components/ScanSlip"
 import ConfirmModal from "@/app/components/ConfirmModal"
 import { showToast } from "@/app/components/Toast"
-import { BarChart2, CalendarDays, List, ChevronLeft, ChevronRight } from "lucide-react"
+import { BarChart2, CalendarDays, List, ChevronLeft, ChevronRight, Info } from "lucide-react"
+import { pickActiveOpening } from "@/lib/opening-balance"
 
 type Transaction = {
   id: string
@@ -63,6 +64,7 @@ export default function TransactionPage() {
   const [loading, setLoading] = useState(false)
 
   const [initialLoading, setInitialLoading] = useState(true)
+  const [openingDate, setOpeningDate] = useState<string | null>(null)
 
   const [calendarDate, setCalendarDate] = useState(new Date())
   const [selectedDay, setSelectedDay] = useState<string | null>(null)
@@ -94,6 +96,27 @@ export default function TransactionPage() {
   }
 
   useEffect(() => { fetchAll() }, [])
+
+  // ยอดตั้งต้นที่ใช้อยู่ (แถว created_at ล่าสุด) — ไว้ติดป้ายรายการที่อยู่ก่อนวันตั้งยอด
+  useEffect(() => {
+    const loadOpening = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+      const { data, error } = await supabase
+        .from("opening_balances")
+        .select("opening_date, created_at")
+        .eq("user_id", user.id)
+      if (error) {
+        showToast("โหลดยอดเงินตั้งต้นไม่สำเร็จ", "error")
+        return
+      }
+      const active = pickActiveOpening((data || []) as { opening_date: string; created_at: string }[])
+      setOpeningDate(active ? active.opening_date : null)
+    }
+    loadOpening()
+    window.addEventListener("openingBalanceChanged", loadOpening)
+    return () => window.removeEventListener("openingBalanceChanged", loadOpening)
+  }, [])
   // ดักฟัง event "transactionAdded" จากปุ่ม FAB ใน Sidebar
   // เมื่อ FAB เพิ่มรายการเสร็จ → เรียก fetchAll เพื่อโหลดข้อมูลใหม่ทันที (real-time)
   useEffect(() => {
@@ -404,7 +427,14 @@ export default function TransactionPage() {
                       <tr key={t.id} className="border-b border-gray-100 hover:bg-gray-50">
                         <td className="px-4 py-3 text-gray-400">{(page - 1) * PAGE_SIZE + i + 1}</td>
                         <td className="px-4 py-3 text-gray-600">{formatDate(t.date)}</td>
-                        <td className="px-4 py-3 font-medium text-gray-800">{t.name}</td>
+                        <td className="px-4 py-3 font-medium text-gray-800">
+                          {t.name}
+                          {openingDate && t.date < openingDate && (
+                            <span className="mt-0.5 flex items-center gap-1 text-xs font-normal text-gray-400">
+                              <Info size={12} className="shrink-0" /> อยู่ก่อนยอดตั้งต้น ไม่นับในยอดใช้ได้
+                            </span>
+                          )}
+                        </td>
                         <td className="px-4 py-3 text-gray-500">{t.category || "-"}</td>
                         <td className="px-4 py-3 font-semibold text-[#1D9E75]">
                           {t.type === "income" ? `฿${Number(t.amount).toLocaleString()}` : ""}
