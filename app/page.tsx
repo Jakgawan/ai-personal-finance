@@ -276,6 +276,8 @@ export default function Dashboard() {
         nextIncomeDate: next.date,
       })
     : null
+  // ยอดรอบนี้เป็น 0 พอดี (เช่น ขึ้นรอบใหม่แบบไม่ยกยอด) ไม่ใช่ใช้เกิน → แสดงเป็นข้อมูล ไม่ใช่ความผิดพลาด
+  const zeroBalance: boolean = !!spend && spend.state === "negative" && Math.round(spend.overBy) === 0
 
   // ---- ขึ้นรอบใหม่ (งาน 5c) ----
   const prevPaydayDate = prev?.date ?? null
@@ -635,7 +637,7 @@ export default function Dashboard() {
         {/* Hero: ใช้ได้วันนี้ */}
         <div
           className="rounded-2xl p-4 md:p-6 text-white shadow-sm flex flex-col justify-between"
-          style={{ backgroundColor: !spend ? (openingError ? "#6B7280" : "#378ADD") : spend.state === "ok" ? "#1D9E75" : "#D85A30" }}
+          style={{ backgroundColor: !spend ? (openingError ? "#6B7280" : "#378ADD") : zeroBalance ? "#378ADD" : spend.state === "ok" ? "#1D9E75" : "#D85A30" }}
         >
           {!spend && openingError ? (
             <>
@@ -665,13 +667,21 @@ export default function Dashboard() {
               )}
             </>
           ) : spend.state === "negative" ? (
-            <>
-              <p className="text-sm opacity-90">ใช้เกินไปแล้ว</p>
-              <p className={`${Math.round(spend.overBy) === 0 ? "text-[2rem]" : "text-[2.5rem] tabular-nums"} leading-tight font-bold mt-1`}>
-                {Math.round(spend.overBy) === 0 ? "เงินรอบนี้หมดแล้ว" : `฿${formatMoney(spend.overBy)}`}
-              </p>
-              <p className="text-sm opacity-90 mt-3">ถ้าตัวเลขไม่ตรงกับเงินจริง กด ปรับยอดเงิน ได้</p>
-            </>
+            zeroBalance ? (
+              <>
+                <p className="text-sm opacity-90">ใช้ได้วันนี้</p>
+                <p className="text-[2rem] leading-tight font-bold mt-1">ยังไม่มีเงินรอบนี้</p>
+                <p className="text-sm opacity-90 mt-3">จดรายรับเมื่อเงินเข้า</p>
+              </>
+            ) : (
+              <>
+                <p className="text-sm opacity-90">ใช้เกินไปแล้ว</p>
+                <p className="text-[2.5rem] tabular-nums leading-tight font-bold mt-1">
+                  {`฿${formatMoney(spend.overBy)}`}
+                </p>
+                <p className="text-sm opacity-90 mt-3">ถ้าตัวเลขไม่ตรงกับเงินจริง กด ปรับยอดเงิน ได้</p>
+              </>
+            )
           ) : (
             <>
               <p className="text-sm opacity-90">{spend.state === "over" ? "วันนี้ใช้เกินไป" : "ใช้ได้วันนี้"}</p>
