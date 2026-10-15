@@ -690,6 +690,13 @@ export default function Dashboard() {
                   ? `-฿${formatMoney(Math.max(1, spend.overBy))}`
                   : `฿${formatMoney(Math.max(0, spend.availableToday))}`}
               </p>
+              <p className="text-sm opacity-90 mt-1">
+                เงินเหลือ <span className="font-semibold tabular-nums">฿{formatMoney(Math.max(0, spend.balanceNow))}</span>
+                {" "}แบ่งใช้ <span className="font-semibold tabular-nums">{spend.daysLeftInclToday}</span> วัน
+                {" "}{next.source === "month_end"
+                  ? `จนถึง ${formatThaiShortDate(period.end)}`
+                  : `จนเงินเข้า ${formatThaiShortDate(next.date)}`}
+              </p>
               <div className="h-2 bg-white/30 rounded-full mt-3" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(spentPct)}>
                 <div className="h-2 rounded-full bg-white transition-all" style={{ width: `${spentPct}%` }} />
               </div>
