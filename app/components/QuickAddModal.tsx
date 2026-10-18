@@ -6,6 +6,7 @@ import { Plus, Loader2, X, ChevronDown, ChevronUp } from "lucide-react"
 import { showToast } from "./Toast"
 import CategoryIcon from "./CategoryIcon"
 import { todayLocal } from "@/lib/recurring"
+import { topAmounts } from "@/lib/quick-amounts"
 
 type Category = { id: string; name: string; type: string; icon: string; color?: string }
 type Cycle = { id: string; name: string }
@@ -52,6 +53,8 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles,
   const [categoryDropdownOpen, setCategoryDropdownOpen] = useState(false)
   const [categoryUsage, setCategoryUsage] = useState<{ category: string; type: string }[]>([])
 
+  const [recentTx, setRecentTx] = useState<{ amount: number | string; type: string; date: string }[]>([])
+
   useEffect(() => {
     if (!open || mode !== "full") return
     const loadUsage = async () => {
@@ -68,6 +71,34 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles,
     }
     loadUsage()
   }, [open, mode])
+
+  // ตัวเลขแนะนำ: โหลดรายการ 60 วันล่าสุด (ทุก mode) ถ้า error ก็แค่ไม่แสดงปุ่ม
+  useEffect(() => {
+    if (!open) return
+    let cancelled = false
+    const loadRecent = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user || cancelled) return
+      const d = new Date()
+      d.setDate(d.getDate() - 59)
+      const from = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
+      const { data, error } = await supabase
+        .from("transactions")
+        .select("amount, type, date")
+        .eq("user_id", user.id)
+        .gte("date", from)
+        .order("date", { ascending: false })
+        .limit(500)
+      if (cancelled) return
+      if (error) {
+        setRecentTx([])
+        return
+      }
+      setRecentTx((data || []) as { amount: number | string; type: string; date: string }[])
+    }
+    loadRecent()
+    return () => { cancelled = true }
+  }, [open])
 
   // เปิดพร้อมค่าเริ่มต้น -> ไปแท็บฟอร์ม ใส่ประเภท/จำนวนให้ (ไม่ focus อะไร)
   useEffect(() => {
@@ -88,6 +119,7 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles,
     setType("expense"); setCategory(""); setCycleId("")
     setInputMode("form"); setAiText(""); setAiError(""); setShowAllCategories(false)
     setShowDetails(false)
+    setRecentTx([])
     setCategorySearch(""); setCategoryDropdownOpen(false)
   }, [open])
 
@@ -107,6 +139,9 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles,
     return new Date(y, m - 1, d).toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "2-digit" })
   })()
   const detailsSummary = [dateSummary, mode === "full" && category ? category : ""].filter(Boolean).join(" · ")
+
+  const suggestedAmounts = topAmounts(recentTx, type, todayLocal())
+  const typeColor = type === "expense" ? "#D85A30" : "#1D9E75"
 
   const categoriesForType = categories.filter(c => !c.type || c.type === type)
 
@@ -258,6 +293,26 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles,
                 />
               </div>
               {amountError && <p className="text-xs text-[#D85A30] mt-1">{amountError}</p>}
+              {suggestedAmounts.length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {suggestedAmounts.map(x => {
+                    const selected = amountNum === x
+                    const label = x.toLocaleString("th-TH", { minimumFractionDigits: Number.isInteger(x) ? 0 : 2, maximumFractionDigits: 2 })
+                    return (
+                      <button
+                        key={x}
+                        type="button"
+                        onClick={() => setAmount(sanitizeAmount(String(x)))}
+                        aria-label={`ใส่จำนวน ฿${label}`}
+                        style={selected ? { borderColor: typeColor, backgroundColor: `${typeColor}1A`, color: typeColor } : undefined}
+                        className={`px-3 py-1 rounded-full text-sm border transition-colors ${selected ? "font-medium" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}
+                      >
+                        ฿{label}
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
             </div>
 
             <button
