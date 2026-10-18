@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
-import { Plus, Loader2, X } from "lucide-react"
+import { Plus, Loader2, X, ChevronDown, ChevronUp } from "lucide-react"
 import { showToast } from "./Toast"
 import CategoryIcon from "./CategoryIcon"
 import { todayLocal } from "@/lib/recurring"
@@ -22,6 +22,16 @@ type Props = {
   initialDate?: string | null
 }
 
+// รับเฉพาะตัวเลขกับจุดทศนิยม 1 จุด, ทศนิยมไม่เกิน 2 ตำแหน่ง
+function sanitizeAmount(raw: string): string {
+  const cleaned = raw.replace(/[^0-9.]/g, "")
+  const firstDot = cleaned.indexOf(".")
+  if (firstDot === -1) return cleaned
+  const intPart = cleaned.slice(0, firstDot)
+  const decPart = cleaned.slice(firstDot + 1).replace(/\./g, "").slice(0, 2)
+  return `${intPart}.${decPart}`
+}
+
 export default function QuickAddModal({ open, onClose, mode, categories, cycles, initialAmount, initialType, initialDate }: Props) {
   const [name, setName] = useState("")
   const [amount, setAmount] = useState("")
@@ -36,6 +46,7 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles,
   const [aiLoading, setAiLoading] = useState(false)
   const [aiError, setAiError] = useState("")
 
+  const [showDetails, setShowDetails] = useState(false)
   const [showAllCategories, setShowAllCategories] = useState(false)
   const [categorySearch, setCategorySearch] = useState("")
   const [categoryDropdownOpen, setCategoryDropdownOpen] = useState(false)
@@ -64,8 +75,11 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles,
     if (initialType === undefined && (initialAmount === undefined || initialAmount === null) && !initialDate) return
     setInputMode("form")
     if (initialType) setType(initialType)
-    if (initialDate) setDate(initialDate)
-    if (initialAmount !== undefined && initialAmount !== null) setAmount(String(initialAmount))
+    if (initialDate) {
+      setDate(initialDate)
+      if (initialDate !== todayLocal()) setShowDetails(true)
+    }
+    if (initialAmount !== undefined && initialAmount !== null) setAmount(sanitizeAmount(String(initialAmount)))
   }, [open, initialAmount, initialType, initialDate])
 
   useEffect(() => {
@@ -73,12 +87,26 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles,
     setName(""); setAmount(""); setDate(todayLocal())
     setType("expense"); setCategory(""); setCycleId("")
     setInputMode("form"); setAiText(""); setAiError(""); setShowAllCategories(false)
+    setShowDetails(false)
     setCategorySearch(""); setCategoryDropdownOpen(false)
   }, [open])
 
   if (!open) return null
 
-  const amountError = amount !== "" && Number(amount) <= 0 ? "จำนวนเงินต้องมากกว่า 0" : ""
+  const amountNum = Number(amount)
+  const amountInvalid = !Number.isFinite(amountNum) || amountNum <= 0
+  // "." อย่างเดียวไม่ขึ้นข้อความแดง แค่ปิดปุ่ม
+  const amountError = amount !== "" && amount !== "." && amountInvalid ? "จำนวนเงินต้องมากกว่า 0" : ""
+  const canSave = !loading && !amountInvalid && !!date
+
+  const dateSummary = (() => {
+    if (!date) return "ยังไม่ได้เลือกวันที่"
+    if (date === todayLocal()) return "วันนี้"
+    const [y, m, d] = date.split("-").map(Number)
+    if (!y || !m || !d) return date
+    return new Date(y, m - 1, d).toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "2-digit" })
+  })()
+  const detailsSummary = [dateSummary, mode === "full" && category ? category : ""].filter(Boolean).join(" · ")
 
   const categoriesForType = categories.filter(c => !c.type || c.type === type)
 
@@ -116,10 +144,11 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles,
         return
       }
       setName(data.name || "")
-      setAmount(data.amount ? String(data.amount) : "")
+      setAmount(data.amount ? sanitizeAmount(String(data.amount)) : "")
       setType(data.type === "income" ? "income" : "expense")
       setCategory(mode === "full" ? (data.category || "") : "")
       setInputMode("form")
+      if (data.name || (mode === "full" && data.category)) setShowDetails(true)
     } catch {
       setAiError("แปลงข้อความไม่สำเร็จ กรุณาลองใหม่")
     }
@@ -127,7 +156,7 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles,
   }
 
   const handleSave = async () => {
-    if (!amount || Number(amount) <= 0) return
+    if (!Number.isFinite(amountNum) || amountNum <= 0 || !date) return
     setLoading(true)
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) {
@@ -137,7 +166,7 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles,
     const { error } = await supabase.from("transactions").insert({
       user_id: user.id,
       name,
-      amount: Number(amount),
+      amount: amountNum,
       date,
       type,
       category: category || null,
@@ -156,7 +185,7 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles,
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-end md:items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl w-full max-w-md shadow-xl">
+      <div className="bg-white rounded-2xl w-full max-w-md shadow-xl max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between px-6 pt-5 pb-3">
           <h2 className="text-lg font-semibold text-gray-800">บันทึกรายการ</h2>
           <button onClick={onClose} aria-label="ปิด" className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
@@ -212,6 +241,46 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles,
                 รายรับ
               </button>
             </div>
+            <div>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[1.5rem] font-semibold text-gray-400 pointer-events-none">฿</span>
+                <input
+                  placeholder="0"
+                  type="text"
+                  inputMode="decimal"
+                  autoFocus
+                  value={amount}
+                  onChange={e => setAmount(sanitizeAmount(e.target.value))}
+                  onKeyDown={e => {
+                    if (e.key === "Enter" && canSave) handleSave()
+                  }}
+                  className={`w-full border rounded-lg pl-10 pr-3 py-2.5 text-[1.5rem] font-semibold focus:outline-none focus:ring-2 text-gray-800 ${amountError ? "border-[#D85A30] focus:ring-[#D85A30]" : "border-gray-200 focus:ring-[#1D9E75]"}`}
+                />
+              </div>
+              {amountError && <p className="text-xs text-[#D85A30] mt-1">{amountError}</p>}
+            </div>
+
+            <button
+              onClick={handleSave}
+              disabled={!canSave}
+              className="w-full bg-[#1D9E75] text-white rounded-lg btn-height-token text-sm font-medium hover:bg-[#178a64] disabled:opacity-50 transition-colors"
+            >
+              {loading ? "กำลังบันทึก..." : "บันทึก"}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setShowDetails(v => !v)}
+              aria-expanded={showDetails}
+              className="flex items-center gap-1.5 text-sm text-gray-600 hover:text-gray-800"
+            >
+              {showDetails ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+              <span>เพิ่มรายละเอียด</span>
+              {!showDetails && <span className={`text-xs ${date ? "text-gray-400" : "text-[#D85A30]"}`}>{detailsSummary}</span>}
+            </button>
+
+            {showDetails && (
+              <div className="flex flex-col gap-3">
             <input
               type="date"
               value={date}
@@ -224,17 +293,6 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles,
               onChange={e => setName(e.target.value)}
               className="border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75] text-gray-800"
             />
-            <div>
-              <input
-                placeholder="จำนวน (฿)"
-                type="number"
-                value={amount}
-                onChange={e => setAmount(e.target.value)}
-                className={`w-full border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 text-gray-800 ${amountError ? "border-[#D85A30] focus:ring-[#D85A30]" : "border-gray-200 focus:ring-[#1D9E75]"}`}
-              />
-              {amountError && <p className="text-xs text-[#D85A30] mt-1">{amountError}</p>}
-            </div>
-
             {mode === "full" && (
               <div className="flex flex-col gap-2">
                 <div className="flex gap-2 flex-wrap items-center">
@@ -311,14 +369,8 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles,
               </select>
               <p className="text-xs text-gray-400 mt-1">ไม่บังคับ — เลือกไว้เพื่อดูสรุปแยกตามรอบเงินเดือน</p>
             </div>
-
-            <button
-              onClick={handleSave}
-              disabled={loading || !amount || !!amountError}
-              className="w-full bg-[#1D9E75] text-white rounded-lg py-3 text-sm font-medium hover:bg-[#178a64] disabled:opacity-50 transition-colors"
-            >
-              {loading ? "กำลังบันทึก..." : "บันทึก"}
-            </button>
+              </div>
+            )}
           </div>
         )}
       </div>
