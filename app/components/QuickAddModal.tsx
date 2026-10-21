@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
-import { Plus, Loader2, X, ChevronDown, ChevronUp } from "lucide-react"
+import { Plus, Loader2, X, ChevronDown, ChevronUp, Receipt } from "lucide-react"
 import { showToast } from "./Toast"
 import CategoryIcon from "./CategoryIcon"
 import { todayLocal } from "@/lib/recurring"
@@ -53,6 +53,8 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles,
   const [categoryDropdownOpen, setCategoryDropdownOpen] = useState(false)
   const [categoryUsage, setCategoryUsage] = useState<{ category: string; type: string }[]>([])
 
+  const [isBillPayment, setIsBillPayment] = useState(false)
+
   const [recentTx, setRecentTx] = useState<{ amount: number | string; type: string; date: string }[]>([])
 
   useEffect(() => {
@@ -84,7 +86,7 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles,
       const from = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
       const { data, error } = await supabase
         .from("transactions")
-        .select("amount, type, date")
+        .select("amount, type, date, kind")
         .eq("user_id", user.id)
         .gte("date", from)
         .order("date", { ascending: false })
@@ -94,7 +96,9 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles,
         setRecentTx([])
         return
       }
-      setRecentTx((data || []) as { amount: number | string; type: string; date: string }[])
+      // ยอดจ่ายบิล/ชำระหนี้ไม่ใช้เป็นยอดแนะนำ
+      const rows = (data || []) as { amount: number | string; type: string; date: string; kind?: string | null }[]
+      setRecentTx(rows.filter(r => r.kind !== "bill_payment"))
     }
     loadRecent()
     return () => { cancelled = true }
@@ -117,6 +121,7 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles,
     if (open) return
     setName(""); setAmount(""); setDate(todayLocal())
     setType("expense"); setCategory(""); setCycleId("")
+    setIsBillPayment(false)
     setInputMode("form"); setAiText(""); setAiError(""); setShowAllCategories(false)
     setShowDetails(false)
     setRecentTx([])
@@ -206,6 +211,7 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles,
       type,
       category: category || null,
       cycle_id: cycleId || null,
+      kind: type === "expense" && isBillPayment ? "bill_payment" : "regular",
     })
     if (error) {
       showToast("บันทึกไม่สำเร็จ ลองใหม่อีกครั้ง", "error")
@@ -276,6 +282,21 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles,
                 รายรับ
               </button>
             </div>
+            {type === "expense" && (
+              <label className="flex items-center gap-3 min-h-[44px] px-3 rounded-lg border border-gray-200 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={isBillPayment}
+                  onChange={e => setIsBillPayment(e.target.checked)}
+                  className="w-5 h-5 accent-[#D85A30] shrink-0"
+                />
+                <Receipt size={18} className="text-gray-500 shrink-0" />
+                <span className="flex flex-col leading-tight">
+                  <span className="text-sm font-medium text-gray-800">จ่ายบิล/ชำระหนี้</span>
+                  <span className="text-xs text-gray-400">ไม่นับเป็นค่าใช้จ่ายของวันนี้</span>
+                </span>
+              </label>
+            )}
             <div>
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[1.5rem] font-semibold text-gray-400 pointer-events-none">฿</span>

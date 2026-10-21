@@ -7,7 +7,8 @@ import { formatDate } from "@/lib/utils"
 import ScanSlip from "@/app/components/ScanSlip"
 import ConfirmModal from "@/app/components/ConfirmModal"
 import { showToast } from "@/app/components/Toast"
-import { BarChart2, CalendarDays, List, ChevronLeft, ChevronRight, Info } from "lucide-react"
+import { BarChart2, CalendarDays, List, ChevronLeft, ChevronRight, Info, Receipt } from "lucide-react"
+import BillPaymentBadge from "@/app/components/BillPaymentBadge"
 import { pickActiveOpening } from "@/lib/opening-balance"
 
 type Transaction = {
@@ -19,6 +20,7 @@ type Transaction = {
   category: string
   cycle_id: string | null
   note: string | null
+  kind?: string | null
 }
 
 type Category = {
@@ -61,6 +63,7 @@ export default function TransactionPage() {
   const [category, setCategory] = useState("")
   const [cycleId, setCycleId] = useState("")
   const [note, setNote] = useState("")
+  const [isBillPayment, setIsBillPayment] = useState(false)
   const [loading, setLoading] = useState(false)
 
   const [initialLoading, setInitialLoading] = useState(true)
@@ -161,6 +164,7 @@ export default function TransactionPage() {
     setDate(new Date().toISOString().split("T")[0])
     setType("expense")
     setCategory(""); setCycleId(""); setNote("")
+    setIsBillPayment(false)
     setShowModal(true)
   }
 
@@ -168,6 +172,7 @@ export default function TransactionPage() {
     setEditId(t.id)
     setName(t.name); setAmount(String(t.amount)); setDate(t.date)
     setType(t.type); setCategory(t.category); setCycleId(t.cycle_id || ""); setNote(t.note || "")
+    setIsBillPayment(t.kind === "bill_payment")
     setShowModal(true)
   }
 
@@ -186,7 +191,8 @@ export default function TransactionPage() {
 
     const payload = {
       name, amount: Number(amount), date, type, category,
-      cycle_id: cycleId || null, note: note || null, user_id: user.id
+      cycle_id: cycleId || null, note: note || null, user_id: user.id,
+      kind: type === "expense" && isBillPayment ? "bill_payment" : "regular",
     }
 
    if (editId) {
@@ -428,7 +434,10 @@ export default function TransactionPage() {
                         <td className="px-4 py-3 text-gray-400">{(page - 1) * PAGE_SIZE + i + 1}</td>
                         <td className="px-4 py-3 text-gray-600">{formatDate(t.date)}</td>
                         <td className="px-4 py-3 font-medium text-gray-800">
-                          {t.name}
+                          <span className="inline-flex items-center gap-1.5 flex-wrap">
+                            {t.name}
+                            {t.kind === "bill_payment" && <BillPaymentBadge />}
+                          </span>
                           {openingDate && t.date < openingDate && (
                             <span className="mt-0.5 flex items-center gap-1 text-xs font-normal text-gray-400">
                               <Info size={12} className="shrink-0" /> อยู่ก่อนยอดตั้งต้น ไม่นับในยอดใช้ได้
@@ -545,7 +554,10 @@ export default function TransactionPage() {
                     {selectedDayTx.map(t => (
                       <div key={t.id} className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0">
                         <div>
-                          <p className="text-sm font-medium text-gray-800">{t.name}</p>
+                          <p className="text-sm font-medium text-gray-800 flex items-center gap-1.5">
+                            {t.name}
+                            {t.kind === "bill_payment" && <BillPaymentBadge />}
+                          </p>
                           <p className="text-xs text-gray-400">{t.category || "-"}</p>
                         </div>
                         <div className="flex items-center gap-2">
@@ -565,6 +577,7 @@ export default function TransactionPage() {
                     setDate(selectedDay!)
                     setType("expense")
                     setCategory(""); setCycleId(""); setNote("")
+                    setIsBillPayment(false)
                     setShowModal(true)
                   }}
                   className="w-full mt-4 border border-dashed border-gray-300 text-gray-500 rounded-lg py-2 text-sm hover:border-[#1D9E75] hover:text-[#1D9E75] transition-colors"
@@ -595,6 +608,21 @@ export default function TransactionPage() {
                   รายรับ
                 </button>
               </div>
+              {type === "expense" && (
+                <label className="flex items-center gap-3 min-h-[44px] px-3 rounded-lg border border-gray-200 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={isBillPayment}
+                    onChange={(e) => setIsBillPayment(e.target.checked)}
+                    className="w-5 h-5 accent-[#D85A30] shrink-0"
+                  />
+                  <Receipt size={18} className="text-gray-500 shrink-0" />
+                  <span className="flex flex-col leading-tight">
+                    <span className="text-sm font-medium text-gray-800">จ่ายบิล/ชำระหนี้</span>
+                    <span className="text-xs text-gray-400">ไม่นับเป็นค่าใช้จ่ายของวันนี้</span>
+                  </span>
+                </label>
+              )}
               <input placeholder="วันที่" type="date" value={date} onChange={(e) => setDate(e.target.value)}
                 className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75] text-gray-800" />
               <input placeholder="ชื่อรายการ" value={name} onChange={(e) => setName(e.target.value)}

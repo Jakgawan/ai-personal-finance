@@ -11,6 +11,7 @@ import { getPeriodTransition, type CarryoverPref, type PeriodTransition } from "
 import { showToast } from "@/app/components/Toast"
 import { pickActiveOpening } from "@/lib/opening-balance"
 import CategoryIcon from "@/app/components/CategoryIcon"
+import BillPaymentBadge from "@/app/components/BillPaymentBadge"
 import { pickInsight, formatMoney, formatThaiShortDate } from "@/lib/daily-budget"
 import { todayInBangkok, addDays, getNextIncomeDate, getPreviousIncomeDate, type IncomeSourceSchedule } from "@/lib/income-schedule"
 import { calcSpendable, getCurrentPeriod, toLegacyBudget, dayDiff } from "@/lib/spendable"
@@ -26,6 +27,7 @@ type Transaction = {
   date: string
   type: string
   category: string
+  kind?: string | null
 }
 
 type PayCycle = {
@@ -704,6 +706,11 @@ export default function Dashboard() {
                 วันนี้ใช้ไป <span className="font-semibold tabular-nums">฿{formatMoney(spend.todayExpense)}</span>
                 {" "}จาก <span className="font-semibold tabular-nums">฿{formatMoney(Math.max(0, spend.todayBudget))}</span>
               </p>
+              {spend.todayBillPayments > 0 && (
+                <p className="text-xs opacity-90 mt-1">
+                  จ่ายบิลวันนี้ <span className="font-semibold tabular-nums">฿{formatMoney(spend.todayBillPayments)}</span> (ไม่นับในใช้ไป)
+                </p>
+              )}
               {spend.state === "over" && (
                 <p className="text-sm opacity-90 mt-1">
                   {spend.tomorrowBudget === null
@@ -819,7 +826,10 @@ export default function Dashboard() {
                 <div key={t.id} className="flex items-center gap-3 px-4 md:px-5 py-3">
                   <CategoryIcon icon={cat?.icon} color={cat?.color} size="md" />
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-800 truncate">{t.name || t.category || (t.type === "income" ? "รายรับ" : "รายจ่าย")}</p>
+                    <p className="text-sm font-medium text-gray-800 flex items-center gap-1.5 min-w-0">
+                      <span className="truncate">{t.name || t.category || (t.type === "income" ? "รายรับ" : "รายจ่าย")}</span>
+                      {t.kind === "bill_payment" && <BillPaymentBadge />}
+                    </p>
                     {t.category && <p className="text-xs text-gray-400 truncate">{t.category}</p>}
                   </div>
                   <p className={`text-sm font-semibold tabular-nums ${t.type === "income" ? "text-[#1D9E75]" : "text-[#D85A30]"}`}>
