@@ -1,12 +1,12 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { supabase } from "@/lib/supabase"
 import { Plus, Loader2, X, ChevronDown, ChevronUp, Receipt } from "lucide-react"
 import { showToast } from "./Toast"
 import CategoryIcon from "./CategoryIcon"
 import { todayLocal } from "@/lib/recurring"
-import { topAmounts } from "@/lib/quick-amounts"
+import { topItems, type TopItem } from "@/lib/quick-amounts"
 
 type Category = { id: string; name: string; type: string; icon: string; color?: string }
 type Cycle = { id: string; name: string }
@@ -55,7 +55,11 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles,
 
   const [isBillPayment, setIsBillPayment] = useState(false)
 
-  const [recentTx, setRecentTx] = useState<{ amount: number | string; type: string; date: string }[]>([])
+  type RecentTx = { name: string | null; amount: number | string; type: string; date: string; category: string | null; kind?: string | null }
+  const [recentTx, setRecentTx] = useState<RecentTx[]>([])
+  // กดค้างบนรายการบ่อย: timer + ธงบอกว่ากดค้างครบแล้ว (กัน click ตามมาบันทึก)
+  const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const longPressed = useRef(false)
 
   useEffect(() => {
     if (!open || mode !== "full") return
@@ -74,7 +78,7 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles,
     loadUsage()
   }, [open, mode])
 
-  // ตัวเลขแนะนำ: โหลดรายการ 60 วันล่าสุด (ทุก mode) ถ้า error ก็แค่ไม่แสดงปุ่ม
+  // รายการบ่อย: โหลดรายการ 30 วันล่าสุด (ทุก mode) ถ้า error ก็แค่ไม่แสดง
   useEffect(() => {
     if (!open) return
     let cancelled = false
@@ -82,11 +86,11 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles,
       const { data: { user } } = await supabase.auth.getUser()
       if (!user || cancelled) return
       const d = new Date()
-      d.setDate(d.getDate() - 59)
+      d.setDate(d.getDate() - 29)
       const from = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
       const { data, error } = await supabase
         .from("transactions")
-        .select("amount, type, date, kind")
+        .select("name, amount, type, date, category, kind")
         .eq("user_id", user.id)
         .gte("date", from)
         .order("date", { ascending: false })
@@ -96,9 +100,8 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles,
         setRecentTx([])
         return
       }
-      // ยอดจ่ายบิล/ชำระหนี้ไม่ใช้เป็นยอดแนะนำ
-      const rows = (data || []) as { amount: number | string; type: string; date: string; kind?: string | null }[]
-      setRecentTx(rows.filter(r => r.kind !== "bill_payment"))
+      // topItems กรองจ่ายบิล/ชำระหนี้ออกเอง
+      setRecentTx((data || []) as RecentTx[])
     }
     loadRecent()
     return () => { cancelled = true }
@@ -117,8 +120,16 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles,
     if (initialAmount !== undefined && initialAmount !== null) setAmount(sanitizeAmount(String(initialAmount)))
   }, [open, initialAmount, initialType, initialDate])
 
+  const clearPressTimer = () => {
+    if (pressTimer.current) {
+      clearTimeout(pressTimer.current)
+      pressTimer.current = null
+    }
+  }
+
   useEffect(() => {
-    if (open) return
+    if (open) return () => clearPressTimer()
+    clearPressTimer()
     setName(""); setAmount(""); setDate(todayLocal())
     setType("expense"); setCategory(""); setCycleId("")
     setIsBillPayment(false)
@@ -145,8 +156,72 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles,
   })()
   const detailsSummary = [dateSummary, mode === "full" && category ? category : ""].filter(Boolean).join(" · ")
 
-  const suggestedAmounts = topAmounts(recentTx, type, todayLocal())
-  const typeColor = type === "expense" ? "#D85A30" : "#1D9E75"
+  const frequentItems: TopItem[] = topItems(recentTx, type, todayLocal())
+
+  const formatBaht = (x: number): string =>
+    `฿${x.toLocaleString("th-TH", { minimumFractionDigits: Number.isInteger(x) ? 0 : 2, maximumFractionDigits: 2 })}`
+
+  const itemLabel = (item: TopItem): string => item.name || item.category || "ไม่มีชื่อ"
+
+  // กดค้างครบ -> เติมฟอร์มให้แก้ก่อนบันทึก
+  const startPress = (item: TopItem) => {
+    longPressed.current = false
+    clearPressTimer()
+    pressTimer.current = setTimeout(() => {
+      pressTimer.current = null
+      longPressed.current = true
+      setAmount(sanitizeAmount(String(item.amount)))
+      setName(item.name)
+      setCategory(item.category || "")
+      setShowDetails(true)
+    }, 500)
+  }
+
+  // แตะ -> บันทึกทันที + Toast ให้ยกเลิกได้
+  const handleQuickSave = async (item: TopItem) => {
+    if (longPressed.current) {
+      longPressed.current = false
+      return
+    }
+    if (loading) return
+    setLoading(true)
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      setLoading(false)
+      return
+    }
+    const { data, error } = await supabase.from("transactions").insert({
+      user_id: user.id,
+      name: item.name,
+      amount: item.amount,
+      date: todayLocal(),
+      type,
+      category: item.category,
+      cycle_id: null,
+      kind: "regular",
+    }).select("id").single()
+    if (error || !data) {
+      showToast("บันทึกไม่สำเร็จ ลองใหม่อีกครั้ง", "error")
+      setLoading(false)
+      return
+    }
+    const newId: string = (data as { id: string }).id
+    window.dispatchEvent(new CustomEvent("transactionAdded"))
+    setLoading(false)
+    onClose()
+    showToast(`บันทึก ${itemLabel(item)} ${formatBaht(item.amount)} แล้ว`, "success", {
+      label: "ยกเลิก",
+      onClick: async () => {
+        const { error: delError } = await supabase.from("transactions").delete().eq("id", newId)
+        if (delError) {
+          showToast("ยกเลิกไม่สำเร็จ ลองใหม่อีกครั้ง", "error")
+          return
+        }
+        window.dispatchEvent(new CustomEvent("transactionAdded"))
+        showToast("ยกเลิกแล้ว")
+      },
+    })
+  }
 
   const categoriesForType = categories.filter(c => !c.type || c.type === type)
 
@@ -314,26 +389,6 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles,
                 />
               </div>
               {amountError && <p className="text-xs text-[#D85A30] mt-1">{amountError}</p>}
-              {suggestedAmounts.length > 0 && (
-                <div className="flex flex-wrap gap-2 mt-2">
-                  {suggestedAmounts.map(x => {
-                    const selected = amountNum === x
-                    const label = x.toLocaleString("th-TH", { minimumFractionDigits: Number.isInteger(x) ? 0 : 2, maximumFractionDigits: 2 })
-                    return (
-                      <button
-                        key={x}
-                        type="button"
-                        onClick={() => setAmount(sanitizeAmount(String(x)))}
-                        aria-label={`ใส่จำนวน ฿${label}`}
-                        style={selected ? { borderColor: typeColor, backgroundColor: `${typeColor}1A`, color: typeColor } : undefined}
-                        className={`px-3 py-1 rounded-full text-sm border transition-colors ${selected ? "font-medium" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}
-                      >
-                        ฿{label}
-                      </button>
-                    )
-                  })}
-                </div>
-              )}
             </div>
 
             <button
@@ -343,6 +398,36 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles,
             >
               {loading ? "กำลังบันทึก..." : "บันทึก"}
             </button>
+
+            {frequentItems.length > 0 && (
+              <div className="flex flex-col gap-1.5">
+                <p className="text-xs font-medium text-gray-500">รายการที่จดบ่อย</p>
+                <p className="text-xs text-gray-400">แตะเพื่อบันทึกทันที · กดค้างเพื่อแก้ยอด</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {frequentItems.map(item => (
+                    <button
+                      key={`${item.name}|${item.amount}|${item.category ?? ""}`}
+                      type="button"
+                      disabled={loading}
+                      aria-label={`บันทึก ${itemLabel(item)} ${formatBaht(item.amount)}`}
+                      onPointerDown={() => startPress(item)}
+                      onPointerUp={clearPressTimer}
+                      onPointerLeave={clearPressTimer}
+                      onPointerCancel={clearPressTimer}
+                      onContextMenu={e => e.preventDefault()}
+                      onClick={() => handleQuickSave(item)}
+                      style={{ WebkitTouchCallout: "none" }}
+                      className="min-h-[44px] px-3 py-1.5 rounded-lg border border-gray-200 text-left select-none hover:bg-gray-50 disabled:opacity-50 transition-colors"
+                    >
+                      <span className="block text-sm font-medium text-gray-800 truncate">{itemLabel(item)}</span>
+                      <span className="block text-xs text-gray-500 truncate">
+                        {formatBaht(item.amount)}{item.category ? ` · ${item.category}` : ""}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <button
               type="button"

@@ -1,41 +1,53 @@
 import { addDays } from "./income-schedule"
 
-type TxLike = { amount: number | string; type: string; date: string }
+type TxLike = {
+  name: string | null
+  amount: number | string
+  type: string
+  date: string
+  category: string | null
+  kind?: string | null
+}
 
-// ยอดที่ผู้ใช้จดบ่อยในช่วง N วันล่าสุด (ใช้เป็นตัวเลขแนะนำในฟอร์มจด)
-// คืนเรียงน้อย -> มาก
-export function topAmounts(
+export type TopItem = { name: string; amount: number; category: string | null; count: number }
+
+// รายการที่ผู้ใช้จดบ่อยในช่วง N วันล่าสุด (ชื่อ + ยอด + หมวดเหมือนกัน)
+// คืนเรียงถี่สุดก่อน เสมอกันเอาที่จดล่าสุดก่อน
+export function topItems(
   txs: TxLike[],
   type: "expense" | "income",
   today: string,
   opts: { days?: number; limit?: number; minCount?: number } = {}
-): number[] {
-  const days = opts.days ?? 60
-  const limit = opts.limit ?? 4
+): TopItem[] {
+  const days = opts.days ?? 30
+  const limit = opts.limit ?? 6
   const minCount = opts.minCount ?? 2
   const from = addDays(today, -(days - 1))
 
-  const stats = new Map<number, { count: number; latest: string }>()
+  const groups = new Map<string, { name: string; amount: number; category: string | null; count: number; latest: string }>()
   for (const t of txs) {
     if (t.type !== type) continue
+    if (t.kind === "bill_payment") continue
     if (typeof t.date !== "string" || t.date < from || t.date > today) continue
     const n = Number(t.amount)
     if (!Number.isFinite(n) || n <= 0) continue
     const v = Math.round(n * 100) / 100
     if (v <= 0) continue
-    const s = stats.get(v)
-    if (s) {
-      s.count += 1
-      if (t.date > s.latest) s.latest = t.date
+    const name = typeof t.name === "string" ? t.name.trim() : ""
+    const category = t.category ? t.category : null
+    const key = JSON.stringify([name, v, category ?? ""])
+    const g = groups.get(key)
+    if (g) {
+      g.count += 1
+      if (t.date > g.latest) g.latest = t.date
     } else {
-      stats.set(v, { count: 1, latest: t.date })
+      groups.set(key, { name, amount: v, category, count: 1, latest: t.date })
     }
   }
 
-  return [...stats.entries()]
-    .filter(([, s]) => s.count >= minCount)
-    .sort((a, b) => b[1].count - a[1].count || (a[1].latest < b[1].latest ? 1 : a[1].latest > b[1].latest ? -1 : 0))
+  return [...groups.values()]
+    .filter(g => g.count >= minCount)
+    .sort((a, b) => b.count - a.count || (a.latest < b.latest ? 1 : a.latest > b.latest ? -1 : 0))
     .slice(0, limit)
-    .map(([v]) => v)
-    .sort((a, b) => a - b)
+    .map(g => ({ name: g.name, amount: g.amount, category: g.category, count: g.count }))
 }
