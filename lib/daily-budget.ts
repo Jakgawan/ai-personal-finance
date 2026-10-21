@@ -159,19 +159,7 @@ export function pickInsight(
   budget: DailyBudget,
   todayStr: string
 ): Insight | null {
-  // (a) ใช้เกินงบวันนี้ -> บอกว่าวันละเท่าไรถึงจะพอถึงสิ้นรอบ
-  if (budget.state === "over" && budget.tomorrowBudget !== null && Math.floor(budget.tomorrowBudget) > 0) {
-    return {
-      parts: [
-        { text: "ถ้าใช้ไม่เกินวันละ " },
-        { text: `฿${formatMoney(Math.floor(budget.tomorrowBudget))}`, bold: true },
-        { text: " จะมีเงินพอถึง " },
-        { text: formatThaiShortDate(budget.cycleEnd), bold: true },
-      ],
-    }
-  }
-
-  // (b) หมวดที่ใช้มากสุดใน 7 วันล่าสุด เทียบ 7 วันก่อนหน้า
+  // (a) หมวดที่ใช้มากสุดใน 7 วันล่าสุด เทียบ 7 วันก่อนหน้า
   const thisWeekFrom = addDays(todayStr, -6)
   const prevWeekFrom = addDays(todayStr, -13)
   const prevWeekTo = addDays(todayStr, -7)
@@ -204,7 +192,7 @@ export function pickInsight(
     }
   }
 
-  // (c) วันนี้ยังไม่มีรายการเลย
+  // (b) วันนี้ยังไม่มีรายการเลย
   if (!transactions.some(t => t.date === todayStr)) {
     return { parts: [{ text: "วันนี้ยังไม่ได้บันทึกรายการ" }] }
   }
