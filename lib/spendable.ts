@@ -6,7 +6,8 @@ import { addDays } from "./income-schedule"
 import type { DailyBudget } from "./daily-budget"
 
 // รายการเงินเข้า-ออก (type เป็น "income" หรือ "expense")
-export type Tx = { date: string; type: string; amount: number | string }
+// kind: "bill_payment" = จ่ายบิล/ชำระหนี้ (ไม่ส่ง/null/ค่าอื่น = รายการปกติ)
+export type Tx = { date: string; type: string; amount: number | string; kind?: string | null }
 // ยอดตั้งต้นที่ผู้ใช้ตั้งไว้ + วันที่ตั้ง (ยอดนี้คือยอด "ต้นวัน" ของ opening_date)
 export type Opening = { amount: number; opening_date: string }
 
@@ -17,8 +18,9 @@ export type Spendable = {
   // ใช้เกินไปเท่าไหร่ (0 ถ้า state = ok) — ความหมายขึ้นกับ state: negative = ยอดคงเหลือติดลบ, over = ใช้เกินส่วนของวันนี้
   overBy: number
   incomeToToday: number
-  expenseBeforeToday: number
-  todayExpense: number
+  expenseBeforeToday: number // รายจ่ายก่อนวันนี้ + จ่ายบิลวันนี้ (หักจากยอดต้นวัน)
+  todayExpense: number // รายจ่ายปกติของวันนี้ (ไม่รวมจ่ายบิล)
+  todayBillPayments: number // ยอดจ่ายบิล/ชำระหนี้วันนี้ (UI ไว้แสดง — ถูกหักจากยอดต้นวันแล้ว ไม่นับเป็น "วันนี้ใช้ไป")
   startOfTodayBalance: number // ยอดต้นวันนี้ (ยังไม่หักรายจ่ายวันนี้)
   balanceNow: number // ยอดตอนนี้ (หักรายจ่ายวันนี้แล้ว)
   daysLeftInclToday: number
@@ -58,6 +60,7 @@ export function calcSpendable(input: {
   let incomeToToday = 0
   let expenseBeforeToday = 0
   let todayExpense = 0
+  let todayBillPayments = 0
   let excludedBeforeOpening = 0
 
   for (const t of transactions) {
@@ -74,8 +77,15 @@ export function calcSpendable(input: {
       // รวมรายรับของวันนี้ด้วย — เงินที่เข้าวันนี้ใช้ได้วันนี้
       incomeToToday += amt
     } else if (t.type === "expense") {
-      if (t.date < today) expenseBeforeToday += amt
-      else todayExpense += amt
+      if (t.date < today) {
+        expenseBeforeToday += amt
+      } else if (t.kind === "bill_payment") {
+        // จ่ายบิลวันนี้: หักจากยอดต้นวัน (เหมือนจ่ายไปก่อนเริ่มวัน) ไม่นับเป็น "วันนี้ใช้ไป"
+        expenseBeforeToday += amt
+        todayBillPayments += amt
+      } else {
+        todayExpense += amt
+      }
     }
   }
 
@@ -112,6 +122,7 @@ export function calcSpendable(input: {
     incomeToToday,
     expenseBeforeToday,
     todayExpense,
+    todayBillPayments,
     startOfTodayBalance,
     balanceNow,
     daysLeftInclToday,

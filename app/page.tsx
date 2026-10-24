@@ -4,16 +4,18 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { supabase } from "@/lib/supabase"
 import Link from "next/link"
 import { formatDate } from "@/lib/utils"
-import { Plus, Lightbulb, Scale, X, Wallet, TriangleAlert } from "lucide-react"
+import { Lightbulb, Scale, X, Wallet, TriangleAlert } from "lucide-react"
 import AdjustBalanceModal from "@/app/components/AdjustBalanceModal"
 import CarryOverModal from "@/app/components/CarryOverModal"
 import { getPeriodTransition, type CarryoverPref, type PeriodTransition } from "@/lib/period-transition"
 import { showToast } from "@/app/components/Toast"
 import { pickActiveOpening } from "@/lib/opening-balance"
 import CategoryIcon from "@/app/components/CategoryIcon"
+import BillPaymentBadge from "@/app/components/BillPaymentBadge"
 import { pickInsight, formatMoney, formatThaiShortDate } from "@/lib/daily-budget"
 import { todayInBangkok, addDays, getNextIncomeDate, getPreviousIncomeDate, type IncomeSourceSchedule } from "@/lib/income-schedule"
-import { calcSpendable, getCurrentPeriod, toLegacyBudget, dayDiff } from "@/lib/spendable"
+import { calcSpendable, getCurrentPeriod, toLegacyBudget } from "@/lib/spendable"
+import { calcCarryIn } from "@/lib/period-carry-in"
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend
@@ -26,6 +28,7 @@ type Transaction = {
   date: string
   type: string
   category: string
+  kind?: string | null
 }
 
 type PayCycle = {
@@ -51,6 +54,7 @@ type Asset = {
 type OpeningRow = {
   id: string
   amount: number
+  entered_amount: number | null
   opening_date: string
   source: string
   leftover: number | null
@@ -174,14 +178,14 @@ export default function Dashboard() {
     setOpeningError(false)
     const { data, error } = await supabase
       .from("opening_balances")
-      .select("id, amount, opening_date, source, leftover, leftover_from, created_at")
+      .select("id, amount, entered_amount, opening_date, source, leftover, leftover_from, created_at")
       .eq("user_id", user.id)
     if (error) {
       showToast("โหลดยอดเงินตั้งต้นไม่สำเร็จ", "error")
       setOpeningError(true)
       return
     }
-    setOpeningRows(((data || []) as OpeningRow[]).map(r => ({ ...r, amount: Number(r.amount), leftover: r.leftover === null || r.leftover === undefined ? null : Number(r.leftover) })))
+    setOpeningRows(((data || []) as OpeningRow[]).map(r => ({ ...r, amount: Number(r.amount), entered_amount: r.entered_amount === null || r.entered_amount === undefined ? null : Number(r.entered_amount), leftover: r.leftover === null || r.leftover === undefined ? null : Number(r.leftover) })))
     setOpeningLoaded(true)
   }, [])
 
@@ -451,8 +455,10 @@ export default function Dashboard() {
     ? pickInsight(transactions, toLegacyBudget(spend, period, { income: cycleIncome, expense: cycleExpense, balance: cycleBalance }), today)
     : null
   const todayTransactions = transactions.filter(t => t.date === today)
-  const todayTop5 = todayTransactions.slice(0, 5)
+  const todayTop3 = todayTransactions.slice(0, 3)
   const categoryByName = new Map(categories.map(c => [c.name, c]))
+  // ยกมา = เงินตอนเริ่มรอบนี้ก่อนรายรับของรอบ (ไม่มียอดตั้งต้น -> ไม่แสดง)
+  const carryIn: number | null = spend && activeOpening ? calcCarryIn(activeOpening, transactions, period.start) : null
   const spentPct = spend && spend.todayBudget > 0 ? Math.min(100, (spend.todayExpense / spend.todayBudget) * 100) : 100
 
   const totalLiabilities = liabilities.reduce((s, l) => s + Number(l.balance), 0)
@@ -510,32 +516,23 @@ export default function Dashboard() {
     return (
       <div className="p-4 md:p-6 bg-gray-50 min-h-screen animate-pulse">
         <div className="h-7 w-32 bg-gray-200 rounded mb-6" />
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4 mb-3 md:mb-4">
-          <div className="bg-gray-200 rounded-2xl h-44" />
-          <div className="bg-white rounded-xl shadow-sm p-4 h-44">
-            <div className="h-3 w-32 bg-gray-200 rounded mb-4" />
-            <div className="grid grid-cols-4 gap-2">
-              {Array.from({ length: 4 }).map((_, i) => (
-                <div key={i} className="h-12 bg-gray-200 rounded-lg" />
-              ))}
-            </div>
-          </div>
-        </div>
-        <div className="grid grid-cols-2 gap-3 md:gap-4 mb-6">
+        <div className="bg-gray-200 rounded-2xl h-44 mb-3 md:mb-4" />
+        <div className="grid grid-cols-2 gap-3 md:gap-4 mb-3 md:mb-4">
           {Array.from({ length: 2 }).map((_, i) => (
             <div key={i} className="bg-white rounded-xl p-3 md:p-4 shadow-sm h-20">
               <div className="h-3 w-16 bg-gray-200 rounded mb-2" />
               <div className="h-5 w-20 bg-gray-200 rounded" />
             </div>
           ))}
+          <div className="col-span-2 bg-white rounded-xl p-3 md:p-4 shadow-sm h-16">
+            <div className="h-3 w-24 bg-gray-200 rounded mb-2" />
+            <div className="h-5 w-28 bg-gray-200 rounded" />
+          </div>
         </div>
-        <div className="bg-white rounded-xl shadow-sm p-4 md:p-5 mb-6 h-64">
-          <div className="h-4 w-40 bg-gray-200 rounded mb-4" />
-          <div className="w-24 h-24 rounded-full bg-gray-200 mx-auto" />
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-          <div className="md:col-span-2 bg-white rounded-xl p-4 md:p-5 shadow-sm h-56" />
-          <div className="bg-white rounded-xl p-4 md:p-5 shadow-sm h-56" />
+        <div className="bg-white rounded-xl shadow-sm p-4 md:p-5 mb-6 h-40">
+          <div className="h-4 w-32 bg-gray-200 rounded mb-4" />
+          <div className="h-3 w-full bg-gray-200 rounded mb-3" />
+          <div className="h-3 w-full bg-gray-200 rounded" />
         </div>
       </div>
     )
@@ -543,7 +540,7 @@ export default function Dashboard() {
 
   return (
     <div className="p-4 md:p-6 bg-gray-50 min-h-screen">
-      <h1 className="text-2xl font-bold text-gray-800 mb-6">ภาพรวม</h1>
+      <h1 className="text-2xl font-bold text-gray-800 mb-3 md:mb-6">ภาพรวม</h1>
 
       {/* ถึงวันเงินเข้าแล้วแต่ยังไม่มีรายรับ -> ถามว่าเงินเข้าแล้วหรือยัง */}
       {incomeCheck && (
@@ -632,8 +629,9 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Hero + บันทึกด่วน — mobile เรียงบนลงล่าง, desktop (md+) แบ่ง 2 คอลัมน์ */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4 mb-3 md:mb-4">
+
+      {/* Hero + Insight — mobile เรียงบนลงล่าง, desktop (md+) ถ้ามี insight วางคู่กัน */}
+      <div className={`grid grid-cols-1 ${insight ? "md:grid-cols-2" : ""} gap-3 md:gap-4 mb-3 md:mb-4`}>
         {/* Hero: ใช้ได้วันนี้ */}
         <div
           className="rounded-2xl p-4 md:p-6 text-white shadow-sm flex flex-col justify-between"
@@ -690,13 +688,6 @@ export default function Dashboard() {
                   ? `-฿${formatMoney(Math.max(1, spend.overBy))}`
                   : `฿${formatMoney(Math.max(0, spend.availableToday))}`}
               </p>
-              <p className="text-sm opacity-90 mt-1">
-                เงินเหลือ <span className="font-semibold tabular-nums">฿{formatMoney(Math.max(0, spend.balanceNow))}</span>
-                {" "}แบ่งใช้ <span className="font-semibold tabular-nums">{spend.daysLeftInclToday}</span> วัน
-                {" "}{next.source === "month_end"
-                  ? `จนถึง ${formatThaiShortDate(period.end)}`
-                  : `จนเงินเข้า ${formatThaiShortDate(next.date)}`}
-              </p>
               <div className="h-2 bg-white/30 rounded-full mt-3" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(spentPct)}>
                 <div className="h-2 rounded-full bg-white transition-all" style={{ width: `${spentPct}%` }} />
               </div>
@@ -704,32 +695,30 @@ export default function Dashboard() {
                 วันนี้ใช้ไป <span className="font-semibold tabular-nums">฿{formatMoney(spend.todayExpense)}</span>
                 {" "}จาก <span className="font-semibold tabular-nums">฿{formatMoney(Math.max(0, spend.todayBudget))}</span>
               </p>
-              {spend.state === "over" && (
-                <p className="text-sm opacity-90 mt-1">
-                  {spend.tomorrowBudget === null
-                    ? "วันนี้เป็นวันสุดท้ายของรอบ"
-                    : spend.tomorrowBudget > 0
-                      ? <>พรุ่งนี้ใช้ได้ <span className="font-semibold tabular-nums">฿{formatMoney(spend.tomorrowBudget)}</span>/วัน</>
-                      : "พรุ่งนี้ยังไม่มีงบเหลือ"}
+              {spend.todayBillPayments > 0 && (
+                <p className="text-xs opacity-90 mt-1">
+                  จ่ายบิลวันนี้ <span className="font-semibold tabular-nums">฿{formatMoney(spend.todayBillPayments)}</span> (ไม่นับในใช้ไป)
                 </p>
               )}
+              <p className="text-sm opacity-90 mt-1">
+                {spend.tomorrowBudget === null
+                  ? "วันนี้เป็นวันสุดท้ายของรอบ"
+                  : spend.tomorrowBudget > 0
+                    ? <>พรุ่งนี้ใช้ได้ <span className="font-semibold tabular-nums">฿{formatMoney(spend.tomorrowBudget)}</span> · พอถึง {formatThaiShortDate(period.end)}</>
+                    : "พรุ่งนี้ยังไม่มีงบเหลือ"}
+                {next.source === "month_end" && (
+                  <>
+                    {" · "}
+                    <Link href="/settings?tab=paycycles" className="underline underline-offset-2 hover:text-white">ตั้งวันเงินเข้า</Link>
+                  </>
+                )}
+              </p>
             </>
           )}
           {spend && activeOpening && activeOpening.source === "carryover" && activeOpening.leftover !== null && activeOpening.leftover > 0 && activeOpening.opening_date === period.start && (
             <p className="text-xs opacity-90 mt-3">
               เหลือจากรอบที่แล้ว ({formatThaiShortDate(activeOpening.leftover_from ?? prevStart)} – {formatThaiShortDate(prevEnd)}){" "}
               <span className="font-semibold tabular-nums">฿{formatMoney(activeOpening.leftover)}</span>
-            </p>
-          )}
-          {spend && (
-            <p className="text-xs opacity-90 mt-3">
-              รอบนี้ {formatThaiShortDate(period.start)} – {formatThaiShortDate(period.end)} (เหลือ {spend.daysLeftInclToday} วัน)
-              {next.source === "month_end" && (
-                <>
-                  {" · "}
-                  <Link href="/settings?tab=paycycles" className="underline underline-offset-2 hover:text-white">ยังไม่ได้ตั้งวันเงินเข้า</Link>
-                </>
-              )}
             </p>
           )}
           {activeOpening && (
@@ -741,54 +730,31 @@ export default function Dashboard() {
               <Scale size={12} /> ปรับยอดเงิน
             </button>
           )}
-        </div>
-
-        <div className="flex flex-col gap-3 md:gap-4">
-          {/* บันทึกรายจ่ายด่วน */}
-          <div className="bg-white rounded-xl p-4 shadow-sm">
-            <p className="text-sm font-semibold text-gray-700 mb-3">บันทึกรายจ่ายด่วน</p>
-            <div className="grid grid-cols-4 gap-2">
-              {[50, 100, 200].map(amt => (
-                <button
-                  key={amt}
-                  type="button"
-                  onClick={() => window.dispatchEvent(new CustomEvent("openQuickAdd", { detail: { amount: amt, type: "expense" } }))}
-                  className="min-h-12 rounded-lg bg-gray-50 border border-gray-200 text-sm font-semibold text-gray-800 tabular-nums hover:bg-gray-100 transition-colors"
-                >
-                  ฿{amt}
-                </button>
-              ))}
-              <button
-                type="button"
-                onClick={() => window.dispatchEvent(new CustomEvent("openQuickAdd", { detail: { amount: null, type: "expense" } }))}
-                className="min-h-12 rounded-lg border border-[#1D9E75] text-[#1D9E75] text-sm font-semibold flex items-center justify-center gap-1 hover:bg-green-50 transition-colors"
-              >
-                <Plus size={16} /> อื่นๆ
-              </button>
-            </div>
-          </div>
-
-          {/* Insight */}
-          {insight && (
-            <div className="bg-white rounded-xl p-4 shadow-sm flex items-start gap-3">
-              <span className="w-9 h-9 rounded-full bg-blue-50 text-[#378ADD] flex items-center justify-center shrink-0">
-                <Lightbulb size={18} />
-              </span>
-              <div className="min-w-0">
-                <p className="text-sm text-gray-700">
-                  {insight.parts.map((p, i) => (
-                    p.bold ? <span key={i} className="font-bold text-gray-900">{p.text}</span> : <span key={i}>{p.text}</span>
-                  ))}
-                </p>
-                {insight.caption && <p className="text-xs text-gray-400 mt-1">{insight.caption}</p>}
-              </div>
-            </div>
+          {spend && spend.state === "negative" && next.source === "month_end" && (
+            <Link href="/settings?tab=paycycles" className="self-start mt-2 text-xs text-white/90 underline underline-offset-2 hover:text-white">ตั้งวันเงินเข้า</Link>
           )}
         </div>
+
+        {/* Insight */}
+        {insight && (
+          <div className="bg-white rounded-xl p-4 shadow-sm flex items-start gap-3">
+            <span className="w-9 h-9 rounded-full bg-blue-50 text-[#378ADD] flex items-center justify-center shrink-0">
+              <Lightbulb size={18} />
+            </span>
+            <div className="min-w-0">
+              <p className="text-sm text-gray-700">
+                {insight.parts.map((p, i) => (
+                  p.bold ? <span key={i} className="font-bold text-gray-900">{p.text}</span> : <span key={i}>{p.text}</span>
+                ))}
+              </p>
+              {insight.caption && <p className="text-xs text-gray-400 mt-1">{insight.caption}</p>}
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* รายรับ/รายจ่ายรอบนี้ */}
-      <div className="grid grid-cols-2 gap-3 md:gap-4 mb-6">
+      {/* รายรับ/รายจ่าย/คงเหลือรอบนี้ */}
+      <div className="grid grid-cols-2 gap-3 md:gap-4 mb-3 md:mb-4">
         {[
           { label: "รายรับรอบนี้", value: cycleIncome, color: "text-[#1D9E75]", pct: pctChange(cycleIncome, prevIncome) },
           { label: "รายจ่ายรอบนี้", value: cycleExpense, color: "text-[#D85A30]", pct: pctChange(cycleExpense, prevExpense) },
@@ -803,23 +769,36 @@ export default function Dashboard() {
             )}
           </div>
         ))}
+        {spend && (
+          <div className="col-span-2 bg-white rounded-xl p-3 md:p-4 shadow-sm">
+            <p className="text-xs text-gray-500">คงเหลือรอบนี้</p>
+            <p className={`text-lg md:text-xl font-bold tabular-nums ${spend.balanceNow < -0.5 ? "text-[#D85A30]" : "text-gray-800"}`}>{signedMoney(spend.balanceNow)}</p>
+            {carryIn !== null && carryIn > 0.5 && (
+              <p className="text-xs text-gray-400 mt-0.5">ยกมา <span className="tabular-nums">฿{formatMoney(carryIn)}</span></p>
+            )}
+          </div>
+        )}
       </div>
 
+
       {/* รายการวันนี้ (ไม่มีรายการ -> ไม่แสดง เพราะ insight บอกอยู่แล้ว) */}
-      {todayTop5.length > 0 && (
+      {todayTop3.length > 0 && (
         <div className="bg-white rounded-xl shadow-sm overflow-hidden mb-6">
           <div className="flex items-center justify-between px-4 md:px-5 py-3 border-b border-gray-100">
             <h2 className="text-sm font-semibold text-gray-700">รายการวันนี้</h2>
             <Link href="/transaction" className="text-xs text-[#378ADD] hover:underline">ดูทั้งหมด</Link>
           </div>
           <div className="divide-y divide-gray-100">
-            {todayTop5.map(t => {
+            {todayTop3.map(t => {
               const cat = t.category ? categoryByName.get(t.category) : undefined
               return (
                 <div key={t.id} className="flex items-center gap-3 px-4 md:px-5 py-3">
                   <CategoryIcon icon={cat?.icon} color={cat?.color} size="md" />
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-800 truncate">{t.name || t.category || (t.type === "income" ? "รายรับ" : "รายจ่าย")}</p>
+                    <p className="text-sm font-medium text-gray-800 flex items-center gap-1.5 min-w-0">
+                      <span className="truncate">{t.name || t.category || (t.type === "income" ? "รายรับ" : "รายจ่าย")}</span>
+                      {t.kind === "bill_payment" && <BillPaymentBadge />}
+                    </p>
                     {t.category && <p className="text-xs text-gray-400 truncate">{t.category}</p>}
                   </div>
                   <p className={`text-sm font-semibold tabular-nums ${t.type === "income" ? "text-[#1D9E75]" : "text-[#D85A30]"}`}>
@@ -876,9 +855,22 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-        {/* กราฟรายจ่ายแบ่งหมวด */}
-        <div className="md:col-span-2 bg-white rounded-xl p-4 md:p-5 shadow-sm">
+      {/* กราฟย้อนหลัง 6 เดือน */}
+      <div className="bg-white rounded-xl p-4 md:p-5 shadow-sm mb-6">
+        <h2 className="text-sm font-semibold text-gray-700 mb-4">รายรับ vs รายจ่าย ย้อนหลัง 6 เดือน</h2>
+        <ResponsiveContainer width="100%" height={220}>
+          <BarChart data={last6Months} barGap={4}>
+            <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+            <YAxis tick={{ fontSize: 11 }} />
+            <Tooltip formatter={(v) => `฿${Number(v ?? 0).toLocaleString()}`} />
+            <Bar dataKey="income" name="รายรับ" fill="#1D9E75" radius={[4, 4, 0, 0]} />
+            <Bar dataKey="expense" name="รายจ่าย" fill="#D85A30" radius={[4, 4, 0, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+
+              {/* กราฟรายจ่ายแบ่งหมวด */}
+        <div className="bg-white rounded-xl p-4 md:p-5 shadow-sm mb-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-sm font-semibold text-gray-700">รายจ่ายแบ่งหมวด</h2>
             <div className="flex gap-1">
@@ -960,50 +952,6 @@ export default function Dashboard() {
             </>
           )}
         </div>
-
-        {/* นับถอยหลังรอบเงินเดือน */}
-        <div className="bg-white rounded-xl p-4 md:p-5 shadow-sm flex flex-col justify-between">
-          <h2 className="text-sm font-semibold text-gray-700 mb-3">รอบเงินเดือน</h2>
-          <div className="text-center py-4">
-            <p className="text-5xl font-bold text-[#378ADD]">{dayDiff(next.date, today)}</p>
-            <p className="text-sm text-gray-500 mt-1">วันถึงเงินเข้า</p>
-            {next.source === "month_end" ? (
-              <p className="text-xs text-gray-400 mt-1">ยังไม่ได้ตั้งวันเงินเข้า</p>
-            ) : (
-              <p className="text-xs text-gray-400 mt-1">
-                เงินเข้าครั้งถัดไป {formatThaiShortDate(next.date)}
-              </p>
-            )}
-            <Link href="/settings?tab=paycycles" className="text-xs text-[#378ADD] hover:underline mt-2 block">ตั้งค่ารายได้และรอบเงิน →</Link>
-          </div>
-          {spend && (
-            <div className="mt-4 bg-gray-50 rounded-xl p-3 text-sm">
-              <div className="flex justify-between text-gray-600 mb-1">
-                <span>คงเหลือ</span>
-                <span className={`font-semibold ${spend.balanceNow >= 0 ? "text-[#1D9E75]" : "text-[#D85A30]"}`}>{signedMoney(spend.balanceNow)}</span>
-              </div>
-              <div className="flex justify-between text-gray-600">
-                <span>ใช้ได้/วัน</span>
-                <span className="font-semibold text-[#378ADD]">฿{formatMoney(Math.max(0, spend.todayBudget))}</span>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* กราฟย้อนหลัง 6 เดือน */}
-      <div className="bg-white rounded-xl p-4 md:p-5 shadow-sm mb-6">
-        <h2 className="text-sm font-semibold text-gray-700 mb-4">รายรับ vs รายจ่าย ย้อนหลัง 6 เดือน</h2>
-        <ResponsiveContainer width="100%" height={220}>
-          <BarChart data={last6Months} barGap={4}>
-            <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-            <YAxis tick={{ fontSize: 11 }} />
-            <Tooltip formatter={(v) => `฿${Number(v ?? 0).toLocaleString()}`} />
-            <Bar dataKey="income" name="รายรับ" fill="#1D9E75" radius={[4, 4, 0, 0]} />
-            <Bar dataKey="expense" name="รายจ่าย" fill="#D85A30" radius={[4, 4, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
 
       {/* ตารางรายการล่าสุด — mobile แสดงแบบ card แทนตาราง */}
       <div className="bg-white rounded-xl shadow-sm overflow-hidden mb-6">

@@ -174,6 +174,73 @@ describe("calcSpendable", () => {
   })
 })
 
+const bill = (date: string, amount: number) => ({ date, type: "expense", amount, kind: "bill_payment" })
+const base = {
+  today: "2026-10-10",
+  opening: { amount: 6000, opening_date: "2026-10-10" },
+  nextIncomeDate: "2026-10-20",
+}
+
+describe("calcSpendable bill_payment", () => {
+  it("bill today deducts from start-of-day, not counted as today spend", () => {
+    const r = calcSpendable({ ...base, transactions: [bill("2026-10-10", 3751)] })
+    expect(r.state).not.toBe("over")
+    expect(r.state).toBe("ok")
+    expect(r.todayExpense).toBe(0)
+    expect(r.todayBillPayments).toBe(3751)
+    expect(r.todayBudget).toBeCloseTo(224.9)
+    expect(r.availableToday).toBeCloseTo(224.9)
+    expect(r.balanceNow).toBe(2249)
+    expect(r.tomorrowBudget).toBeCloseTo(2249 / 9)
+  })
+
+  it("bill + regular expense today", () => {
+    const r = calcSpendable({ ...base, transactions: [bill("2026-10-10", 3751), exp("2026-10-10", 300)] })
+    expect(r.todayExpense).toBe(300)
+    expect(r.availableToday).toBeCloseTo(r.todayBudget - 300)
+    expect(r.balanceNow).toBe(6000 - 3751 - 300)
+  })
+
+  it("bill yesterday behaves like regular expense yesterday", () => {
+    const o = { amount: 6000, opening_date: "2026-10-01" }
+    const a = calcSpendable({ ...base, opening: o, transactions: [bill("2026-10-09", 1000)] })
+    const b = calcSpendable({ ...base, opening: o, transactions: [exp("2026-10-09", 1000)] })
+    expect(a).toEqual({ ...b, todayBillPayments: 0 })
+    expect(a.todayBillPayments).toBe(0)
+  })
+
+  it("bill that exhausts balance -> negative", () => {
+    const r = calcSpendable({ ...base, transactions: [bill("2026-10-10", 7000)] })
+    expect(r.state).toBe("negative")
+    expect(r.overBy).toBe(1000)
+    expect(r.todayExpense).toBe(0)
+  })
+
+  it("missing / null / unknown kind counts as regular", () => {
+    const r = calcSpendable({
+      ...base,
+      transactions: [
+        exp("2026-10-10", 100),
+        { date: "2026-10-10", type: "expense", amount: 100, kind: null },
+        { date: "2026-10-10", type: "expense", amount: 100, kind: "regular" },
+        { date: "2026-10-10", type: "expense", amount: 100, kind: "weird" },
+      ],
+    })
+    expect(r.todayExpense).toBe(400)
+    expect(r.todayBillPayments).toBe(0)
+  })
+
+  it("future / before-opening bill is ignored", () => {
+    const r = calcSpendable({
+      ...base,
+      transactions: [bill("2026-10-11", 500), bill("2026-10-09", 500)],
+    })
+    expect(r.todayBillPayments).toBe(0)
+    expect(r.balanceNow).toBe(6000)
+    expect(r.excludedBeforeOpening).toBe(1)
+  })
+})
+
 describe("getCurrentPeriod", () => {
   it("uses previous income date as start", () => {
     expect(getCurrentPeriod("2026-10-22", "2026-10-20", "2026-11-05", "2026-10-14")).toEqual({
