@@ -6,6 +6,7 @@ import "./globals.css";
 import Sidebar from "@/app/components/Sidebar"
 import Toast from "@/app/components/Toast"
 import ServiceWorkerRegister from "@/app/components/ServiceWorkerRegister"
+import InAppBrowserNotice from "@/app/components/InAppBrowserNotice"
 import { APP_NAME } from "@/app/manifest"
 import { useEffect } from "react"
 import { processDueRecurring } from "@/lib/recurring"
@@ -46,6 +47,7 @@ export default function RootLayout({
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         <RecurringProcessor />
         <ServiceWorkerRegister />
+        <InAppBrowserNotice />
         <Sidebar>{children}</Sidebar>
         <Toast />
       </body>
