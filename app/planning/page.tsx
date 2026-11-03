@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { supabase } from "@/lib/supabase"
 import React from "react"
 import { ClipboardList, BarChart2, Copy, Trash2, ChevronLeft, ChevronRight, X, ArrowRight } from "lucide-react"
@@ -56,6 +56,7 @@ export default function PlanningPage() {
   const [items, setItems] = useState<PlanItem[]>([])
   const [year, setYear] = useState(CURRENT_YEAR)
   const [loading, setLoading] = useState(true)
+  const [itemsYear, setItemsYear] = useState<number | null>(null)
   const [editingCell, setEditingCell] = useState<string | null>(null)
   const [editingName, setEditingName] = useState<string | null>(null)
   const [categories, setCategories] = useState<{id: string, name: string, type: string}[]>([])
@@ -81,11 +82,35 @@ export default function PlanningPage() {
     supabase.from("categories").select("*").eq("user_id", user.id),
   ])
   setItems((data || []) as PlanItem[])
+  setItemsYear(year)
   setCategories(catData || [])
   setLoading(false)
 }
 
-  useEffect(() => { fetchItems() }, [year])
+  useEffect(() => { pendingAlignRef.current = true; fetchItems() }, [year])
+
+  // Mobile only: scroll the table so the current month sits right after the sticky first column
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const spacerRef = useRef<HTMLDivElement>(null)
+  const pendingAlignRef = useRef<boolean>(true)
+  useEffect(() => {
+    const wrap = scrollRef.current
+    if (!pendingAlignRef.current || loading || !wrap || itemsYear !== year) return
+    pendingAlignRef.current = false
+    if (!window.matchMedia("(max-width: 767px)").matches) return
+    if (year !== CURRENT_YEAR) { if (spacerRef.current) spacerRef.current.style.width = "0px"; wrap.scrollLeft = 0; return }
+    const monthTh = wrap.querySelector<HTMLElement>(`th[data-month="${new Date().getMonth() + 1}"]`)
+    const firstTh = wrap.querySelector<HTMLElement>("thead th")
+    if (!monthTh || !firstTh) return
+    // trailing room (mobile only) so late months can also align right after the sticky column
+    const tableEl = wrap.querySelector<HTMLElement>("table")
+    if (spacerRef.current && tableEl) {
+      spacerRef.current.style.width = "0px"
+      const needed = wrap.clientWidth - firstTh.offsetWidth - (tableEl.getBoundingClientRect().right - monthTh.getBoundingClientRect().left)
+      spacerRef.current.style.width = `${Math.max(0, needed)}px`
+    }
+    wrap.scrollLeft += monthTh.getBoundingClientRect().left - firstTh.getBoundingClientRect().right
+  }, [loading, year, items, itemsYear])
 
   const addItem = (section: PlanItem["section"]) => {
   setAddSection(section)
@@ -511,15 +536,17 @@ const doResetMonth = async () => {
 
       {/* Table */}
       <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs min-w-[900px]">
+        <div ref={scrollRef} className="overflow-auto max-h-[calc(100dvh-180px)] md:max-h-none md:overflow-x-auto">
+          <div className="flex md:block">
+          <table className="w-full text-xs min-w-[900px] shrink-0 md:shrink">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                <th className="px-4 py-3 text-left text-gray-500 w-40">รายการ</th>
+                <th className="sticky left-0 top-0 z-30 md:static md:z-auto bg-gray-50 w-28 min-w-28 max-w-28 md:w-40 md:min-w-0 md:max-w-none shadow-[1px_0_0_#e5e7eb,0_1px_0_#e5e7eb] md:shadow-none px-2 md:px-4 py-3 text-left text-gray-500">รายการ</th>
                 {MONTHS.map((m, i) => (
-                  <th key={i} className="px-2 py-3 text-center text-gray-500 w-16">{m}</th>
+                  <th key={i} data-month={i + 1} className="sticky top-0 z-20 md:static md:z-auto bg-gray-50 shadow-[0_1px_0_#e5e7eb] md:shadow-none px-2 py-3 text-center text-gray-500 w-16">{m}</th>
                 ))}
-                <th className="px-4 py-3 text-right text-gray-500 w-24">รวม (฿)</th>
+                <th className="sticky top-0 z-20 md:static md:z-auto bg-gray-50 shadow-[0_1px_0_#e5e7eb] md:shadow-none px-4 py-3 text-right text-gray-500 w-24">รวม (฿)</th>
+                <th className="sticky top-0 z-20 md:static md:z-auto bg-gray-50 shadow-[0_1px_0_#e5e7eb] md:shadow-none"><span className="sr-only">เติมทุกเดือน</span></th>
               </tr>
             </thead>
             <tbody>
@@ -528,13 +555,14 @@ const doResetMonth = async () => {
                 return (
                   <React.Fragment key={sec.key}>
                     <tr className="border-t border-gray-200">
-                      <td colSpan={14} className={`px-4 py-2 text-xs font-semibold ${sec.color}`}>
+                      <td className={`sticky left-0 z-10 md:static md:z-auto w-28 min-w-28 max-w-28 md:w-40 md:min-w-0 md:max-w-none shadow-[1px_0_0_#e5e7eb] md:shadow-none px-2 md:px-4 py-2 text-xs font-semibold truncate md:whitespace-normal md:overflow-visible ${sec.color}`}>
                         {sec.label}
                       </td>
+                      <td colSpan={14} className={sec.color}></td>
                     </tr>
                     {secItems.map(item => (
                       <tr key={item.id} className="border-t border-gray-100 hover:bg-gray-50">
-                        <td className="px-4 py-2">
+                        <td className="sticky left-0 z-10 md:static md:z-auto w-28 min-w-28 max-w-28 md:w-40 md:min-w-0 md:max-w-none shadow-[1px_0_0_#e5e7eb] md:shadow-none bg-white md:bg-transparent px-2 md:px-4 py-2">
                           {editingName === item.id ? (
                             <input
                               autoFocus
@@ -597,17 +625,18 @@ const doResetMonth = async () => {
                       </tr>
                     ))}
                     <tr className="border-t border-dashed border-gray-200">
-                      <td colSpan={14} className="px-4 py-2">
+                      <td className="sticky left-0 z-10 md:static md:z-auto w-28 min-w-28 max-w-28 md:w-40 md:min-w-0 md:max-w-none shadow-[1px_0_0_#e5e7eb] md:shadow-none bg-white md:bg-transparent px-2 md:px-4 py-2">
                         <button
                           onClick={() => addItem(sec.key)}
-                          className="text-xs text-gray-400 hover:text-[#1D9E75] hover:bg-green-50 px-2 py-1 rounded transition-colors"
+                          className="text-xs text-gray-400 hover:text-[#1D9E75] hover:bg-green-50 px-2 py-1 rounded transition-colors whitespace-nowrap"
                         >
                           + เพิ่มรายการ
                         </button>
                       </td>
+                      <td colSpan={14}></td>
                     </tr>
                     <tr className="border-t border-gray-200 bg-gray-50">
-                      <td className="px-4 py-2 text-xs font-semibold text-gray-500">รวม{sec.label}</td>
+                      <td className="sticky left-0 z-10 md:static md:z-auto w-28 min-w-28 max-w-28 md:w-40 md:min-w-0 md:max-w-none shadow-[1px_0_0_#e5e7eb] md:shadow-none bg-gray-50 md:bg-transparent px-2 md:px-4 py-2 text-xs font-semibold text-gray-500 truncate md:whitespace-normal md:overflow-visible">รวม{sec.label}</td>
                       {Array.from({ length: 12 }, (_, i) => i + 1).map(month => (
                         <td key={month} className="px-1 py-2 text-center text-xs font-semibold text-gray-700">
                           {colTotal(secItems, month) ? colTotal(secItems, month).toLocaleString() : "—"}
@@ -621,7 +650,7 @@ const doResetMonth = async () => {
                 )
               })}
               <tr className="border-t-2 border-gray-300 bg-green-50">
-                <td className="px-4 py-3 text-xs font-bold text-[#1D9E75]">เงินเหลือสุทธิ</td>
+                <td className="sticky left-0 z-10 md:static md:z-auto w-28 min-w-28 max-w-28 md:w-40 md:min-w-0 md:max-w-none shadow-[1px_0_0_#e5e7eb] md:shadow-none bg-green-50 md:bg-transparent px-2 md:px-4 py-3 text-xs font-bold text-[#1D9E75] truncate md:whitespace-normal md:overflow-visible">เงินเหลือสุทธิ</td>
                 {Array.from({ length: 12 }, (_, i) => i + 1).map(month => {
                   const net = netByMonth(month)
                   return (
@@ -636,6 +665,8 @@ const doResetMonth = async () => {
               </tr>
             </tbody>
           </table>
+          <div ref={spacerRef} className="shrink-0 md:hidden" aria-hidden="true"></div>
+          </div>
         </div>
       </div>
       {/* Add Item Modal */}
