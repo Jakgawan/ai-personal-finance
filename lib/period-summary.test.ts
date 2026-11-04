@@ -16,6 +16,44 @@ describe("summarizePeriod", () => {
     expect(summarizePeriod(txs, period, "2026-10-30")).toEqual({ income: 1000, expense: 500 })
     expect(summarizePeriod(txs, period, "2026-11-04")).toEqual({ income: 1000, expense: 550 })
   })
+
+  it("นับวันแรกและวันสุดท้ายของรอบ ตัดวันก่อนรอบ", () => {
+    const txs = [
+      { date: "2026-10-19", type: "income", amount: 1 }, // start - 1
+      { date: "2026-10-20", type: "income", amount: 10 }, // start
+      { date: "2026-11-04", type: "income", amount: 100 }, // end
+    ]
+    expect(summarizePeriod(txs, period, "2026-11-04")).toEqual({ income: 110, expense: 0 })
+  })
+
+  it("รายการวันสิ้นสุดรอบที่ยังไม่ถึงวันนี้ไม่นับ แต่ของวันนี้นับ", () => {
+    const txs = [
+      { date: "2026-11-04", type: "expense", amount: 40 }, // = end, > today
+      { date: "2026-11-03", type: "expense", amount: 7 }, // = today
+    ]
+    expect(summarizePeriod(txs, period, "2026-11-03")).toEqual({ income: 0, expense: 7 })
+  })
+
+  it("จ่ายบิลนับในรายจ่าย และรายรับที่ kind เป็น bill_payment (ข้อมูลแปลก) ยังนับเป็นรายรับ", () => {
+    const txs = [
+      { date: "2026-10-25", type: "expense", amount: 300, kind: "bill_payment" },
+      { date: "2026-10-26", type: "income", amount: 500, kind: "bill_payment" },
+    ]
+    expect(summarizePeriod(txs, period, "2026-11-04")).toEqual({ income: 500, expense: 300 })
+  })
+
+  it("จำนวนเงินเป็น string ตัวเลขรวมได้ถูก", () => {
+    const txs = [
+      { date: "2026-10-25", type: "income", amount: "1200.50" },
+      { date: "2026-10-26", type: "income", amount: "0.25" },
+      { date: "2026-10-27", type: "expense", amount: "99.75" },
+    ]
+    expect(summarizePeriod(txs, period, "2026-11-04")).toEqual({ income: 1200.75, expense: 99.75 })
+  })
+
+  it("ไม่มีรายการ -> 0", () => {
+    expect(summarizePeriod([], period, "2026-11-04")).toEqual({ income: 0, expense: 0 })
+  })
 })
 
 describe("buildFinancialContext", () => {
@@ -44,6 +82,26 @@ describe("buildFinancialContext", () => {
   it("ไม่มียอดตั้งต้น -> บอกว่ายังไม่ได้ตั้งยอดเงิน", () => {
     const out = buildFinancialContext({ ...base, balanceNow: null })
     expect(out).toContain("ยังไม่ได้ตั้งยอดเงิน")
+  })
+
+  it("เงินคงเหลือติดลบแสดงเครื่องหมายลบ", () => {
+    const out = buildFinancialContext({ ...base, balanceNow: -850 })
+    const line = out.split("\n").find(l => l.startsWith("เงินคงเหลือตอนนี้"))
+    expect(line).toBeDefined()
+    expect(line).toContain("-")
+    expect(line).toContain((850).toLocaleString())
+  })
+
+  it("ป้ายจ่ายบิลอยู่เฉพาะแถวที่เป็นจ่ายบิล", () => {
+    const recent: RecentTx[] = [
+      { date: "2026-11-02", name: "bill", type: "expense", amount: 500, kind: "bill_payment" },
+      { date: "2026-11-02", name: "food", type: "expense", amount: 60, kind: "regular" },
+      { date: "2026-11-01", name: "pay", type: "income", amount: 900 },
+    ]
+    const lines = buildFinancialContext({ ...base, recent }).split("\n")
+    expect(lines.find(l => l.includes(" bill "))).toContain("(จ่ายบิล)")
+    expect(lines.find(l => l.includes(" food "))).not.toContain("(จ่ายบิล)")
+    expect(lines.find(l => l.includes(" pay "))).not.toContain("(จ่ายบิล)")
   })
 
   it("รายการล่าสุดไม่เกิน 20 และมีป้ายจ่ายบิล", () => {
