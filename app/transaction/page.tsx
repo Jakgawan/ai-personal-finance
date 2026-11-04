@@ -179,8 +179,15 @@ export default function TransactionPage() {
   // แก้ไข: await fetchAll() ก่อนปิด modal
   // ทำให้ข้อมูลใหม่โหลดเสร็จก่อนที่ modal จะปิด
   // ผู้ใช้เห็นรายการใหม่ทันทีโดยไม่ต้องรีเพจ
+  const amountNum: number = Number(amount)
+  const amountValid: boolean = amount.trim() !== "" && Number.isFinite(amountNum) && amountNum > 0
+
   const handleSubmit = async () => {
-  if (!name || !amount || !date) return
+    if (!name) return
+    if (!amountValid || !date || (type !== "income" && type !== "expense")) {
+      showToast("กรอกจำนวนเงินให้ถูกต้อง", "error")
+      return
+    }
     setLoading(true)
 
     const { data: { user } } = await supabase.auth.getUser()
@@ -190,7 +197,7 @@ export default function TransactionPage() {
     }
 
     const payload = {
-      name, amount: Number(amount), date, type, category,
+      name, amount: amountNum, date, type, category,
       cycle_id: cycleId || null, note: note || null, user_id: user.id,
       kind: type === "expense" && isBillPayment ? "bill_payment" : "regular",
     }
@@ -629,6 +636,9 @@ export default function TransactionPage() {
                 className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75] text-gray-800" />
               <input placeholder="จำนวน (฿)" type="number" value={amount} onChange={(e) => setAmount(e.target.value)}
                 className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75] text-gray-800" />
+              {amount.trim() !== "" && !amountValid && (
+                <p className="text-[0.75rem] text-[#D85A30] -mt-2">จำนวนเงินต้องมากกว่า 0</p>
+              )}
               <select value={category} onChange={(e) => setCategory(e.target.value)}
                 className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none text-gray-800">
                   <option value="">-- หมวดหมู่ --</option>
@@ -647,7 +657,7 @@ export default function TransactionPage() {
             <div className="flex gap-3 mt-5">
               <button onClick={() => setShowModal(false)}
                 className="flex-1 border border-gray-200 rounded-lg py-2 text-sm hover:bg-gray-50 text-gray-700">ยกเลิก</button>
-              <button onClick={handleSubmit} disabled={loading || !name || !amount || !date}
+              <button onClick={handleSubmit} disabled={loading || !name || !amountValid || !date}
                 className="flex-1 bg-[#1D9E75] text-white rounded-lg py-2 text-sm hover:bg-[#178a64] disabled:opacity-50">
                 {loading ? "กำลังบันทึก..." : "บันทึก"}
               </button>
