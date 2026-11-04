@@ -16,6 +16,7 @@ import { pickInsight, formatMoney, formatThaiShortDate } from "@/lib/daily-budge
 import { todayInBangkok, addDays, getNextIncomeDate, getPreviousIncomeDate, type IncomeSourceSchedule } from "@/lib/income-schedule"
 import { calcSpendable, getCurrentPeriod, toLegacyBudget } from "@/lib/spendable"
 import { calcCarryIn } from "@/lib/period-carry-in"
+import { summarizePeriod } from "@/lib/period-summary"
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend
@@ -462,8 +463,7 @@ export default function Dashboard() {
   const sumType = (txs: Transaction[], type: string): number =>
     txs.filter(t => t.type === type).reduce((s, t) => s + Number(t.amount), 0)
 
-  const cycleIncome = sumType(cycleTransactions, "income")
-  const cycleExpense = sumType(cycleTransactions, "expense")
+  const { income: cycleIncome, expense: cycleExpense } = summarizePeriod(transactions, period, today)
   const cycleBalance = cycleIncome - cycleExpense
 
   const insight = spend
