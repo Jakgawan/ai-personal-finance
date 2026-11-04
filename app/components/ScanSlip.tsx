@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabase"
 import { Camera, CheckCircle2, Loader2, X } from "lucide-react"
 import { showToast } from "./Toast"
 import { todayInBangkok } from "@/lib/income-schedule"
+import { isValidDateString } from "@/lib/date-valid"
 
 type ScannedData = {
   name: string
@@ -15,7 +16,6 @@ type ScannedData = {
   category: string
 }
 
-const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
 const parseAmount = (v: string): number => (v.trim() === "" ? NaN : Number(v))
 const isAmountValid = (v: string): boolean => {
   const n = parseAmount(v)
@@ -67,7 +67,7 @@ useEffect(() => {
           name: data.data.name || "",
           amount: amountOk ? String(ocrAmount) : "",
           amountMissing: !amountOk,
-          date: typeof data.data.date === "string" && DATE_RE.test(data.data.date) ? data.data.date : todayInBangkok(),
+          date: isValidDateString(data.data.date) ? data.data.date : todayInBangkok(),
           type: data.data.type === "income" ? "income" : "expense",
           category: data.data.category || "",
         })
@@ -81,7 +81,7 @@ useEffect(() => {
     if (!scanned) return
     if (
       !isAmountValid(scanned.amount) ||
-      !DATE_RE.test(scanned.date) ||
+      !isValidDateString(scanned.date) ||
       (scanned.type !== "income" && scanned.type !== "expense")
     ) {
       showToast("กรอกจำนวนเงินและวันที่ให้ถูกต้อง", "error")
@@ -217,7 +217,7 @@ useEffect(() => {
                   .map(c => <option key={c.id} value={c.name} />) }
                   </datalist>
 
-                  <button onClick={handleSave} disabled={saving || !isAmountValid(scanned.amount) || !DATE_RE.test(scanned.date)}
+                  <button onClick={handleSave} disabled={saving || !isAmountValid(scanned.amount) || !isValidDateString(scanned.date)}
                     className="w-full bg-[#1D9E75] text-white rounded-lg py-3 text-sm font-medium hover:bg-[#178a64] disabled:opacity-50 transition-colors">
                     {saving ? "กำลังบันทึก..." : "บันทึกรายการ"}
                   </button>
