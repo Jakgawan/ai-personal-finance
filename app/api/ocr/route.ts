@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
       const parsed = JSON.parse(text)
       return NextResponse.json({ success: true, data: parsed })
     } catch {
-      return NextResponse.json({ success: false, error: "Parse failed", raw: text })
+      return NextResponse.json({ success: false, error: "Parse failed" })
     }
   } catch (error) {
     return NextResponse.json({ success: false, error: "Server error" }, { status: 500 })
