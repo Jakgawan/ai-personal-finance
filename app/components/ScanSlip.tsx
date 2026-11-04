@@ -11,6 +11,7 @@ type ScannedData = {
   name: string
   amount: string
   amountMissing: boolean
+  dateFromToday: boolean
   date: string
   type: "income" | "expense"
   category: string
@@ -109,6 +110,7 @@ useEffect(() => {
           amount: amountOk ? String(ocrAmount) : "",
           amountMissing: !amountOk,
           date: isValidDateString(data.data.date) ? data.data.date : todayInBangkok(),
+          dateFromToday: !isValidDateString(data.data.date),
           type: data.data.type === "income" ? "income" : "expense",
           category: data.data.category || "",
         })
@@ -252,9 +254,12 @@ useEffect(() => {
                     <p className="text-[0.75rem] text-[#D85A30] -mt-2">จำนวนเงินต้องมากกว่า 0</p>
                   )}
 
-                  <input value={scanned.date} onChange={e => setScanned({ ...scanned, date: e.target.value })}
+                  <input value={scanned.date} onChange={e => setScanned({ ...scanned, date: e.target.value, dateFromToday: false })}
                     type="date"
                     className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75]" />
+                  {scanned.dateFromToday && (
+                    <p className="text-[0.75rem] text-gray-500 -mt-2">อ่านวันที่จากสลิปไม่ได้ ใช้วันนี้แทน ตรวจก่อนบันทึก</p>
+                  )}
 
                   <input value={scanned.category} onChange={e => setScanned({ ...scanned, category: e.target.value })} placeholder="หมวดหมู่" 
                     list="category-list"
