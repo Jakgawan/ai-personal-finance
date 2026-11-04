@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef, useEffect } from "react"
+import { useState, useRef, useEffect, useCallback } from "react"
 import { supabase } from "@/lib/supabase"
 import { Camera, CheckCircle2, Loader2, X } from "lucide-react"
 import { showToast } from "./Toast"
@@ -29,6 +29,8 @@ export default function ScanSlip({ onSuccess }: { onSuccess?: () => void }) {
   const [preview, setPreview] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
+  const scanIdRef = useRef<number>(0)
+  const abortRef = useRef<AbortController | null>(null)
   const [categories, setCategories] = useState<{id: string, name: string, type: string}[]>([])
 
 useEffect(() => {
@@ -42,13 +44,34 @@ useEffect(() => {
 }, [])
   
 
+  // ยกเลิกการสแกนที่ค้างอยู่ และทำให้ผลที่ตอบกลับมาทีหลังถูกทิ้ง
+  const cancelScan = useCallback(() => {
+    abortRef.current?.abort()
+    abortRef.current = null
+    scanIdRef.current += 1
+    setScanning(false)
+    setScanned(null)
+    setPreview(null)
+  }, [])
+
+  useEffect(() => {
+    return () => cancelScan()
+  }, [cancelScan])
+
   const handleFile = async (file: File) => {
     if (!file) return
+    abortRef.current?.abort()
+    const controller = new AbortController()
+    abortRef.current = controller
+    scanIdRef.current += 1
+    const myId = scanIdRef.current
+    const isCurrent = (): boolean => myId === scanIdRef.current
     setScanning(true)
     setScanned(null)
 
     // อ่านสลิปไม่สำเร็จ: แจ้งผู้ใช้ ล้างภาพเก่า เปิดโมดอลค้างไว้ให้เลือกรูปใหม่
     const failScan = () => {
+      if (!isCurrent()) return
       showToast("อ่านสลิปไม่สำเร็จ ลองใหม่หรือกรอกเอง", "error")
       setScanned(null)
       setPreview(null)
@@ -59,19 +82,22 @@ useEffect(() => {
       try {
         const base64 = (e.target?.result as string).split(",")[1]
         const mimeType = file.type
-        setPreview(e.target?.result as string)
+        if (isCurrent()) setPreview(e.target?.result as string)
 
         const res = await fetch("/api/ocr", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ imageBase64: base64, mimeType }),
+          signal: controller.signal,
         })
 
+        if (!isCurrent()) return
         if (!res.ok) {
           failScan()
           return
         }
         const data = await res.json()
+        if (!isCurrent()) return
         if (data?.success !== true || !data.data) {
           failScan()
           return
@@ -86,15 +112,15 @@ useEffect(() => {
           type: data.data.type === "income" ? "income" : "expense",
           category: data.data.category || "",
         })
-      } catch {
-        failScan()
+      } catch (err) {
+        if (!(err instanceof DOMException && err.name === "AbortError")) failScan()
       } finally {
-        setScanning(false)
+        if (isCurrent()) setScanning(false)
       }
     }
     reader.onerror = () => {
       failScan()
-      setScanning(false)
+      if (isCurrent()) setScanning(false)
     }
     reader.readAsDataURL(file)
   }
@@ -134,8 +160,7 @@ useEffect(() => {
 
     setSaving(false)
     setShowModal(false)
-    setScanned(null)
-    setPreview(null)
+    cancelScan()
     onSuccess?.()
   }
   
@@ -157,7 +182,7 @@ useEffect(() => {
           <div className="bg-white rounded-2xl w-full max-w-md shadow-xl">
             <div className="flex items-center justify-between px-6 pt-5 pb-3">
               <h2 className="text-lg font-semibold text-gray-800">สแกนสลิป</h2>
-              <button onClick={() => { setShowModal(false); setScanned(null); setPreview(null) }}
+              <button onClick={() => { setShowModal(false); cancelScan() }}
                 aria-label="ปิด" className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
             </div>
 
