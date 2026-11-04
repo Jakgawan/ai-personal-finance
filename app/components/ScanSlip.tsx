@@ -47,20 +47,35 @@ useEffect(() => {
     setScanning(true)
     setScanned(null)
 
+    // อ่านสลิปไม่สำเร็จ: แจ้งผู้ใช้ ล้างภาพเก่า เปิดโมดอลค้างไว้ให้เลือกรูปใหม่
+    const failScan = () => {
+      showToast("อ่านสลิปไม่สำเร็จ ลองใหม่หรือกรอกเอง", "error")
+      setScanned(null)
+      setPreview(null)
+    }
+
     const reader = new FileReader()
     reader.onload = async (e) => {
-      const base64 = (e.target?.result as string).split(",")[1]
-      const mimeType = file.type
-      setPreview(e.target?.result as string)
+      try {
+        const base64 = (e.target?.result as string).split(",")[1]
+        const mimeType = file.type
+        setPreview(e.target?.result as string)
 
-      const res = await fetch("/api/ocr", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ imageBase64: base64, mimeType }),
-      })
+        const res = await fetch("/api/ocr", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ imageBase64: base64, mimeType }),
+        })
 
-      const data = await res.json()
-      if (data.success) {
+        if (!res.ok) {
+          failScan()
+          return
+        }
+        const data = await res.json()
+        if (data?.success !== true || !data.data) {
+          failScan()
+          return
+        }
         const ocrAmount = Number(data.data.amount)
         const amountOk = Number.isFinite(ocrAmount) && ocrAmount > 0
         setScanned({
@@ -71,7 +86,14 @@ useEffect(() => {
           type: data.data.type === "income" ? "income" : "expense",
           category: data.data.category || "",
         })
+      } catch {
+        failScan()
+      } finally {
+        setScanning(false)
       }
+    }
+    reader.onerror = () => {
+      failScan()
       setScanning(false)
     }
     reader.readAsDataURL(file)
