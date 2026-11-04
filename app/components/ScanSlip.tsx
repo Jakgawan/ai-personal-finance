@@ -4,13 +4,22 @@ import { useState, useRef, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
 import { Camera, CheckCircle2, Loader2, X } from "lucide-react"
 import { showToast } from "./Toast"
+import { todayInBangkok } from "@/lib/income-schedule"
 
 type ScannedData = {
   name: string
-  amount: number
+  amount: string
+  amountMissing: boolean
   date: string
-  type: string
+  type: "income" | "expense"
   category: string
+}
+
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
+const parseAmount = (v: string): number => (v.trim() === "" ? NaN : Number(v))
+const isAmountValid = (v: string): boolean => {
+  const n = parseAmount(v)
+  return Number.isFinite(n) && n > 0
 }
 
 export default function ScanSlip({ onSuccess }: { onSuccess?: () => void }) {
@@ -52,11 +61,14 @@ useEffect(() => {
 
       const data = await res.json()
       if (data.success) {
+        const ocrAmount = Number(data.data.amount)
+        const amountOk = Number.isFinite(ocrAmount) && ocrAmount > 0
         setScanned({
           name: data.data.name || "",
-          amount: data.data.amount || 0,
-          date: data.data.date || new Date().toISOString().split("T")[0],
-          type: data.data.type || "expense",
+          amount: amountOk ? String(ocrAmount) : "",
+          amountMissing: !amountOk,
+          date: typeof data.data.date === "string" && DATE_RE.test(data.data.date) ? data.data.date : todayInBangkok(),
+          type: data.data.type === "income" ? "income" : "expense",
           category: data.data.category || "",
         })
       }
@@ -67,6 +79,14 @@ useEffect(() => {
 
   const handleSave = async () => {
     if (!scanned) return
+    if (
+      !isAmountValid(scanned.amount) ||
+      !DATE_RE.test(scanned.date) ||
+      (scanned.type !== "income" && scanned.type !== "expense")
+    ) {
+      showToast("กรอกจำนวนเงินและวันที่ให้ถูกต้อง", "error")
+      return
+    }
     setSaving(true)
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) {
@@ -175,9 +195,15 @@ useEffect(() => {
                     placeholder="ชื่อรายการ"
                     className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75]" />
 
-                  <input value={scanned.amount} onChange={e => setScanned({ ...scanned, amount: Number(e.target.value) })}
-                    type="number" placeholder="จำนวน (฿)"
+                  <input value={scanned.amount} onChange={e => setScanned({ ...scanned, amount: e.target.value })}
+                    type="number" inputMode="decimal" placeholder="จำนวน (฿)"
                     className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75]" />
+                  {scanned.amount.trim() === "" && scanned.amountMissing && (
+                    <p className="text-[0.75rem] text-gray-500 -mt-2">อ่านยอดจากสลิปไม่ได้ กรอกยอดเอง</p>
+                  )}
+                  {scanned.amount.trim() !== "" && !isAmountValid(scanned.amount) && (
+                    <p className="text-[0.75rem] text-[#D85A30] -mt-2">จำนวนเงินต้องมากกว่า 0</p>
+                  )}
 
                   <input value={scanned.date} onChange={e => setScanned({ ...scanned, date: e.target.value })}
                     type="date"
@@ -191,7 +217,7 @@ useEffect(() => {
                   .map(c => <option key={c.id} value={c.name} />) }
                   </datalist>
 
-                  <button onClick={handleSave} disabled={saving}
+                  <button onClick={handleSave} disabled={saving || !isAmountValid(scanned.amount) || !DATE_RE.test(scanned.date)}
                     className="w-full bg-[#1D9E75] text-white rounded-lg py-3 text-sm font-medium hover:bg-[#178a64] disabled:opacity-50 transition-colors">
                     {saving ? "กำลังบันทึก..." : "บันทึกรายการ"}
                   </button>
