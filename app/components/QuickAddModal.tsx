@@ -1,12 +1,13 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import { supabase } from "@/lib/supabase"
-import { Plus, Loader2, X, ChevronDown, ChevronUp, Receipt } from "lucide-react"
+import { Plus, Loader2, X, ChevronDown, ChevronUp, Receipt, Camera } from "lucide-react"
 import { showToast } from "./Toast"
 import CategoryIcon from "./CategoryIcon"
 import { todayLocal } from "@/lib/recurring"
 import { topItems, type TopItem } from "@/lib/quick-amounts"
+import { isValidDateString } from "@/lib/date-valid"
 
 type Category = { id: string; name: string; type: string; icon: string; color?: string }
 type Cycle = { id: string; name: string }
@@ -42,10 +43,19 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles,
   const [cycleId, setCycleId] = useState("")
   const [loading, setLoading] = useState(false)
 
-  const [inputMode, setInputMode] = useState<"form" | "ai">("form")
+  const [inputMode, setInputMode] = useState<"form" | "ai" | "slip">("form")
   const [aiText, setAiText] = useState("")
   const [aiLoading, setAiLoading] = useState(false)
   const [aiError, setAiError] = useState("")
+
+  // แท็บสแกนสลิป
+  const [slipScanning, setSlipScanning] = useState(false)
+  const [slipError, setSlipError] = useState("")
+  const [amountHint, setAmountHint] = useState("")
+  const [dateHint, setDateHint] = useState("")
+  const slipFileRef = useRef<HTMLInputElement>(null)
+  const slipScanIdRef = useRef<number>(0)
+  const slipAbortRef = useRef<AbortController | null>(null)
 
   const [showDetails, setShowDetails] = useState(false)
   const [showAllCategories, setShowAllCategories] = useState(false)
@@ -120,6 +130,18 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles,
     if (initialAmount !== undefined && initialAmount !== null) setAmount(sanitizeAmount(String(initialAmount)))
   }, [open, initialAmount, initialType, initialDate])
 
+  // ยกเลิกการสแกนที่ค้างอยู่ ผลที่ตอบกลับมาทีหลังจะถูกทิ้ง
+  const cancelSlip = useCallback(() => {
+    slipAbortRef.current?.abort()
+    slipAbortRef.current = null
+    slipScanIdRef.current += 1
+    setSlipScanning(false)
+  }, [])
+
+  useEffect(() => {
+    return () => cancelSlip()
+  }, [cancelSlip])
+
   const clearPressTimer = () => {
     if (pressTimer.current) {
       clearTimeout(pressTimer.current)
@@ -137,7 +159,8 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles,
     setShowDetails(false)
     setRecentTx([])
     setCategorySearch(""); setCategoryDropdownOpen(false)
-  }, [open])
+    cancelSlip(); setSlipError(""); setAmountHint(""); setDateHint("")
+  }, [open, cancelSlip])
 
   if (!open) return null
 
@@ -171,6 +194,7 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles,
       pressTimer.current = null
       longPressed.current = true
       setAmount(sanitizeAmount(String(item.amount)))
+      setAmountHint("")
       setName(item.name)
       setCategory(item.category || "")
       setShowDetails(true)
@@ -260,6 +284,7 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles,
       }
       setName(data.name || "")
       setAmount(data.amount ? sanitizeAmount(String(data.amount)) : "")
+      setAmountHint("")
       setType(data.type === "income" ? "income" : "expense")
       setCategory(mode === "full" ? (data.category || "") : "")
       setInputMode("form")
@@ -268,6 +293,94 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles,
       setAiError("แปลงข้อความไม่สำเร็จ กรุณาลองใหม่")
     }
     setAiLoading(false)
+  }
+
+  const switchTab = (next: "form" | "ai" | "slip") => {
+    if (inputMode === "slip" && next !== "slip") {
+      cancelSlip()
+      setSlipError("")
+    }
+    setInputMode(next)
+  }
+
+  const handleSlipFile = (file: File) => {
+    slipAbortRef.current?.abort()
+    const controller = new AbortController()
+    slipAbortRef.current = controller
+    slipScanIdRef.current += 1
+    const myId = slipScanIdRef.current
+    const isCurrent = (): boolean => myId === slipScanIdRef.current
+    setSlipScanning(true)
+    setSlipError("")
+
+    const fail = () => {
+      if (isCurrent()) setSlipError("อ่านสลิปไม่สำเร็จ ลองรูปอื่นหรือกรอกเอง")
+    }
+
+    const reader = new FileReader()
+    reader.onload = async (e) => {
+      try {
+        const base64 = (e.target?.result as string).split(",")[1]
+        const res = await fetch("/api/ocr", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ imageBase64: base64, mimeType: file.type }),
+          signal: controller.signal,
+        })
+        if (!isCurrent()) return
+        if (!res.ok) {
+          fail()
+          return
+        }
+        const json = await res.json()
+        if (!isCurrent()) return
+        if (json?.success !== true || !json.data) {
+          fail()
+          return
+        }
+        const d = json.data
+        const newType: "expense" | "income" = d.type === "income" ? "income" : "expense"
+        const ocrAmount = Number(d.amount)
+        if (d.amount !== null && d.amount !== undefined && Number.isFinite(ocrAmount) && ocrAmount > 0) {
+          setAmount(sanitizeAmount(String(ocrAmount)))
+          setAmountHint("")
+        } else {
+          setAmount("")
+          setAmountHint("อ่านยอดเงินจากสลิปไม่ได้ กรอกเอง")
+        }
+        if (isValidDateString(d.date)) {
+          setDate(d.date)
+          setDateHint("")
+        } else {
+          setDate(todayLocal())
+          setDateHint("อ่านวันที่จากสลิปไม่ได้ ใช้วันนี้แทน ตรวจก่อนบันทึก")
+        }
+        setType(newType)
+        setName(typeof d.name === "string" ? d.name : "")
+        // ใส่หมวดเฉพาะที่ตรงกับหมวดของผู้ใช้เท่านั้น (AI อาจตอบชื่อที่ไม่มีอยู่จริง)
+        let matched = ""
+        if (mode === "full" && typeof d.category === "string") {
+          const wanted = d.category.trim().toLowerCase()
+          const hit = wanted
+            ? categories.find(c => (!c.type || c.type === newType) && c.name.trim().toLowerCase() === wanted)
+            : undefined
+          if (hit) matched = hit.name
+        }
+        setCategory(matched)
+        setIsBillPayment(false)
+        setShowDetails(true)
+        setInputMode("form")
+      } catch (err) {
+        if (!(err instanceof DOMException && err.name === "AbortError")) fail()
+      } finally {
+        if (isCurrent()) setSlipScanning(false)
+      }
+    }
+    reader.onerror = () => {
+      fail()
+      if (isCurrent()) setSlipScanning(false)
+    }
+    reader.readAsDataURL(file)
   }
 
   const handleSave = async () => {
@@ -307,16 +420,55 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles,
           <button onClick={onClose} aria-label="ปิด" className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
         </div>
 
-        <div className="px-6 flex gap-2 mb-3">
-          <button onClick={() => setInputMode("form")}
-            className={`flex-1 py-2 rounded-lg text-sm font-medium border transition-colors ${inputMode === "form" ? "bg-gray-800 text-white border-gray-800" : "border-gray-200 text-gray-600"}`}>
+        <div className="px-6 flex gap-1.5 mb-3">
+          <button onClick={() => switchTab("form")}
+            className={`flex-1 py-2 px-1 whitespace-nowrap rounded-lg text-sm font-medium border transition-colors ${inputMode === "form" ? "bg-gray-800 text-white border-gray-800" : "border-gray-200 text-gray-600"}`}>
             กรอกฟอร์ม
           </button>
-          <button onClick={() => setInputMode("ai")}
-            className={`flex-1 py-2 rounded-lg text-sm font-medium border transition-colors ${inputMode === "ai" ? "bg-gray-800 text-white border-gray-800" : "border-gray-200 text-gray-600"}`}>
+          <button onClick={() => switchTab("ai")}
+            className={`flex-1 py-2 px-1 whitespace-nowrap rounded-lg text-sm font-medium border transition-colors ${inputMode === "ai" ? "bg-gray-800 text-white border-gray-800" : "border-gray-200 text-gray-600"}`}>
             พิมพ์บอก AI
           </button>
+          <button onClick={() => switchTab("slip")}
+            className={`flex-1 py-2 px-1 whitespace-nowrap rounded-lg text-sm font-medium border transition-colors flex items-center justify-center gap-1 ${inputMode === "slip" ? "bg-gray-800 text-white border-gray-800" : "border-gray-200 text-gray-600"}`}>
+            <Camera size={14} className="hidden min-[390px]:inline-block" />
+            สแกนสลิป
+          </button>
         </div>
+
+        {inputMode === "slip" && (
+          <div className="px-6 pb-6 flex flex-col gap-2">
+            <button
+              type="button"
+              disabled={slipScanning}
+              onClick={() => slipFileRef.current?.click()}
+              className={`w-full border-2 border-dashed border-gray-200 rounded-xl p-6 text-center transition-colors ${slipScanning ? "cursor-not-allowed opacity-60" : "cursor-pointer hover:border-[#1D9E75]"}`}
+            >
+              <Camera size={32} className="text-gray-400 mx-auto mb-2" />
+              <p className="text-sm text-gray-500">กดเพื่อเลือกรูปสลิป</p>
+              <p className="text-xs text-gray-400 mt-1">รองรับ JPG, PNG</p>
+            </button>
+            <input
+              ref={slipFileRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={e => {
+                const file = e.target.files?.[0]
+                e.target.value = ""
+                if (file) handleSlipFile(file)
+              }}
+            />
+            {slipScanning && (
+              <p className="text-sm text-gray-500 flex items-center justify-center gap-1.5 py-1">
+                <Loader2 size={14} className="animate-spin" />
+                กำลังอ่านสลิป...
+              </p>
+            )}
+            {slipError && <p className="text-xs text-[#D85A30]">{slipError}</p>}
+            <p className="text-xs text-gray-400">อ่านเสร็จแล้วตรวจสอบผลลัพธ์ก่อนกดบันทึก</p>
+          </div>
+        )}
 
         {inputMode === "ai" && (
           <div className="px-6 pb-4 flex flex-col gap-2">
@@ -381,7 +533,7 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles,
                   inputMode="decimal"
                   autoFocus
                   value={amount}
-                  onChange={e => setAmount(sanitizeAmount(e.target.value))}
+                  onChange={e => { setAmount(sanitizeAmount(e.target.value)); setAmountHint("") }}
                   onKeyDown={e => {
                     if (e.key === "Enter" && canSave) handleSave()
                   }}
@@ -389,6 +541,7 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles,
                 />
               </div>
               {amountError && <p className="text-xs text-[#D85A30] mt-1">{amountError}</p>}
+              {!amountError && amountHint && <p className="text-xs text-gray-500 mt-1">{amountHint}</p>}
             </div>
 
             <button
@@ -445,9 +598,10 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles,
             <input
               type="date"
               value={date}
-              onChange={e => setDate(e.target.value)}
+              onChange={e => { setDate(e.target.value); setDateHint("") }}
               className="border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75] text-gray-800"
             />
+            {dateHint && <p className="text-xs text-gray-500 -mt-2">{dateHint}</p>}
             <input
               placeholder="ชื่อรายการ เช่น ข้าวเที่ยง (ไม่บังคับ)"
               value={name}
