@@ -428,7 +428,7 @@ export default function TransactionPage() {
                 <thead className="bg-gray-50 border-b border-gray-200">
                   <tr>
                     {["#", "วันที่", "รายการ", "หมวด", "รายรับ (฿)", "รายจ่าย (฿)", "หมายเหตุ", "จัดการ"].map(h => (
-                      <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-500">{h}</th>
+                      <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
                 </thead>
@@ -438,9 +438,9 @@ export default function TransactionPage() {
                   ) : (
                     paginated.map((t, i) => (
                       <tr key={t.id} className="border-b border-gray-100 hover:bg-gray-50">
-                        <td className="px-4 py-3 text-gray-400">{(page - 1) * PAGE_SIZE + i + 1}</td>
-                        <td className="px-4 py-3 text-gray-600">{formatDate(t.date)}</td>
-                        <td className="px-4 py-3 font-medium text-gray-800">
+                        <td className="px-4 py-3 text-gray-400 whitespace-nowrap">{(page - 1) * PAGE_SIZE + i + 1}</td>
+                        <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{formatDate(t.date)}</td>
+                        <td className="px-4 py-3 font-medium text-gray-800 min-w-[11rem]">
                           <span className="inline-flex items-center gap-1.5 flex-wrap">
                             {t.name}
                             {t.kind === "bill_payment" && <BillPaymentBadge />}
@@ -451,15 +451,15 @@ export default function TransactionPage() {
                             </span>
                           )}
                         </td>
-                        <td className="px-4 py-3 text-gray-500">{t.category || "-"}</td>
-                        <td className="px-4 py-3 font-semibold text-[#1D9E75]">
+                        <td className="px-4 py-3 text-gray-500 whitespace-nowrap">{t.category || "-"}</td>
+                        <td className="px-4 py-3 font-semibold text-[#1D9E75] whitespace-nowrap">
                           {t.type === "income" ? `฿${Number(t.amount).toLocaleString()}` : ""}
                         </td>
-                        <td className="px-4 py-3 font-semibold text-[#D85A30]">
+                        <td className="px-4 py-3 font-semibold text-[#D85A30] whitespace-nowrap">
                           {t.type === "expense" ? `฿${Number(t.amount).toLocaleString()}` : ""}
                         </td>
-                        <td className="px-4 py-3 text-gray-400 text-xs">{t.note || "-"}</td>
-                        <td className="px-4 py-3 flex gap-2">
+                        <td className="px-4 py-3 text-gray-400 text-xs min-w-[8rem]">{t.note || "-"}</td>
+                        <td className="px-4 py-3 flex gap-2 whitespace-nowrap">
                           <button onClick={() => openEditModal(t)} className="text-xs text-[#378ADD] hover:underline">แก้ไข</button>
                           <button onClick={() => handleDelete(t.id)} className="text-xs text-[#D85A30] hover:underline">ลบ</button>
                         </td>
