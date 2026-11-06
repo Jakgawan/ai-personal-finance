@@ -1,16 +1,26 @@
 "use client"
 
-import { useState, useRef, useEffect } from "react"
+import { useState, useRef, useEffect, useCallback } from "react"
 import { supabase } from "@/lib/supabase"
 import { Camera, CheckCircle2, Loader2, X } from "lucide-react"
 import { showToast } from "./Toast"
+import { todayInBangkok } from "@/lib/income-schedule"
+import { isValidDateString } from "@/lib/date-valid"
 
 type ScannedData = {
   name: string
-  amount: number
+  amount: string
+  amountMissing: boolean
+  dateFromToday: boolean
   date: string
-  type: string
+  type: "income" | "expense"
   category: string
+}
+
+const parseAmount = (v: string): number => (v.trim() === "" ? NaN : Number(v))
+const isAmountValid = (v: string): boolean => {
+  const n = parseAmount(v)
+  return Number.isFinite(n) && n > 0
 }
 
 export default function ScanSlip({ onSuccess }: { onSuccess?: () => void }) {
@@ -20,6 +30,8 @@ export default function ScanSlip({ onSuccess }: { onSuccess?: () => void }) {
   const [preview, setPreview] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
+  const scanIdRef = useRef<number>(0)
+  const abortRef = useRef<AbortController | null>(null)
   const [categories, setCategories] = useState<{id: string, name: string, type: string}[]>([])
 
 useEffect(() => {
@@ -33,40 +45,98 @@ useEffect(() => {
 }, [])
   
 
+  // ยกเลิกการสแกนที่ค้างอยู่ และทำให้ผลที่ตอบกลับมาทีหลังถูกทิ้ง
+  const cancelScan = useCallback(() => {
+    abortRef.current?.abort()
+    abortRef.current = null
+    scanIdRef.current += 1
+    setScanning(false)
+    setScanned(null)
+    setPreview(null)
+  }, [])
+
+  useEffect(() => {
+    return () => cancelScan()
+  }, [cancelScan])
+
   const handleFile = async (file: File) => {
     if (!file) return
+    abortRef.current?.abort()
+    const controller = new AbortController()
+    abortRef.current = controller
+    scanIdRef.current += 1
+    const myId = scanIdRef.current
+    const isCurrent = (): boolean => myId === scanIdRef.current
     setScanning(true)
     setScanned(null)
 
+    // อ่านสลิปไม่สำเร็จ: แจ้งผู้ใช้ ล้างภาพเก่า เปิดโมดอลค้างไว้ให้เลือกรูปใหม่
+    const failScan = () => {
+      if (!isCurrent()) return
+      showToast("อ่านสลิปไม่สำเร็จ ลองใหม่หรือกรอกเอง", "error")
+      setScanned(null)
+      setPreview(null)
+    }
+
     const reader = new FileReader()
     reader.onload = async (e) => {
-      const base64 = (e.target?.result as string).split(",")[1]
-      const mimeType = file.type
-      setPreview(e.target?.result as string)
+      try {
+        const base64 = (e.target?.result as string).split(",")[1]
+        const mimeType = file.type
+        if (isCurrent()) setPreview(e.target?.result as string)
 
-      const res = await fetch("/api/ocr", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ imageBase64: base64, mimeType }),
-      })
+        const res = await fetch("/api/ocr", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ imageBase64: base64, mimeType }),
+          signal: controller.signal,
+        })
 
-      const data = await res.json()
-      if (data.success) {
+        if (!isCurrent()) return
+        if (!res.ok) {
+          failScan()
+          return
+        }
+        const data = await res.json()
+        if (!isCurrent()) return
+        if (data?.success !== true || !data.data) {
+          failScan()
+          return
+        }
+        const ocrAmount = Number(data.data.amount)
+        const amountOk = Number.isFinite(ocrAmount) && ocrAmount > 0
         setScanned({
           name: data.data.name || "",
-          amount: data.data.amount || 0,
-          date: data.data.date || new Date().toISOString().split("T")[0],
-          type: data.data.type || "expense",
+          amount: amountOk ? String(ocrAmount) : "",
+          amountMissing: !amountOk,
+          date: isValidDateString(data.data.date) ? data.data.date : todayInBangkok(),
+          dateFromToday: !isValidDateString(data.data.date),
+          type: data.data.type === "income" ? "income" : "expense",
           category: data.data.category || "",
         })
+      } catch (err) {
+        if (!(err instanceof DOMException && err.name === "AbortError")) failScan()
+      } finally {
+        if (isCurrent()) setScanning(false)
       }
-      setScanning(false)
+    }
+    reader.onerror = () => {
+      failScan()
+      if (isCurrent()) setScanning(false)
     }
     reader.readAsDataURL(file)
   }
 
   const handleSave = async () => {
     if (!scanned) return
+    if (
+      !isAmountValid(scanned.amount) ||
+      !isValidDateString(scanned.date) ||
+      (scanned.type !== "income" && scanned.type !== "expense")
+    ) {
+      showToast("กรอกจำนวนเงินและวันที่ให้ถูกต้อง", "error")
+      return
+    }
     setSaving(true)
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) {
@@ -92,8 +162,7 @@ useEffect(() => {
 
     setSaving(false)
     setShowModal(false)
-    setScanned(null)
-    setPreview(null)
+    cancelScan()
     onSuccess?.()
   }
   
@@ -115,7 +184,7 @@ useEffect(() => {
           <div className="bg-white rounded-2xl w-full max-w-md shadow-xl">
             <div className="flex items-center justify-between px-6 pt-5 pb-3">
               <h2 className="text-lg font-semibold text-gray-800">สแกนสลิป</h2>
-              <button onClick={() => { setShowModal(false); setScanned(null); setPreview(null) }}
+              <button onClick={() => { setShowModal(false); cancelScan() }}
                 aria-label="ปิด" className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
             </div>
 
@@ -141,7 +210,11 @@ useEffect(() => {
                 type="file"
                 accept="image/*"
                 className="hidden"
-                onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
+                onChange={(e) => {
+                  const file = e.target.files?.[0]
+                  e.target.value = ""
+                  if (file) handleFile(file)
+                }}
               />
 
               {scanning && (
@@ -175,13 +248,22 @@ useEffect(() => {
                     placeholder="ชื่อรายการ"
                     className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75]" />
 
-                  <input value={scanned.amount} onChange={e => setScanned({ ...scanned, amount: Number(e.target.value) })}
-                    type="number" placeholder="จำนวน (฿)"
+                  <input value={scanned.amount} onChange={e => setScanned({ ...scanned, amount: e.target.value })}
+                    type="number" inputMode="decimal" placeholder="จำนวน (฿)"
                     className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75]" />
+                  {scanned.amount.trim() === "" && scanned.amountMissing && (
+                    <p className="text-[0.75rem] text-gray-500 -mt-2">อ่านยอดจากสลิปไม่ได้ กรอกยอดเอง</p>
+                  )}
+                  {scanned.amount.trim() !== "" && !isAmountValid(scanned.amount) && (
+                    <p className="text-[0.75rem] text-[#D85A30] -mt-2">จำนวนเงินต้องมากกว่า 0</p>
+                  )}
 
-                  <input value={scanned.date} onChange={e => setScanned({ ...scanned, date: e.target.value })}
+                  <input value={scanned.date} onChange={e => setScanned({ ...scanned, date: e.target.value, dateFromToday: false })}
                     type="date"
                     className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75]" />
+                  {scanned.dateFromToday && (
+                    <p className="text-[0.75rem] text-gray-500 -mt-2">อ่านวันที่จากสลิปไม่ได้ ใช้วันนี้แทน ตรวจก่อนบันทึก</p>
+                  )}
 
                   <input value={scanned.category} onChange={e => setScanned({ ...scanned, category: e.target.value })} placeholder="หมวดหมู่" 
                     list="category-list"
@@ -191,7 +273,7 @@ useEffect(() => {
                   .map(c => <option key={c.id} value={c.name} />) }
                   </datalist>
 
-                  <button onClick={handleSave} disabled={saving}
+                  <button onClick={handleSave} disabled={saving || !isAmountValid(scanned.amount) || !isValidDateString(scanned.date)}
                     className="w-full bg-[#1D9E75] text-white rounded-lg py-3 text-sm font-medium hover:bg-[#178a64] disabled:opacity-50 transition-colors">
                     {saving ? "กำลังบันทึก..." : "บันทึกรายการ"}
                   </button>

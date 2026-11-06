@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { supabase } from "@/lib/supabase"
 import Link from "next/link"
 import { formatDate } from "@/lib/utils"
-import { Lightbulb, Scale, X, Wallet, TriangleAlert } from "lucide-react"
+import { Lightbulb, Scale, X, Wallet, TriangleAlert, RefreshCw } from "lucide-react"
 import AdjustBalanceModal from "@/app/components/AdjustBalanceModal"
 import CarryOverModal from "@/app/components/CarryOverModal"
 import { getPeriodTransition, type CarryoverPref, type PeriodTransition } from "@/lib/period-transition"
@@ -16,6 +16,7 @@ import { pickInsight, formatMoney, formatThaiShortDate } from "@/lib/daily-budge
 import { todayInBangkok, addDays, getNextIncomeDate, getPreviousIncomeDate, type IncomeSourceSchedule } from "@/lib/income-schedule"
 import { calcSpendable, getCurrentPeriod, toLegacyBudget } from "@/lib/spendable"
 import { calcCarryIn } from "@/lib/period-carry-in"
+import { summarizePeriod } from "@/lib/period-summary"
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend
@@ -160,6 +161,8 @@ export default function Dashboard() {
   const [openingRows, setOpeningRows] = useState<OpeningRow[]>([])
   const [openingLoaded, setOpeningLoaded] = useState(false)
   const [openingError, setOpeningError] = useState(false)
+  const [dataError, setDataError] = useState(false)
+  const [retrying, setRetrying] = useState(false)
   const [adjustOpen, setAdjustOpen] = useState(false)
   const [dismissedId, setDismissedId] = useState<string | null>(null)
   const [dismissCheckedKey, setDismissCheckedKey] = useState<string | null>(null)
@@ -173,20 +176,25 @@ export default function Dashboard() {
 
   // โหลดยอดเงินตั้งต้น (งาน 4: เก็บข้อมูลและจุดเข้าปรับยอดเท่านั้น ยังไม่ใช้คำนวณ)
   const fetchOpening = useCallback(async () => {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
-    setOpeningError(false)
-    const { data, error } = await supabase
-      .from("opening_balances")
-      .select("id, amount, entered_amount, opening_date, source, leftover, leftover_from, created_at")
-      .eq("user_id", user.id)
-    if (error) {
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+      const { data, error } = await supabase
+        .from("opening_balances")
+        .select("id, amount, entered_amount, opening_date, source, leftover, leftover_from, created_at")
+        .eq("user_id", user.id)
+      if (error) {
+        showToast("โหลดยอดเงินตั้งต้นไม่สำเร็จ", "error")
+        setOpeningError(true)
+        return
+      }
+      setOpeningRows(((data || []) as OpeningRow[]).map(r => ({ ...r, amount: Number(r.amount), entered_amount: r.entered_amount === null || r.entered_amount === undefined ? null : Number(r.entered_amount), leftover: r.leftover === null || r.leftover === undefined ? null : Number(r.leftover) })))
+      setOpeningLoaded(true)
+      setOpeningError(false)
+    } catch {
       showToast("โหลดยอดเงินตั้งต้นไม่สำเร็จ", "error")
       setOpeningError(true)
-      return
     }
-    setOpeningRows(((data || []) as OpeningRow[]).map(r => ({ ...r, amount: Number(r.amount), entered_amount: r.entered_amount === null || r.entered_amount === undefined ? null : Number(r.entered_amount), leftover: r.leftover === null || r.leftover === undefined ? null : Number(r.leftover) })))
-    setOpeningLoaded(true)
   }, [])
 
   useEffect(() => {
@@ -219,37 +227,44 @@ export default function Dashboard() {
 
   // ดึงข้อมูลทั้งหมด — แยกเป็น callback เพื่อเรียกซ้ำได้ตอนบันทึกรายการใหม่ (event transactionAdded)
   const fetchData = useCallback(async () => {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
-    const [{ data: txData }, { data: cycleData }, { data: assetData }, { data: liabData }, { data: catData }, { data: srcData, error: srcError }, { data: profData, error: profError }] = await Promise.all([
-      supabase.from("transactions").select("*").eq("user_id", user.id).order("date", { ascending: false }),
-      supabase.from("pay_cycles").select("*").eq("user_id", user.id),
-      supabase.from("assets").select("*").eq("user_id", user.id),
-      supabase.from("liabilities_long").select("balance").eq("user_id", user.id),
-      supabase.from("categories").select("name, icon, color").eq("user_id", user.id),
-      supabase.from("income_sources").select("schedule_type, monthly_days, amount").eq("user_id", user.id),
-      supabase.from("financial_profile").select("target_date, carryover_pref, last_period_decided, income_prompt_dismissed").eq("user_id", user.id).maybeSingle(),
-    ])
-    if (srcError || profError) {
-      showToast("โหลดข้อมูลไม่สำเร็จ", "error")
-    }
-    setIncomeSources((srcData || []) as IncomeSourceRow[])
-    const prof = profData as (ProfileState & { target_date: string | null }) | null
-    setTargetDate(prof?.target_date ?? null)
-    // อ่านโปรไฟล์ไม่สำเร็จ -> ปล่อย profile เดิม (ไม่เดาว่าเคยตัดสินใจหรือยัง)
-    if (!profError) {
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+      const [txRes, cycleRes, assetRes, liabRes, catRes, srcRes, profRes] = await Promise.all([
+        supabase.from("transactions").select("*").eq("user_id", user.id).order("date", { ascending: false }),
+        supabase.from("pay_cycles").select("*").eq("user_id", user.id),
+        supabase.from("assets").select("*").eq("user_id", user.id),
+        supabase.from("liabilities_long").select("balance").eq("user_id", user.id),
+        supabase.from("categories").select("name, icon, color").eq("user_id", user.id),
+        supabase.from("income_sources").select("schedule_type, monthly_days, amount").eq("user_id", user.id),
+        supabase.from("financial_profile").select("target_date, carryover_pref, last_period_decided, income_prompt_dismissed").eq("user_id", user.id).maybeSingle(),
+      ])
+      if (txRes.error || cycleRes.error || assetRes.error || liabRes.error || catRes.error || srcRes.error || profRes.error) {
+        // โหลดไม่ครบ -> ไม่ทับข้อมูลเดิมด้วยค่าว่าง และไม่คำนวณยอดจากข้อมูลไม่ครบ
+        showToast("โหลดข้อมูลไม่สำเร็จ", "error")
+        setDataError(true)
+        return
+      }
+      setIncomeSources((srcRes.data || []) as IncomeSourceRow[])
+      const prof = profRes.data as (ProfileState & { target_date: string | null }) | null
+      setTargetDate(prof?.target_date ?? null)
       setProfile({
         carryover_pref: prof?.carryover_pref ?? null,
         last_period_decided: prof?.last_period_decided ?? null,
         income_prompt_dismissed: prof?.income_prompt_dismissed ?? null,
       })
+      setTransactions(txRes.data || [])
+      setCycles(cycleRes.data || [])
+      setAssets(assetRes.data || [])
+      setLiabilities(liabRes.data || [])
+      setCategories((catRes.data || []) as CategoryInfo[])
+      setDataError(false)
+    } catch {
+      showToast("โหลดข้อมูลไม่สำเร็จ", "error")
+      setDataError(true)
+    } finally {
+      setLoading(false)
     }
-    setTransactions(txData || [])
-    setCycles(cycleData || [])
-    setAssets(assetData || [])
-    setLiabilities(liabData || [])
-    setCategories((catData || []) as CategoryInfo[])
-    setLoading(false)
   }, [])
 
   useEffect(() => {
@@ -288,9 +303,10 @@ export default function Dashboard() {
   const prevPeriodStart = prevPaydayDate
     ? getPreviousIncomeDate(addDays(prevPaydayDate, -1), { incomeSources, payCycles: cycles })?.date ?? null
     : null
+  const loadFailed: boolean = dataError || openingError
   const transition: PeriodTransition = useMemo(() => {
-    // ยังโหลดไม่ครบ (ยอดตั้งต้น/โปรไฟล์/รายการ) -> ไม่ทำอะไร
-    if (loading || !openingLoaded || !profile || !activeOpening) return { kind: "none" }
+    // ยังโหลดไม่ครบ หรือโหลดล้มเหลว (ยอดตั้งต้น/โปรไฟล์/รายการ) -> ไม่ทำอะไร ไม่ยกยอด ไม่เขียนข้อมูล
+    if (loadFailed || retrying || loading || !openingLoaded || !profile || !activeOpening) return { kind: "none" }
     return getPeriodTransition({
       today,
       prevIncomeDate: prevPaydayDate,
@@ -301,7 +317,7 @@ export default function Dashboard() {
       incomePromptDismissed: profile.income_prompt_dismissed,
       pref: profile.carryover_pref,
     })
-  }, [loading, openingLoaded, profile, activeOpening, today, prevPaydayDate, prevPeriodStart, transactions])
+  }, [loadFailed, retrying, loading, openingLoaded, profile, activeOpening, today, prevPaydayDate, prevPeriodStart, transactions])
 
   // บันทึกการตัดสินใจเรื่องยกยอด: mode "reset" = ไม่ยก (เพิ่มแถว carryover ยอด 0), "mark" = แค่จดว่าตัดสินแล้ว
   // คืน true เมื่อสำเร็จทั้งหมด; error ใดๆ แจ้ง toast แล้วคืน false
@@ -447,8 +463,7 @@ export default function Dashboard() {
   const sumType = (txs: Transaction[], type: string): number =>
     txs.filter(t => t.type === type).reduce((s, t) => s + Number(t.amount), 0)
 
-  const cycleIncome = sumType(cycleTransactions, "income")
-  const cycleExpense = sumType(cycleTransactions, "expense")
+  const { income: cycleIncome, expense: cycleExpense } = summarizePeriod(transactions, period, today)
   const cycleBalance = cycleIncome - cycleExpense
 
   const insight = spend
@@ -512,6 +527,16 @@ export default function Dashboard() {
     return { ...t, balance: bal }
   })
 
+  const handleRetry = async (): Promise<void> => {
+    if (retrying) return
+    setRetrying(true)
+    try {
+      await Promise.all([fetchOpening(), fetchData()])
+    } finally {
+      setRetrying(false)
+    }
+  }
+
   if (loading || (!openingLoaded && !openingError)) {
     return (
       <div className="p-4 md:p-6 bg-gray-50 min-h-screen animate-pulse">
@@ -533,6 +558,31 @@ export default function Dashboard() {
           <div className="h-4 w-32 bg-gray-200 rounded mb-4" />
           <div className="h-3 w-full bg-gray-200 rounded mb-3" />
           <div className="h-3 w-full bg-gray-200 rounded" />
+        </div>
+      </div>
+    )
+  }
+
+  // โหลดข้อมูลไม่ครบ -> ไม่แสดงตัวเลขที่คำนวณจากข้อมูลไม่ครบ (กันโชว์ "ใช้ได้วันนี้" สูงเกินจริง)
+  if (loadFailed || retrying) {
+    return (
+      <div className="p-4 md:p-6 bg-gray-50 min-h-screen">
+        <h1 className="text-2xl font-bold text-gray-800 mb-3 md:mb-6">ภาพรวม</h1>
+        <div className="bg-white rounded-xl p-4 md:p-6 shadow-sm flex flex-col items-start gap-2" role="alert">
+          <p className="inline-flex items-center gap-2 text-base font-semibold text-gray-800">
+            <TriangleAlert size={20} className="text-[#D85A30] shrink-0" />
+            โหลดข้อมูลไม่ครบ ตัวเลขยังแสดงไม่ได้
+          </p>
+          <p className="text-sm text-gray-500">ตรวจอินเทอร์เน็ตแล้วลองใหม่</p>
+          <button
+            type="button"
+            onClick={handleRetry}
+            disabled={retrying}
+            className="mt-2 inline-flex items-center justify-center gap-2 bg-[#1D9E75] text-white rounded-lg px-4 min-h-11 text-sm font-semibold hover:bg-[#178a64] disabled:opacity-50 transition-colors"
+          >
+            <RefreshCw size={16} className={retrying ? "animate-spin" : ""} />
+            {retrying ? "กำลังโหลด..." : "ลองใหม่"}
+          </button>
         </div>
       </div>
     )
@@ -635,21 +685,9 @@ export default function Dashboard() {
         {/* Hero: ใช้ได้วันนี้ */}
         <div
           className="rounded-2xl p-4 md:p-6 text-white shadow-sm flex flex-col justify-between"
-          style={{ backgroundColor: !spend ? (openingError ? "#6B7280" : "#378ADD") : zeroBalance ? "#378ADD" : spend.state === "ok" ? "#1D9E75" : "#D85A30" }}
+          style={{ backgroundColor: !spend ? "#378ADD" : zeroBalance ? "#378ADD" : spend.state === "ok" ? "#1D9E75" : "#D85A30" }}
         >
-          {!spend && openingError ? (
-            <>
-              <p className="text-sm opacity-90">ใช้ได้วันนี้</p>
-              <p className="text-[2rem] leading-tight font-bold mt-1">โหลดยอดเงินไม่สำเร็จ</p>
-              <button
-                type="button"
-                onClick={() => { setOpeningError(false); fetchOpening() }}
-                className="self-start mt-3 bg-white text-gray-700 rounded-lg px-4 min-h-11 text-sm font-semibold hover:bg-white/90 transition-colors"
-              >
-                ลองใหม่
-              </button>
-            </>
-          ) : !spend ? (
+          {!spend ? (
             <>
               <p className="text-sm opacity-90">ใช้ได้วันนี้</p>
               <p className="text-[2rem] leading-tight font-bold mt-1">ตั้งยอดเงินก่อน</p>
