@@ -48,6 +48,17 @@ function normalizeDate(v: unknown): string | null {
   return v
 }
 
+// ใช้ร่วมกันทุกผู้ให้บริการ: ทำความสะอาดฟิลด์ที่ AI ตอบมา
+export function normalizeOcrFields(obj: Record<string, unknown>): OcrData {
+  return {
+    name: cleanString(obj.name),
+    amount: normalizeAmount(obj.amount),
+    date: normalizeDate(obj.date),
+    type: obj.type === "income" ? "income" : "expense",
+    category: cleanString(obj.category),
+  }
+}
+
 export function parseOcrGeminiResponse(httpStatus: number, body: unknown): OcrResult {
   const diag = (
     stage: OcrDiag["stage"],
@@ -100,14 +111,5 @@ export function parseOcrGeminiResponse(httpStatus: number, body: unknown): OcrRe
   }
   if (!isRecord(parsed)) return diag("invalid_shape", { finishReason, textLength: text.length, hadFence })
 
-  return {
-    ok: true,
-    data: {
-      name: cleanString(parsed.name),
-      amount: normalizeAmount(parsed.amount),
-      date: normalizeDate(parsed.date),
-      type: parsed.type === "income" ? "income" : "expense",
-      category: cleanString(parsed.category),
-    },
-  }
+  return { ok: true, data: normalizeOcrFields(parsed) }
 }

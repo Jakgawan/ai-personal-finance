@@ -1,17 +1,19 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getAuthUser, createUserClient } from "@/lib/supabase-server"
-import { parseOcrGeminiResponse, type OcrData, type OcrDiag } from "@/lib/ocr-parse"
+import { parseOcrGeminiResponse, type OcrDiag } from "@/lib/ocr-parse"
 import {
   TYPHOON_OCR_PROMPT,
   parseTyphoonOcrResponse,
+  parseTyphoonChatJson,
+  type TyphoonChatDiag,
   buildSlipExtractPrompt,
   matchCategory,
   type SlipCategory,
 } from "@/lib/typhoon-ocr"
 
 type TyphoonStage = null | "typhoon_http" | "typhoon_empty" | "typhoon_timeout" | "skipped_no_key" | "skipped_mime"
-type Provider = "typhoon+gemini" | "gemini"
-type RouteDiag = OcrDiag & { provider: Provider; typhoonStage: TyphoonStage; typhoonStatus: number | null }
+type Provider = "typhoon" | "gemini"
+type RouteDiag = (OcrDiag | TyphoonChatDiag) & { provider: Provider; typhoonStage: TyphoonStage; typhoonStatus: number | null }
 
 export const maxDuration = 60
 
@@ -102,6 +104,32 @@ async function callTyphoon(apiKey: string, imageBase64: string, mime: string): P
   }
 }
 
+async function callTyphoonChat(apiKey: string, system: string, user: string): Promise<{ status: number; body: unknown }> {
+  try {
+    const res = await fetch("https://api.opentyphoon.ai/v1/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model: "typhoon-v2.5-30b-a3b-instruct",
+        messages: [
+          { role: "system", content: system },
+          { role: "user", content: user },
+        ],
+        temperature: 0,
+        max_tokens: 512,
+      }),
+      signal: AbortSignal.timeout(25000),
+    })
+    try {
+      return { status: res.status, body: await res.json() }
+    } catch {
+      return { status: 502, body: null }
+    }
+  } catch {
+    return { status: 502, body: null }
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
     const user = await getAuthUser(req)
@@ -154,22 +182,29 @@ export async function POST(req: NextRequest) {
       if (!error && Array.isArray(data)) categories = data as SlipCategory[]
     }
 
-    const useTyphoon = ocrText !== null
-    const provider: Provider = useTyphoon ? "typhoon+gemini" : "gemini"
+    if (ocrText !== null) {
+      const prompt = buildSlipExtractPrompt(ocrText, categories)
+      const chat = await callTyphoonChat(typhoonKey as string, prompt.system, prompt.user)
+      const result = parseTyphoonChatJson(chat.status, chat.body)
+      if (result.ok) {
+        const data = { ...result.data, category: matchCategory(result.data.category, categories, result.data.type) }
+        return NextResponse.json({ success: true, data, meta: { provider: "typhoon", typhoonStage: null, typhoonStatus: null } })
+      }
+      const diag: RouteDiag = { ...result.diag, provider: "typhoon", typhoonStage: null, typhoonStatus: null }
+      console.warn("ocr parse failed", diag)
+      return NextResponse.json({ success: false, error: "Parse failed", diag })
+    }
 
-    const gemini = useTyphoon
-      ? await callGemini([{ text: buildSlipExtractPrompt(ocrText, categories) }])
-      : await callGemini([
-          { inline_data: { mime_type: mimeType, data: imageBase64 } },
-          { text: VISION_PROMPT },
-        ])
-
+    const gemini = await callGemini([
+      { inline_data: { mime_type: mimeType, data: imageBase64 } },
+      { text: VISION_PROMPT },
+    ])
     const result = parseOcrGeminiResponse(gemini.status, gemini.body)
     if (result.ok) {
-      const data: OcrData = { ...result.data, category: matchCategory(result.data.category, categories, result.data.type) }
-      return NextResponse.json({ success: true, data, meta: { provider, typhoonStage, typhoonStatus } })
+      const data = { ...result.data, category: matchCategory(result.data.category, categories, result.data.type) }
+      return NextResponse.json({ success: true, data, meta: { provider: "gemini", typhoonStage, typhoonStatus } })
     }
-    const diag: RouteDiag = { ...result.diag, provider, typhoonStage, typhoonStatus }
+    const diag: RouteDiag = { ...result.diag, provider: "gemini", typhoonStage, typhoonStatus }
     console.warn("ocr parse failed", diag)
     return NextResponse.json({ success: false, error: "Parse failed", diag })
   } catch {

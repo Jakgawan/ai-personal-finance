@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { parseTyphoonOcrResponse, matchCategory, buildSlipExtractPrompt } from "./typhoon-ocr"
+import { parseTyphoonOcrResponse, parseTyphoonChatJson, matchCategory, buildSlipExtractPrompt } from "./typhoon-ocr"
 
 const ok = (content: unknown) => ({ choices: [{ message: { content } }] })
 
@@ -48,15 +48,66 @@ describe("matchCategory", () => {
 })
 
 describe("buildSlipExtractPrompt", () => {
-  it("มีกติกาผู้รับและรายชื่อหมวด", () => {
+  it("มีกติกาผู้รับ (ฝ่ายที่สอง) และรายชื่อหมวด", () => {
     const p = buildSlipExtractPrompt("ไปยัง นาย ก", [{ name: "อาหาร", type: "expense" }])
-    expect(p).toContain("ผู้รับเงิน")
-    expect(p).toContain("ห้ามใช้ชื่อผู้โอน")
-    expect(p).toContain("- อาหาร (expense)")
-    expect(p).toContain("ไปยัง นาย ก")
+    expect(p.system).toContain("ผู้รับเงิน")
+    expect(p.system).toContain("ห้ามใช้ชื่อผู้โอน")
+    expect(p.system).toContain("ฝ่ายที่สอง")
+    expect(p.system).toContain("- อาหาร (expense)")
+    expect(p.user).toContain("ไปยัง นาย ก")
   })
   it("ค่าแปลก ไม่ throw", () => {
     expect(() => buildSlipExtractPrompt(undefined, null as never)).not.toThrow()
     expect(() => buildSlipExtractPrompt(123, [{ name: "" }, null as never])).not.toThrow()
+  })
+})
+
+describe("parseTyphoonChatJson", () => {
+  const json = '{"name":"นาย ก","amount":95,"date":"2026-11-07","type":"expense","category":"อาหาร"}'
+  const expected = { name: "นาย ก", amount: 95, date: "2026-11-07", type: "expense", category: "อาหาร" }
+  it("JSON ล้วน", () => {
+    expect(parseTyphoonChatJson(200, ok(json))).toEqual({ ok: true, data: expected })
+  })
+  it("มี fence", () => {
+    expect(parseTyphoonChatJson(200, ok("```json\n" + json + "\n```"))).toEqual({ ok: true, data: expected })
+  })
+  it("มีข้อความรอบ JSON", () => {
+    expect(parseTyphoonChatJson(200, ok("นี่คือผลลัพธ์: " + json + " เรียบร้อย"))).toEqual({ ok: true, data: expected })
+  })
+  it("content เป็น array ของ parts", () => {
+    expect(parseTyphoonChatJson(200, ok([{ text: json }]))).toEqual({ ok: true, data: expected })
+  })
+  it("non-2xx", () => {
+    expect(parseTyphoonChatJson(429, {})).toEqual({
+      ok: false,
+      diag: { stage: "typhoon_chat_http", httpStatus: 429, textLength: 0, hadFence: false },
+    })
+  })
+  it("ว่าง", () => {
+    const r = parseTyphoonChatJson(200, ok("  "))
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(r.diag.stage).toBe("typhoon_chat_empty")
+  })
+  it("ขยะ = json_parse", () => {
+    const r = parseTyphoonChatJson(200, ok("ขออภัย ไม่สามารถอ่านได้"))
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(r.diag.stage).toBe("json_parse")
+  })
+  it("array JSON = invalid_shape", () => {
+    const r = parseTyphoonChatJson(200, ok("[1,2]"))
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(r.diag.stage).toBe("invalid_shape")
+  })
+  it("normalize: amount string และวันที่ พ.ศ.", () => {
+    const r = parseTyphoonChatJson(200, ok('{"name":" x ","amount":"95.00","date":"2569-11-07","type":"income"}'))
+    expect(r).toEqual({ ok: true, data: { name: "x", amount: 95, date: null, type: "income", category: "" } })
+  })
+  it("diag ไม่มีเนื้อหา", () => {
+    const r = parseTyphoonChatJson(200, ok("SECRET-CONTENT ไม่ใช่ json"))
+    expect(r.ok).toBe(false)
+    if (!r.ok) {
+      expect(Object.keys(r.diag).sort()).toEqual(["hadFence", "httpStatus", "stage", "textLength"])
+      expect(JSON.stringify(r.diag)).not.toContain("SECRET")
+    }
   })
 })
