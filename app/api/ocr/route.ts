@@ -167,7 +167,7 @@ export async function POST(req: NextRequest) {
     const result = parseOcrGeminiResponse(gemini.status, gemini.body)
     if (result.ok) {
       const data: OcrData = { ...result.data, category: matchCategory(result.data.category, categories, result.data.type) }
-      return NextResponse.json({ success: true, data, meta: { provider, typhoonStage } })
+      return NextResponse.json({ success: true, data, meta: { provider, typhoonStage, typhoonStatus } })
     }
     const diag: RouteDiag = { ...result.diag, provider, typhoonStage, typhoonStatus }
     console.warn("ocr parse failed", diag)
