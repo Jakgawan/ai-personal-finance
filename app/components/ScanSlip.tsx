@@ -6,6 +6,9 @@ import { Camera, CheckCircle2, Loader2, X } from "lucide-react"
 import { showToast } from "./Toast"
 import { todayInBangkok } from "@/lib/income-schedule"
 import { isValidDateString } from "@/lib/date-valid"
+import { prepareSlipImage } from "@/lib/slip-image"
+import { hasSlipConsent, setSlipConsent } from "@/lib/slip-consent"
+import SlipConsentNotice from "./SlipConsentNotice"
 
 type ScannedData = {
   name: string
@@ -29,6 +32,7 @@ export default function ScanSlip({ onSuccess }: { onSuccess?: () => void }) {
   const [scanned, setScanned] = useState<ScannedData | null>(null)
   const [preview, setPreview] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  const [consented, setConsented] = useState<boolean>(() => hasSlipConsent())
   const fileRef = useRef<HTMLInputElement>(null)
   const scanIdRef = useRef<number>(0)
   const abortRef = useRef<AbortController | null>(null)
@@ -78,53 +82,47 @@ useEffect(() => {
       setPreview(null)
     }
 
-    const reader = new FileReader()
-    reader.onload = async (e) => {
-      try {
-        const base64 = (e.target?.result as string).split(",")[1]
-        const mimeType = file.type
-        if (isCurrent()) setPreview(e.target?.result as string)
+    try {
+      const prepared = await prepareSlipImage(file)
+      if (!isCurrent()) return
+      const base64 = prepared.base64
+      const mimeType = prepared.mimeType
+      setPreview(`data:${mimeType};base64,${base64}`)
 
-        const res = await fetch("/api/ocr", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ imageBase64: base64, mimeType }),
-          signal: controller.signal,
-        })
+      const res = await fetch("/api/ocr", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ imageBase64: base64, mimeType }),
+        signal: controller.signal,
+      })
 
-        if (!isCurrent()) return
-        if (!res.ok) {
-          failScan()
-          return
-        }
-        const data = await res.json()
-        if (!isCurrent()) return
-        if (data?.success !== true || !data.data) {
-          failScan()
-          return
-        }
-        const ocrAmount = Number(data.data.amount)
-        const amountOk = Number.isFinite(ocrAmount) && ocrAmount > 0
-        setScanned({
-          name: data.data.name || "",
-          amount: amountOk ? String(ocrAmount) : "",
-          amountMissing: !amountOk,
-          date: isValidDateString(data.data.date) ? data.data.date : todayInBangkok(),
-          dateFromToday: !isValidDateString(data.data.date),
-          type: data.data.type === "income" ? "income" : "expense",
-          category: data.data.category || "",
-        })
-      } catch (err) {
-        if (!(err instanceof DOMException && err.name === "AbortError")) failScan()
-      } finally {
-        if (isCurrent()) setScanning(false)
+      if (!isCurrent()) return
+      if (!res.ok) {
+        failScan()
+        return
       }
-    }
-    reader.onerror = () => {
-      failScan()
+      const data = await res.json()
+      if (!isCurrent()) return
+      if (data?.success !== true || !data.data) {
+        failScan()
+        return
+      }
+      const ocrAmount = Number(data.data.amount)
+      const amountOk = Number.isFinite(ocrAmount) && ocrAmount > 0
+      setScanned({
+        name: data.data.name || "",
+        amount: amountOk ? String(ocrAmount) : "",
+        amountMissing: !amountOk,
+        date: isValidDateString(data.data.date) ? data.data.date : todayInBangkok(),
+        dateFromToday: !isValidDateString(data.data.date),
+        type: data.data.type === "income" ? "income" : "expense",
+        category: data.data.category || "",
+      })
+    } catch (err) {
+      if (!(err instanceof DOMException && err.name === "AbortError")) failScan()
+    } finally {
       if (isCurrent()) setScanning(false)
     }
-    reader.readAsDataURL(file)
   }
 
   const handleSave = async () => {
@@ -189,7 +187,19 @@ useEffect(() => {
             </div>
 
             <div className="px-6 pb-6">
+              {!consented && (
+                <div className="mb-4">
+                  <SlipConsentNotice
+                    onAccept={() => {
+                      setSlipConsent()
+                      setConsented(true)
+                      fileRef.current?.click()
+                    }}
+                  />
+                </div>
+              )}
               {/* Upload area */}
+              {consented && (
               <div
                 onClick={() => !scanning && fileRef.current?.click()}
                 className={`border-2 border-dashed border-gray-200 rounded-xl p-6 text-center transition-colors mb-4 ${scanning ? "cursor-not-allowed opacity-60" : "cursor-pointer hover:border-[#1D9E75]"}`}
@@ -204,6 +214,7 @@ useEffect(() => {
                   </>
                 )}
               </div>
+              )}
 
               <input
                 ref={fileRef}

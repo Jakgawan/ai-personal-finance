@@ -8,6 +8,9 @@ import CategoryIcon from "./CategoryIcon"
 import { todayLocal } from "@/lib/recurring"
 import { topItems, type TopItem } from "@/lib/quick-amounts"
 import { isValidDateString } from "@/lib/date-valid"
+import { prepareSlipImage } from "@/lib/slip-image"
+import { hasSlipConsent, setSlipConsent } from "@/lib/slip-consent"
+import SlipConsentNotice from "./SlipConsentNotice"
 
 type Category = { id: string; name: string; type: string; icon: string; color?: string }
 type Cycle = { id: string; name: string }
@@ -51,6 +54,7 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles,
   // แท็บสแกนสลิป
   const [slipScanning, setSlipScanning] = useState(false)
   const [slipError, setSlipError] = useState("")
+  const [slipConsented, setSlipConsented] = useState<boolean>(() => hasSlipConsent())
   const [amountHint, setAmountHint] = useState("")
   const [dateHint, setDateHint] = useState("")
   const slipFileRef = useRef<HTMLInputElement>(null)
@@ -291,8 +295,9 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles,
       if (data.name || (mode === "full" && data.category)) setShowDetails(true)
     } catch {
       setAiError("แปลงข้อความไม่สำเร็จ กรุณาลองใหม่")
+    } finally {
+      setAiLoading(false)
     }
-    setAiLoading(false)
   }
 
   const switchTab = (next: "form" | "ai" | "slip") => {
@@ -303,7 +308,7 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles,
     setInputMode(next)
   }
 
-  const handleSlipFile = (file: File) => {
+  const handleSlipFile = async (file: File) => {
     slipAbortRef.current?.abort()
     const controller = new AbortController()
     slipAbortRef.current = controller
@@ -317,70 +322,63 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles,
       if (isCurrent()) setSlipError("อ่านสลิปไม่สำเร็จ ลองรูปอื่นหรือกรอกเอง")
     }
 
-    const reader = new FileReader()
-    reader.onload = async (e) => {
-      try {
-        const base64 = (e.target?.result as string).split(",")[1]
-        const res = await fetch("/api/ocr", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ imageBase64: base64, mimeType: file.type }),
-          signal: controller.signal,
-        })
-        if (!isCurrent()) return
-        if (!res.ok) {
-          fail()
-          return
-        }
-        const json = await res.json()
-        if (!isCurrent()) return
-        if (json?.success !== true || !json.data) {
-          fail()
-          return
-        }
-        const d = json.data
-        const newType: "expense" | "income" = d.type === "income" ? "income" : "expense"
-        const ocrAmount = Number(d.amount)
-        if (d.amount !== null && d.amount !== undefined && Number.isFinite(ocrAmount) && ocrAmount > 0) {
-          setAmount(sanitizeAmount(String(ocrAmount)))
-          setAmountHint("")
-        } else {
-          setAmount("")
-          setAmountHint("อ่านยอดเงินจากสลิปไม่ได้ กรอกเอง")
-        }
-        if (isValidDateString(d.date)) {
-          setDate(d.date)
-          setDateHint("")
-        } else {
-          setDate(todayLocal())
-          setDateHint("อ่านวันที่จากสลิปไม่ได้ ใช้วันนี้แทน ตรวจก่อนบันทึก")
-        }
-        setType(newType)
-        setName(typeof d.name === "string" ? d.name : "")
-        // ใส่หมวดเฉพาะที่ตรงกับหมวดของผู้ใช้เท่านั้น (AI อาจตอบชื่อที่ไม่มีอยู่จริง)
-        let matched = ""
-        if (mode === "full" && typeof d.category === "string") {
-          const wanted = d.category.trim().toLowerCase()
-          const hit = wanted
-            ? categories.find(c => (!c.type || c.type === newType) && c.name.trim().toLowerCase() === wanted)
-            : undefined
-          if (hit) matched = hit.name
-        }
-        setCategory(matched)
-        setIsBillPayment(false)
-        setShowDetails(true)
-        setInputMode("form")
-      } catch (err) {
-        if (!(err instanceof DOMException && err.name === "AbortError")) fail()
-      } finally {
-        if (isCurrent()) setSlipScanning(false)
+    try {
+      const prepared = await prepareSlipImage(file)
+      if (!isCurrent()) return
+      const res = await fetch("/api/ocr", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ imageBase64: prepared.base64, mimeType: prepared.mimeType }),
+        signal: controller.signal,
+      })
+      if (!isCurrent()) return
+      if (!res.ok) {
+        fail()
+        return
       }
-    }
-    reader.onerror = () => {
-      fail()
+      const json = await res.json()
+      if (!isCurrent()) return
+      if (json?.success !== true || !json.data) {
+        fail()
+        return
+      }
+      const d = json.data
+      const newType: "expense" | "income" = d.type === "income" ? "income" : "expense"
+      const ocrAmount = Number(d.amount)
+      if (d.amount !== null && d.amount !== undefined && Number.isFinite(ocrAmount) && ocrAmount > 0) {
+        setAmount(sanitizeAmount(String(ocrAmount)))
+        setAmountHint("")
+      } else {
+        setAmount("")
+        setAmountHint("อ่านยอดเงินจากสลิปไม่ได้ กรอกเอง")
+      }
+      if (isValidDateString(d.date)) {
+        setDate(d.date)
+        setDateHint("")
+      } else {
+        setDate(todayLocal())
+        setDateHint("อ่านวันที่จากสลิปไม่ได้ ใช้วันนี้แทน ตรวจก่อนบันทึก")
+      }
+      setType(newType)
+      setName(typeof d.name === "string" ? d.name : "")
+      // ใส่หมวดเฉพาะที่ตรงกับหมวดของผู้ใช้เท่านั้น (AI อาจตอบชื่อที่ไม่มีอยู่จริง)
+      let matched = ""
+      if (mode === "full" && typeof d.category === "string") {
+        const wanted = d.category.trim().toLowerCase()
+        const hit = wanted
+          ? categories.find(c => (!c.type || c.type === newType) && c.name.trim().toLowerCase() === wanted)
+          : undefined
+        if (hit) matched = hit.name
+      }
+      setCategory(matched)
+      setIsBillPayment(false)
+      setShowDetails(true)
+      setInputMode("form")
+    } catch (err) {
+      if (!(err instanceof DOMException && err.name === "AbortError")) fail()
+    } finally {
       if (isCurrent()) setSlipScanning(false)
     }
-    reader.readAsDataURL(file)
   }
 
   const handleSave = async () => {
@@ -438,6 +436,16 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles,
 
         {inputMode === "slip" && (
           <div className="px-6 pb-6 flex flex-col gap-2">
+            {!slipConsented && (
+              <SlipConsentNotice
+                onAccept={() => {
+                  setSlipConsent()
+                  setSlipConsented(true)
+                  slipFileRef.current?.click()
+                }}
+              />
+            )}
+            {slipConsented && (
             <button
               type="button"
               disabled={slipScanning}
@@ -448,6 +456,7 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles,
               <p className="text-sm text-gray-500">กดเพื่อเลือกรูปสลิป</p>
               <p className="text-xs text-gray-400 mt-1">รองรับ JPG, PNG</p>
             </button>
+            )}
             <input
               ref={slipFileRef}
               type="file"
