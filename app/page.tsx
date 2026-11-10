@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { supabase } from "@/lib/supabase"
 import Link from "next/link"
 import { formatDate } from "@/lib/utils"
-import { Lightbulb, Scale, X, Wallet, TriangleAlert, RefreshCw } from "lucide-react"
+import { Lightbulb, Scale, X, Wallet, TriangleAlert, RefreshCw, Eye, EyeOff, PiggyBank } from "lucide-react"
 import AdjustBalanceModal from "@/app/components/AdjustBalanceModal"
 import CarryOverModal from "@/app/components/CarryOverModal"
 import { getPeriodTransition, type CarryoverPref, type PeriodTransition } from "@/lib/period-transition"
@@ -17,7 +17,7 @@ import { todayInBangkok, addDays, getNextIncomeDate, getPreviousIncomeDate, type
 import { calcSpendable, getCurrentPeriod, toLegacyBudget } from "@/lib/spendable"
 import { calcCarryIn } from "@/lib/period-carry-in"
 import { summarizePeriod } from "@/lib/period-summary"
-import { isSavingKind } from "@/lib/savings"
+import { isSavingKind, computeSavingsTotals } from "@/lib/savings"
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend
@@ -174,6 +174,72 @@ export default function Dashboard() {
   const [noteDismissedKey, setNoteDismissedKey] = useState<string | null>(null)
   const [noteCheckedKey, setNoteCheckedKey] = useState<string | null>(null)
   const transitionBusy = useRef<boolean>(false)
+  // ข้อมูลการ์ดเงินเก็บ/ลงทุน (null = ยังไม่โหลด/โหลดไม่สำเร็จ -> ซ่อนการ์ด ไม่กระทบทั้งหน้า)
+  const [savingsProfile, setSavingsProfile] = useState<{ hide: boolean; savingStart: number; investmentStart: number } | null>(null)
+  const [hideSaving, setHideSaving] = useState(false)
+
+  const loadSavingsProfile = async (): Promise<void> => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+      const { data, error } = await supabase
+        .from("financial_profile")
+        .select("hide_savings, saving_start, investment_start")
+        .eq("user_id", user.id)
+        .maybeSingle()
+      if (error) { setSavingsProfile(null); return }
+      setSavingsProfile({
+        hide: data?.hide_savings === true,
+        savingStart: Number(data?.saving_start) || 0,
+        investmentStart: Number(data?.investment_start) || 0,
+      })
+      setHideSaving(data?.hide_savings === true)
+    } catch {
+      setSavingsProfile(null)
+    }
+  }
+
+  useEffect(() => {
+    loadSavingsProfile()
+  }, [])
+
+  const hideSavingBusy = useRef<boolean>(false)
+  const toggleHideSaving = async () => {
+    if (hideSavingBusy.current) return
+    hideSavingBusy.current = true
+    const previous = hideSaving
+    const next = !previous
+    setHideSaving(next)
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        setHideSaving(previous)
+        showToast("บันทึกไม่สำเร็จ ลองใหม่อีกครั้ง", "error")
+        return
+      }
+      const { error } = await supabase
+        .from("financial_profile")
+        .update({ hide_savings: next, updated_at: new Date().toISOString() })
+        .eq("user_id", user.id)
+      if (error) {
+        setHideSaving(previous)
+        showToast("บันทึกไม่สำเร็จ ลองใหม่อีกครั้ง", "error")
+      }
+    } catch {
+      setHideSaving(previous)
+      showToast("บันทึกไม่สำเร็จ ลองใหม่อีกครั้ง", "error")
+    } finally {
+      hideSavingBusy.current = false
+    }
+  }
+
+  const savingsTotals = useMemo(
+    () => computeSavingsTotals(transactions, { savingStart: savingsProfile?.savingStart ?? 0, investmentStart: savingsProfile?.investmentStart ?? 0 }),
+    [transactions, savingsProfile]
+  )
+  const showSavingsCard =
+    savingsProfile !== null &&
+    (transactions.some(t => isSavingKind(t.kind)) || savingsProfile.savingStart > 0 || savingsProfile.investmentStart > 0)
 
   // โหลดยอดเงินตั้งต้น (งาน 4: เก็บข้อมูลและจุดเข้าปรับยอดเท่านั้น ยังไม่ใช้คำนวณ)
   const fetchOpening = useCallback(async () => {
@@ -532,7 +598,7 @@ export default function Dashboard() {
     if (retrying) return
     setRetrying(true)
     try {
-      await Promise.all([fetchOpening(), fetchData()])
+      await Promise.all([fetchOpening(), fetchData(), loadSavingsProfile()])
     } finally {
       setRetrying(false)
     }
@@ -823,6 +889,46 @@ export default function Dashboard() {
           </div>
         )}
       </div>
+
+      {/* เงินเก็บและเงินลงทุน (แตะการ์ด = เปิดฟอร์มจดเงินเก็บ, ปุ่มตา = ซ่อน/แสดงยอด) */}
+      {showSavingsCard && (
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={() => window.dispatchEvent(new CustomEvent("openQuickAdd", { detail: { amount: null, type: "expense", kind: "saving" } }))}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault()
+              window.dispatchEvent(new CustomEvent("openQuickAdd", { detail: { amount: null, type: "expense", kind: "saving" } }))
+            }
+          }}
+          className="bg-white rounded-xl p-3 md:p-4 shadow-sm mb-3 md:mb-4 cursor-pointer"
+        >
+          <div className="flex items-center gap-1.5 mb-2">
+            <PiggyBank size={16} className="text-[#378ADD] shrink-0" />
+            <p className="text-xs text-gray-500">เงินเก็บและเงินลงทุน</p>
+            <button
+              type="button"
+              aria-label={hideSaving ? "แสดงยอด" : "ซ่อนยอด"}
+              onClick={(e) => { e.stopPropagation(); toggleHideSaving() }}
+              onKeyDown={(e) => e.stopPropagation()}
+              className="p-1.5 -m-0.5 text-gray-400 hover:text-gray-600 rounded-md"
+            >
+              {hideSaving ? <EyeOff size={16} /> : <Eye size={16} />}
+            </button>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="min-w-0">
+              <p className="text-xs text-gray-500">เงินเก็บ</p>
+              <p className="text-lg md:text-xl font-bold tabular-nums text-gray-800 truncate">{hideSaving ? "฿••••" : `฿${formatMoney(savingsTotals.saving)}`}</p>
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs text-gray-500">เงินลงทุน</p>
+              <p className="text-lg md:text-xl font-bold tabular-nums text-gray-800 truncate">{hideSaving ? "฿••••" : `฿${formatMoney(savingsTotals.investment)}`}</p>
+            </div>
+          </div>
+        </div>
+      )}
 
 
       {/* รายการวันนี้ (ไม่มีรายการ -> ไม่แสดง เพราะ insight บอกอยู่แล้ว) */}

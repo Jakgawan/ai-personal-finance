@@ -27,6 +27,7 @@ type Props = {
   initialAmount?: number | null
   initialType?: "expense" | "income"
   initialDate?: string | null
+  initialKind?: "saving" | null
 }
 
 // รับเฉพาะตัวเลขกับจุดทศนิยม 1 จุด, ทศนิยมไม่เกิน 2 ตำแหน่ง
@@ -39,7 +40,7 @@ function sanitizeAmount(raw: string): string {
   return `${intPart}.${decPart}`
 }
 
-export default function QuickAddModal({ open, onClose, mode, categories, cycles, initialAmount, initialType, initialDate }: Props) {
+export default function QuickAddModal({ open, onClose, mode, categories, cycles, initialAmount, initialType, initialDate, initialKind }: Props) {
   const [name, setName] = useState("")
   const [amount, setAmount] = useState("")
   const [date, setDate] = useState(todayLocal())
@@ -127,15 +128,16 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles,
   // เปิดพร้อมค่าเริ่มต้น -> ไปแท็บฟอร์ม ใส่ประเภท/จำนวนให้ (ไม่ focus อะไร)
   useEffect(() => {
     if (!open) return
-    if (initialType === undefined && (initialAmount === undefined || initialAmount === null) && !initialDate) return
+    if (initialType === undefined && (initialAmount === undefined || initialAmount === null) && !initialDate && !initialKind) return
     setInputMode("form")
     if (initialType) setType(initialType)
+    if (initialKind) setKind(initialKind)
     if (initialDate) {
       setDate(initialDate)
       if (initialDate !== todayLocal()) setShowDetails(true)
     }
     if (initialAmount !== undefined && initialAmount !== null) setAmount(sanitizeAmount(String(initialAmount)))
-  }, [open, initialAmount, initialType, initialDate])
+  }, [open, initialAmount, initialType, initialDate, initialKind])
 
   // ยกเลิกการสแกนที่ค้างอยู่ ผลที่ตอบกลับมาทีหลังจะถูกทิ้ง
   const cancelSlip = useCallback(() => {

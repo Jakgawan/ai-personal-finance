@@ -36,7 +36,7 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(false)
   const [showQuickAdd, setShowQuickAdd] = useState(false)
   // ค่าเริ่มต้นที่ส่งมาจากปุ่มบันทึกด่วนบน Dashboard (event openQuickAdd) — เคลียร์ตอนปิด modal
-  const [quickAddInitial, setQuickAddInitial] = useState<{ amount: number | null; type: "expense" | "income"; date: string | null } | null>(null)
+  const [quickAddInitial, setQuickAddInitial] = useState<{ amount: number | null; type: "expense" | "income"; date: string | null; kind: "saving" | null } | null>(null)
   const [showMoreMenu, setShowMoreMenu] = useState(false)
   const pathname = usePathname()
   const router = useRouter()
@@ -65,8 +65,8 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
     const handler = (e: Event) => {
       // หน้า business ใช้ modal ของตัวเอง — ไม่สนใจ event นี้
       if (pathname === "/business") return
-      const detail = (e as CustomEvent<{ amount: number | null; type: "expense" | "income"; date?: string | null }>).detail
-      setQuickAddInitial({ amount: detail?.amount ?? null, type: detail?.type === "income" ? "income" : "expense", date: detail?.date ?? null })
+      const detail = (e as CustomEvent<{ amount: number | null; type: "expense" | "income"; date?: string | null; kind?: "saving" }>).detail
+      setQuickAddInitial({ amount: detail?.amount ?? null, type: detail?.type === "income" ? "income" : "expense", date: detail?.date ?? null, kind: detail?.kind === "saving" ? "saving" : null })
       setShowQuickAdd(true)
     }
     window.addEventListener("openQuickAdd", handler)
@@ -270,6 +270,7 @@ export default function Sidebar({ children }: { children: React.ReactNode }) {
           initialAmount={quickAddInitial?.amount}
           initialType={quickAddInitial?.type}
           initialDate={quickAddInitial?.date}
+          initialKind={quickAddInitial?.kind}
         />
 
       </div>

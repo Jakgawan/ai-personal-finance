@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { computeSavingsTotals, wouldOverdraw, isSavingKind } from "./savings"
+import { computeSavingsTotals, wouldOverdraw, isSavingKind, netSavedInRange } from "./savings"
 
 const dep = (kind: string, amount: number | string) => ({ type: "expense", amount, kind })
 const wd = (kind: string, amount: number | string) => ({ type: "income", amount, kind })
@@ -72,5 +72,42 @@ describe("wouldOverdraw", () => {
   it("ค่าแปลก -> false", () => {
     expect(wouldOverdraw(NaN, 10)).toBe(false)
     expect(wouldOverdraw(10, NaN)).toBe(false)
+  })
+})
+
+describe("netSavedInRange", () => {
+  const row = (type: string, kind: string | null, amount: number | string, date: string) => ({ type, kind, amount, date })
+  it("ฝากบวก ถอนลบ รวม saving + investment", () => {
+    const txs = [
+      row("expense", "saving", 1000, "2026-11-02"),
+      row("expense", "investment", 500, "2026-11-10"),
+      row("income", "saving", 300, "2026-11-15"),
+    ]
+    expect(netSavedInRange(txs, "2026-11-01", "2026-11-30")).toBe(1200)
+  })
+  it("ถอนมากกว่าฝาก -> ติดลบ", () => {
+    expect(netSavedInRange([row("income", "investment", 800, "2026-11-03")], "2026-11-01", "2026-11-30")).toBe(-800)
+  })
+  it("รวมวันต้น/วันท้าย และไม่นับนอกช่วง", () => {
+    const txs = [
+      row("expense", "saving", 100, "2026-11-01"),
+      row("expense", "saving", 200, "2026-11-30"),
+      row("expense", "saving", 400, "2026-10-31"),
+      row("expense", "saving", 800, "2026-12-01"),
+    ]
+    expect(netSavedInRange(txs, "2026-11-01", "2026-11-30")).toBe(300)
+  })
+  it("ไม่นับรายการปกติ/จ่ายบิล และข้ามจำนวนที่ไม่ใช่ตัวเลข", () => {
+    const txs = [
+      row("expense", "regular", 999, "2026-11-05"),
+      row("expense", null, 999, "2026-11-05"),
+      row("expense", "bill_payment", 999, "2026-11-05"),
+      row("expense", "saving", "abc", "2026-11-05"),
+      row("expense", "saving", "50.5", "2026-11-05"),
+    ]
+    expect(netSavedInRange(txs, "2026-11-01", "2026-11-30")).toBe(50.5)
+  })
+  it("ไม่มีรายการ -> 0", () => {
+    expect(netSavedInRange([], "2026-11-01", "2026-11-30")).toBe(0)
   })
 })

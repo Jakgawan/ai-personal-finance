@@ -45,3 +45,22 @@ export function wouldOverdraw(currentRaw: number, withdrawAmount: number): boole
   if (!Number.isFinite(currentRaw) || !Number.isFinite(withdrawAmount)) return false
   return withdrawAmount > Math.max(0, currentRaw)
 }
+
+// เก็บได้สุทธิในช่วงวันที่ (รวมปลายทั้งสองด้าน, รูปแบบ YYYY-MM-DD) = ฝาก − ถอน ของ saving + investment
+// ผลติดลบได้ (ถอนมากกว่าฝาก)
+export function netSavedInRange(
+  transactions: Array<SavingsTx & { date: string }>,
+  start: string,
+  end: string
+): number {
+  let net = 0
+  for (const t of transactions) {
+    if (!isSavingKind(t.kind)) continue
+    if (typeof t.date !== "string" || t.date < start || t.date > end) continue
+    const n = Number(t.amount)
+    if (!Number.isFinite(n)) continue
+    if (t.type === "expense") net += n
+    else if (t.type === "income") net -= n
+  }
+  return net
+}
