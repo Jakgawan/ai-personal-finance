@@ -11,7 +11,7 @@ import { getPeriodTransition, type CarryoverPref, type PeriodTransition } from "
 import { showToast } from "@/app/components/Toast"
 import { pickActiveOpening } from "@/lib/opening-balance"
 import CategoryIcon from "@/app/components/CategoryIcon"
-import BillPaymentBadge from "@/app/components/BillPaymentBadge"
+import KindBadge from "@/app/components/KindBadge"
 import { pickInsight, formatMoney, formatThaiShortDate } from "@/lib/daily-budget"
 import { todayInBangkok, addDays, getNextIncomeDate, getPreviousIncomeDate, type IncomeSourceSchedule } from "@/lib/income-schedule"
 import { calcSpendable, getCurrentPeriod, toLegacyBudget } from "@/lib/spendable"
@@ -739,6 +739,11 @@ export default function Dashboard() {
                   จ่ายบิลวันนี้ <span className="font-semibold tabular-nums">฿{formatMoney(spend.todayBillPayments)}</span> (ไม่นับในใช้ไป)
                 </p>
               )}
+              {spend.todaySavingDeposits > 0 && (
+                <p className="text-xs opacity-90 mt-1">
+                  เก็บเงิน/ลงทุนวันนี้ <span className="font-semibold tabular-nums">฿{formatMoney(spend.todaySavingDeposits)}</span> (ไม่นับในใช้ไป)
+                </p>
+              )}
               <p className="text-sm opacity-90 mt-1">
                 {spend.tomorrowBudget === null
                   ? "วันนี้เป็นวันสุดท้ายของรอบ"
@@ -836,7 +841,7 @@ export default function Dashboard() {
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-gray-800 flex items-center gap-1.5 min-w-0">
                       <span className="truncate">{t.name || t.category || (t.type === "income" ? "รายรับ" : "รายจ่าย")}</span>
-                      {t.kind === "bill_payment" && <BillPaymentBadge />}
+                      <KindBadge kind={t.kind} type={t.type} />
                     </p>
                     {t.category && <p className="text-xs text-gray-400 truncate">{t.category}</p>}
                   </div>

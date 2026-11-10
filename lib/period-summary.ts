@@ -1,6 +1,7 @@
 // ฟังก์ชันล้วน (pure) สรุปรายรับ/รายจ่ายของ "รอบนี้" และสร้างข้อความบริบทการเงินให้ AI
 
 import { isSavingKind } from "./savings"
+import { kindLabel } from "./kind-label"
 
 export type SummaryTx = {
   date: string
@@ -30,11 +31,9 @@ export function summarizePeriod(
 }
 
 // ป้ายท้ายบรรทัดรายการล่าสุด (ว่างถ้าเป็นรายการปกติ)
-function kindLabel(t: SummaryTx): string {
-  if (t.kind === "bill_payment") return " (จ่ายบิล)"
-  if (t.kind === "saving") return t.type === "income" ? " (ถอนเงินเก็บ)" : " (เก็บเงิน)"
-  if (t.kind === "investment") return t.type === "income" ? " (ถอนเงินลงทุน)" : " (ลงทุน)"
-  return ""
+function kindSuffix(t: SummaryTx): string {
+  const label = kindLabel(t.kind, t.type)
+  return label ? ` (${label})` : ""
 }
 
 export function buildFinancialContext(input: {
@@ -66,7 +65,7 @@ export function buildFinancialContext(input: {
   } else {
     for (const t of recent) {
       const sign = t.type === "income" ? "+" : "-"
-      lines.push(`${t.date} ${t.name} ${sign}${money(Number(t.amount))}${kindLabel(t)}`)
+      lines.push(`${t.date} ${t.name} ${sign}${money(Number(t.amount))}${kindSuffix(t)}`)
     }
   }
   return lines.join("\n")

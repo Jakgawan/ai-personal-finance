@@ -7,8 +7,11 @@ import { formatDate } from "@/lib/utils"
 import ScanSlip from "@/app/components/ScanSlip"
 import ConfirmModal from "@/app/components/ConfirmModal"
 import { showToast } from "@/app/components/Toast"
-import { BarChart2, CalendarDays, List, ChevronLeft, ChevronRight, Info, Receipt } from "lucide-react"
-import BillPaymentBadge from "@/app/components/BillPaymentBadge"
+import { BarChart2, CalendarDays, List, ChevronLeft, ChevronRight, Info } from "lucide-react"
+import KindBadge from "@/app/components/KindBadge"
+import KindSelector, { type FormKind } from "@/app/components/KindSelector"
+import { useWithdrawWarning } from "@/app/components/useWithdrawWarning"
+import { kindLabel } from "@/lib/kind-label"
 import { pickActiveOpening } from "@/lib/opening-balance"
 import { isSavingKind } from "@/lib/savings"
 
@@ -64,7 +67,7 @@ export default function TransactionPage() {
   const [category, setCategory] = useState("")
   const [cycleId, setCycleId] = useState("")
   const [note, setNote] = useState("")
-  const [isBillPayment, setIsBillPayment] = useState(false)
+  const [kind, setKind] = useState<FormKind>("regular")
   const [loading, setLoading] = useState(false)
 
   const [initialLoading, setInitialLoading] = useState(true)
@@ -165,7 +168,7 @@ export default function TransactionPage() {
     setDate(new Date().toISOString().split("T")[0])
     setType("expense")
     setCategory(""); setCycleId(""); setNote("")
-    setIsBillPayment(false)
+    setKind("regular")
     setShowModal(true)
   }
 
@@ -173,7 +176,9 @@ export default function TransactionPage() {
     setEditId(t.id)
     setName(t.name); setAmount(String(t.amount)); setDate(t.date)
     setType(t.type); setCategory(t.category); setCycleId(t.cycle_id || ""); setNote(t.note || "")
-    setIsBillPayment(t.kind === "bill_payment")
+    setKind(
+      t.kind === "bill_payment" || t.kind === "saving" || t.kind === "investment" ? t.kind : "regular"
+    )
     setShowModal(true)
   }
 
@@ -182,6 +187,14 @@ export default function TransactionPage() {
   // ผู้ใช้เห็นรายการใหม่ทันทีโดยไม่ต้องรีเพจ
   const amountNum: number = Number(amount)
   const amountValid: boolean = amount.trim() !== "" && Number.isFinite(amountNum) && amountNum > 0
+
+  const withdrawWarning: string = useWithdrawWarning({
+    open: showModal,
+    type: type === "income" ? "income" : "expense",
+    kind,
+    amount: amountNum,
+    excludeId: editId,
+  })
 
   const handleSubmit = async () => {
     if (!name) return
@@ -200,7 +213,7 @@ export default function TransactionPage() {
     const payload = {
       name, amount: amountNum, date, type, category,
       cycle_id: cycleId || null, note: note || null, user_id: user.id,
-      kind: type === "expense" && isBillPayment ? "bill_payment" : "regular",
+      kind: type === "income" && kind === "bill_payment" ? "regular" : kind,
     }
 
    if (editId) {
@@ -253,17 +266,18 @@ export default function TransactionPage() {
         รายจ่าย: t.type === "expense" ? Number(t.amount) : "",
         คงเหลือ: running,
         หมายเหตุ: t.note || "-",
+        ประเภท: kindLabel(t.kind, t.type),
       }
     })
     const totalRow = {
       วันที่: "", รายการ: "รวมทั้งหมด", หมวด: "",
       รายรับ: totalIncome, รายจ่าย: totalExpense,
-      คงเหลือ: totalIncome - totalExpense, หมายเหตุ: "",
+      คงเหลือ: totalIncome - totalExpense, หมายเหตุ: "", ประเภท: "",
     }
     const ws = XLSX.utils.json_to_sheet([...rows, {}, totalRow])
     ws["!cols"] = [
       { wch: 14 }, { wch: 25 }, { wch: 15 },
-      { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 20 },
+      { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 20 }, { wch: 14 },
     ]
     rows.forEach((row, i) => {
       const rowIndex = i + 2
@@ -444,7 +458,7 @@ export default function TransactionPage() {
                         <td className="px-4 py-3 font-medium text-gray-800 min-w-[11rem]">
                           <span className="inline-flex items-center gap-1.5 flex-wrap">
                             {t.name}
-                            {t.kind === "bill_payment" && <BillPaymentBadge />}
+                            <KindBadge kind={t.kind} type={t.type} />
                           </span>
                           {openingDate && t.date < openingDate && (
                             <span className="mt-0.5 flex items-center gap-1 text-xs font-normal text-gray-400">
@@ -564,7 +578,7 @@ export default function TransactionPage() {
                         <div>
                           <p className="text-sm font-medium text-gray-800 flex items-center gap-1.5">
                             {t.name}
-                            {t.kind === "bill_payment" && <BillPaymentBadge />}
+                            <KindBadge kind={t.kind} type={t.type} />
                           </p>
                           <p className="text-xs text-gray-400">{t.category || "-"}</p>
                         </div>
@@ -585,7 +599,7 @@ export default function TransactionPage() {
                     setDate(selectedDay!)
                     setType("expense")
                     setCategory(""); setCycleId(""); setNote("")
-                    setIsBillPayment(false)
+                    setKind("regular")
                     setShowModal(true)
                   }}
                   className="w-full mt-4 border border-dashed border-gray-300 text-gray-500 rounded-lg py-2 text-sm hover:border-[#1D9E75] hover:text-[#1D9E75] transition-colors"
@@ -611,26 +625,12 @@ export default function TransactionPage() {
                   className={`flex-1 py-2 rounded-lg text-sm font-medium border transition-colors ${type === "expense" ? "bg-[#D85A30] text-white border-[#D85A30]" : "border-gray-200 text-gray-600"}`}>
                   รายจ่าย
                 </button>
-                <button onClick={() => setType("income")}
+                <button onClick={() => { setType("income"); if (kind === "bill_payment") setKind("regular") }}
                   className={`flex-1 py-2 rounded-lg text-sm font-medium border transition-colors ${type === "income" ? "bg-[#1D9E75] text-white border-[#1D9E75]" : "border-gray-200 text-gray-600"}`}>
                   รายรับ
                 </button>
               </div>
-              {type === "expense" && (
-                <label className="flex items-center gap-3 min-h-[44px] px-3 rounded-lg border border-gray-200 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={isBillPayment}
-                    onChange={(e) => setIsBillPayment(e.target.checked)}
-                    className="w-5 h-5 accent-[#D85A30] shrink-0"
-                  />
-                  <Receipt size={18} className="text-gray-500 shrink-0" />
-                  <span className="flex flex-col leading-tight">
-                    <span className="text-sm font-medium text-gray-800">จ่ายบิล/ชำระหนี้</span>
-                    <span className="text-xs text-gray-400">ไม่นับเป็นค่าใช้จ่ายของวันนี้</span>
-                  </span>
-                </label>
-              )}
+              <KindSelector type={type === "income" ? "income" : "expense"} kind={kind} onChange={setKind} />
               <input placeholder="วันที่" type="date" value={date} onChange={(e) => setDate(e.target.value)}
                 className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75] text-gray-800" />
               <input placeholder="ชื่อรายการ" value={name} onChange={(e) => setName(e.target.value)}
@@ -639,6 +639,9 @@ export default function TransactionPage() {
                 className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75] text-gray-800" />
               {amount.trim() !== "" && !amountValid && (
                 <p className="text-[0.75rem] text-[#D85A30] -mt-2">จำนวนเงินต้องมากกว่า 0</p>
+              )}
+              {amountValid && withdrawWarning && (
+                <p className="text-[0.75rem] text-amber-600 -mt-2">{withdrawWarning}</p>
               )}
               <select value={category} onChange={(e) => setCategory(e.target.value)}
                 className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none text-gray-800">

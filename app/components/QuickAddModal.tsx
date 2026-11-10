@@ -2,7 +2,9 @@
 
 import { useState, useEffect, useRef, useCallback } from "react"
 import { supabase } from "@/lib/supabase"
-import { Plus, Loader2, X, ChevronDown, ChevronUp, Receipt, Camera } from "lucide-react"
+import { Plus, Loader2, X, ChevronDown, ChevronUp, Camera } from "lucide-react"
+import KindSelector, { type FormKind } from "./KindSelector"
+import { useWithdrawWarning } from "./useWithdrawWarning"
 import { showToast } from "./Toast"
 import CategoryIcon from "./CategoryIcon"
 import { todayLocal } from "@/lib/recurring"
@@ -67,7 +69,8 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles,
   const [categoryDropdownOpen, setCategoryDropdownOpen] = useState(false)
   const [categoryUsage, setCategoryUsage] = useState<{ category: string; type: string }[]>([])
 
-  const [isBillPayment, setIsBillPayment] = useState(false)
+  const [kind, setKind] = useState<FormKind>("regular")
+  const withdrawWarning = useWithdrawWarning({ open, type, kind, amount: Number(amount) })
 
   type RecentTx = { name: string | null; amount: number | string; type: string; date: string; category: string | null; kind?: string | null }
   const [recentTx, setRecentTx] = useState<RecentTx[]>([])
@@ -158,7 +161,7 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles,
     clearPressTimer()
     setName(""); setAmount(""); setDate(todayLocal())
     setType("expense"); setCategory(""); setCycleId("")
-    setIsBillPayment(false)
+    setKind("regular")
     setInputMode("form"); setAiText(""); setAiError(""); setShowAllCategories(false)
     setShowDetails(false)
     setRecentTx([])
@@ -201,6 +204,7 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles,
       setAmountHint("")
       setName(item.name)
       setCategory(item.category || "")
+      setKind("regular")
       setShowDetails(true)
     }, 500)
   }
@@ -290,6 +294,7 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles,
       setAmount(data.amount ? sanitizeAmount(String(data.amount)) : "")
       setAmountHint("")
       setType(data.type === "income" ? "income" : "expense")
+      setKind("regular")
       setCategory(mode === "full" ? (data.category || "") : "")
       setInputMode("form")
       if (data.name || (mode === "full" && data.category)) setShowDetails(true)
@@ -371,7 +376,7 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles,
         if (hit) matched = hit.name
       }
       setCategory(matched)
-      setIsBillPayment(false)
+      setKind("regular")
       setShowDetails(true)
       setInputMode("form")
     } catch (err) {
@@ -397,7 +402,7 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles,
       type,
       category: category || null,
       cycle_id: cycleId || null,
-      kind: type === "expense" && isBillPayment ? "bill_payment" : "regular",
+      kind: type === "income" && kind === "bill_payment" ? "regular" : kind,
     })
     if (error) {
       showToast("บันทึกไม่สำเร็จ ลองใหม่อีกครั้ง", "error")
@@ -509,30 +514,16 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles,
         {inputMode === "form" && (
           <div className="px-6 pb-6 flex flex-col gap-3">
             <div className="flex gap-3">
-              <button onClick={() => setType("expense")}
+              <button onClick={() => { setType("expense") }}
                 className={`flex-1 py-2 rounded-lg text-sm font-medium border transition-colors ${type === "expense" ? "bg-[#D85A30] text-white border-[#D85A30]" : "border-gray-200 text-gray-600"}`}>
                 รายจ่าย
               </button>
-              <button onClick={() => setType("income")}
+              <button onClick={() => { setType("income"); if (kind === "bill_payment") setKind("regular") }}
                 className={`flex-1 py-2 rounded-lg text-sm font-medium border transition-colors ${type === "income" ? "bg-[#1D9E75] text-white border-[#1D9E75]" : "border-gray-200 text-gray-600"}`}>
                 รายรับ
               </button>
             </div>
-            {type === "expense" && (
-              <label className="flex items-center gap-3 min-h-[44px] px-3 rounded-lg border border-gray-200 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={isBillPayment}
-                  onChange={e => setIsBillPayment(e.target.checked)}
-                  className="w-5 h-5 accent-[#D85A30] shrink-0"
-                />
-                <Receipt size={18} className="text-gray-500 shrink-0" />
-                <span className="flex flex-col leading-tight">
-                  <span className="text-sm font-medium text-gray-800">จ่ายบิล/ชำระหนี้</span>
-                  <span className="text-xs text-gray-400">ไม่นับเป็นค่าใช้จ่ายของวันนี้</span>
-                </span>
-              </label>
-            )}
+            <KindSelector type={type} kind={kind} onChange={setKind} />
             <div>
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[1.5rem] font-semibold text-gray-400 pointer-events-none">฿</span>
@@ -551,6 +542,7 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles,
               </div>
               {amountError && <p className="text-xs text-[#D85A30] mt-1">{amountError}</p>}
               {!amountError && amountHint && <p className="text-xs text-gray-500 mt-1">{amountHint}</p>}
+              {!amountError && withdrawWarning && <p className="text-xs text-amber-600 mt-1">{withdrawWarning}</p>}
             </div>
 
             <button
