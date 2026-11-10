@@ -10,6 +10,7 @@ import { showToast } from "@/app/components/Toast"
 import { BarChart2, CalendarDays, List, ChevronLeft, ChevronRight, Info, Receipt } from "lucide-react"
 import BillPaymentBadge from "@/app/components/BillPaymentBadge"
 import { pickActiveOpening } from "@/lib/opening-balance"
+import { isSavingKind } from "@/lib/savings"
 
 type Transaction = {
   id: string
@@ -137,8 +138,8 @@ export default function TransactionPage() {
     return matchSearch && matchMonth && matchCycle && matchType && matchCat
   })
 
-  const totalIncome = filtered.filter(t => t.type === "income").reduce((s, t) => s + Number(t.amount), 0)
-  const totalExpense = filtered.filter(t => t.type === "expense").reduce((s, t) => s + Number(t.amount), 0)
+  const totalIncome = filtered.filter(t => t.type === "income" && !isSavingKind(t.kind)).reduce((s, t) => s + Number(t.amount), 0)
+  const totalExpense = filtered.filter(t => t.type === "expense" && !isSavingKind(t.kind)).reduce((s, t) => s + Number(t.amount), 0)
 
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE)
 
@@ -515,8 +516,8 @@ export default function TransactionPage() {
                 const day = i + 1
                 const dateStr = `${calYear}-${String(calMonth + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`
                 const dayTx = txByDay[dateStr] || []
-                const dayIncome = dayTx.filter(t => t.type === "income").reduce((s, t) => s + Number(t.amount), 0)
-                const dayExpense = dayTx.filter(t => t.type === "expense").reduce((s, t) => s + Number(t.amount), 0)
+                const dayIncome = dayTx.filter(t => t.type === "income" && !isSavingKind(t.kind)).reduce((s, t) => s + Number(t.amount), 0)
+                const dayExpense = dayTx.filter(t => t.type === "expense" && !isSavingKind(t.kind)).reduce((s, t) => s + Number(t.amount), 0)
                 const isToday = dateStr === new Date().toISOString().split("T")[0]
                 const isSelected = selectedDay === dateStr
                 return (
@@ -544,13 +545,13 @@ export default function TransactionPage() {
                   <div className="flex-1 bg-green-50 rounded-xl p-3 text-center">
                     <p className="text-xs text-gray-500">รายรับ</p>
                     <p className="text-sm font-bold text-[#1D9E75]">
-                      ฿{selectedDayTx.filter(t => t.type === "income").reduce((s, t) => s + Number(t.amount), 0).toLocaleString()}
+                      ฿{selectedDayTx.filter(t => t.type === "income" && !isSavingKind(t.kind)).reduce((s, t) => s + Number(t.amount), 0).toLocaleString()}
                     </p>
                   </div>
                   <div className="flex-1 bg-red-50 rounded-xl p-3 text-center">
                     <p className="text-xs text-gray-500">รายจ่าย</p>
                     <p className="text-sm font-bold text-[#D85A30]">
-                      ฿{selectedDayTx.filter(t => t.type === "expense").reduce((s, t) => s + Number(t.amount), 0).toLocaleString()}
+                      ฿{selectedDayTx.filter(t => t.type === "expense" && !isSavingKind(t.kind)).reduce((s, t) => s + Number(t.amount), 0).toLocaleString()}
                     </p>
                   </div>
                 </div>

@@ -4,9 +4,11 @@
 
 import { addDays } from "./income-schedule"
 import type { DailyBudget } from "./daily-budget"
+import { isSavingKind } from "./savings"
 
 // รายการเงินเข้า-ออก (type เป็น "income" หรือ "expense")
 // kind: "bill_payment" = จ่ายบิล/ชำระหนี้ (ไม่ส่ง/null/ค่าอื่น = รายการปกติ)
+// kind: "saving" | "investment" = เก็บเงิน/ลงทุน (expense = ฝากเข้า หักจากยอดใช้ได้, income = ถอนคืน เพิ่มยอดใช้ได้)
 // envelope_id: รายจ่ายนี้จ่ายจากซองไหน (ว่าง/ไม่ส่ง = ไม่ใช้ซอง)
 export type Tx = {
   date: string
@@ -40,6 +42,7 @@ export type Spendable = {
   expenseBeforeToday: number // รายจ่ายก่อนวันนี้ + จ่ายบิลวันนี้ (หักจากยอดต้นวัน)
   todayExpense: number // รายจ่ายปกติของวันนี้ (ไม่รวมจ่ายบิล และไม่รวมส่วนที่จ่ายจากซอง; ส่วนที่เกินซองนับรวม)
   todayBillPayments: number // ยอดจ่ายบิล/ชำระหนี้วันนี้ (UI ไว้แสดง — ถูกหักจากยอดต้นวันแล้ว ไม่นับเป็น "วันนี้ใช้ไป")
+  todaySavingDeposits: number // ยอดฝากเก็บเงิน+ลงทุนวันนี้ (หักจากยอดต้นวันแล้ว ไม่นับเป็น "วันนี้ใช้ไป")
   startOfTodayBalance: number // ยอดต้นวันนี้ (ยังไม่หักรายจ่ายวันนี้)
   balanceNow: number // เงินจริงตอนนี้ (หักรายจ่ายวันนี้แล้ว รวมที่จ่ายจากซอง)
   todayEnvelopeSpend: number // วันนี้จ่ายจากซองไปเท่าไหร่ (เฉพาะส่วนที่อยู่ในยอดซอง)
@@ -93,6 +96,7 @@ export function calcSpendable(input: {
   let expenseBeforeToday = 0
   let todayExpense = 0
   let todayBillPayments = 0
+  let todaySavingDeposits = 0
   let excludedBeforeOpening = 0
 
   for (let i = 0; i < transactions.length; i++) {
@@ -136,10 +140,15 @@ export function calcSpendable(input: {
         // จ่ายบิลวันนี้: หักจากยอดต้นวัน (เหมือนจ่ายไปก่อนเริ่มวัน) ไม่นับเป็น "วันนี้ใช้ไป"
         expenseBeforeToday += amt
         todayBillPayments += amt
+      } else if (isSavingKind(t.kind)) {
+        // ฝากเก็บเงิน/ลงทุนวันนี้: หักจากยอดต้นวันเหมือนจ่ายบิล ไม่นับเป็น "วันนี้ใช้ไป"
+        expenseBeforeToday += amt
+        todaySavingDeposits += amt
       } else {
         todayExpense += amt
       }
     }
+    // หมายเหตุ: ถอนเงินเก็บ/ลงทุน (type income) ตกที่ incomeToToday ด้านบน = เงินกลับเข้ายอดใช้ได้
   }
 
   // ---- ซองเงิน: แยกส่วนที่อยู่ในยอดซอง กับส่วนที่เกินซอง ----
@@ -220,6 +229,7 @@ export function calcSpendable(input: {
     expenseBeforeToday,
     todayExpense,
     todayBillPayments,
+    todaySavingDeposits,
     startOfTodayBalance,
     balanceNow,
     todayEnvelopeSpend,

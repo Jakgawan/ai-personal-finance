@@ -17,6 +17,7 @@ import { todayInBangkok, addDays, getNextIncomeDate, getPreviousIncomeDate, type
 import { calcSpendable, getCurrentPeriod, toLegacyBudget } from "@/lib/spendable"
 import { calcCarryIn } from "@/lib/period-carry-in"
 import { summarizePeriod } from "@/lib/period-summary"
+import { isSavingKind } from "@/lib/savings"
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend
@@ -461,7 +462,7 @@ export default function Dashboard() {
   // รายการในรอบ — ใช้ช่วงวันที่เดียวกับ hero ทุกส่วนของ Dashboard จึงตัวเลขตรงกัน
   const cycleTransactions = transactions.filter(t => t.date >= period.start && t.date <= period.end && t.date <= today)
   const sumType = (txs: Transaction[], type: string): number =>
-    txs.filter(t => t.type === type).reduce((s, t) => s + Number(t.amount), 0)
+    txs.filter(t => t.type === type && !isSavingKind(t.kind)).reduce((s, t) => s + Number(t.amount), 0)
 
   const { income: cycleIncome, expense: cycleExpense } = summarizePeriod(transactions, period, today)
   const cycleBalance = cycleIncome - cycleExpense
@@ -493,7 +494,7 @@ export default function Dashboard() {
   }
 
   const expenseByCategory = Object.entries(
-    cycleTransactions.filter(t => t.type === "expense")
+    cycleTransactions.filter(t => t.type === "expense" && !isSavingKind(t.kind))
       .reduce((acc, t) => {
         const key = t.category || "อื่นๆ"
         acc[key] = (acc[key] || 0) + Number(t.amount)
@@ -510,8 +511,8 @@ export default function Dashboard() {
     const monthTx = transactions.filter(t => t.date?.startsWith(key))
     return {
       label, key,
-      income: monthTx.filter(t => t.type === "income").reduce((s, t) => s + Number(t.amount), 0),
-      expense: monthTx.filter(t => t.type === "expense").reduce((s, t) => s + Number(t.amount), 0),
+      income: monthTx.filter(t => t.type === "income" && !isSavingKind(t.kind)).reduce((s, t) => s + Number(t.amount), 0),
+      expense: monthTx.filter(t => t.type === "expense" && !isSavingKind(t.kind)).reduce((s, t) => s + Number(t.amount), 0),
     }
   })
 

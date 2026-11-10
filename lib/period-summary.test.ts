@@ -132,3 +132,45 @@ describe("pickRecent", () => {
     expect(pickRecent(txs, "2026-11-04", 2).map(t => t.name)).toEqual(["c", "b"])
   })
 })
+
+describe("summarizePeriod เก็บเงิน/ลงทุน", () => {
+  it("ไม่นับทั้งรายรับและรายจ่าย (ฝากและถอน ทั้ง saving และ investment)", () => {
+    const txs = [
+      { date: "2026-10-21", type: "income", amount: 1000 },
+      { date: "2026-10-22", type: "expense", amount: 200 },
+      { date: "2026-10-23", type: "expense", amount: 5000, kind: "saving" },
+      { date: "2026-10-24", type: "income", amount: 3000, kind: "saving" },
+      { date: "2026-10-25", type: "expense", amount: 4000, kind: "investment" },
+      { date: "2026-10-26", type: "income", amount: 2000, kind: "investment" },
+    ]
+    expect(summarizePeriod(txs, period, "2026-11-04")).toEqual({ income: 1000, expense: 200 })
+  })
+
+  it("ไม่มีรายการเก็บเงิน -> ผลเท่าเดิมเมื่อใส่ kind regular", () => {
+    const txs = [
+      { date: "2026-10-21", type: "income", amount: 1000 },
+      { date: "2026-10-22", type: "expense", amount: 200, kind: "regular" },
+    ]
+    expect(summarizePeriod(txs, period, "2026-11-04")).toEqual({ income: 1000, expense: 200 })
+  })
+})
+
+describe("buildFinancialContext ป้ายเก็บเงิน/ลงทุน", () => {
+  it("ใส่ป้ายตามประเภทและทิศทาง", () => {
+    const recent: RecentTx[] = [
+      { date: "2026-11-02", name: "a", type: "expense", amount: 10, kind: "saving" },
+      { date: "2026-11-02", name: "b", type: "expense", amount: 10, kind: "investment" },
+      { date: "2026-11-02", name: "c", type: "income", amount: 10, kind: "saving" },
+      { date: "2026-11-02", name: "d", type: "income", amount: 10, kind: "investment" },
+      { date: "2026-11-02", name: "e", type: "expense", amount: 10, kind: "regular" },
+    ]
+    const lines = buildFinancialContext({
+      period, income: 0, expense: 0, balanceNow: null, daysLeftInclToday: 1, totalAssets: 0, totalLiabilities: 0, recent,
+    }).split("\n")
+    expect(lines.find(l => l.includes(" a "))).toContain("(เก็บเงิน)")
+    expect(lines.find(l => l.includes(" b "))).toContain("(ลงทุน)")
+    expect(lines.find(l => l.includes(" c "))).toContain("(ถอนเงินเก็บ)")
+    expect(lines.find(l => l.includes(" d "))).toContain("(ถอนเงินลงทุน)")
+    expect(lines.find(l => l.includes(" e "))).not.toMatch(/\(.*เงิน|ลงทุน/)
+  })
+})

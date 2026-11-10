@@ -513,3 +513,70 @@ describe("calcSpendable envelopes: edge cases", () => {
     expect(r.todayExpense).toBe(100)
   })
 })
+
+const sav = (date: string, amount: number, kind: "saving" | "investment" = "saving") => ({ date, type: "expense", amount, kind })
+const wdr = (date: string, amount: number, kind: "saving" | "investment" = "saving") => ({ date, type: "income", amount, kind })
+
+describe("calcSpendable saving / investment", () => {
+  it("ไม่มีรายการเก็บเงิน -> ตัวเลขเท่ากับก่อนเพิ่มฟีเจอร์ (todaySavingDeposits = 0)", () => {
+    const o = { amount: 6000, opening_date: "2026-10-01" }
+    const txs: { date: string; type: string; amount: number | string; kind?: string | null }[] = [exp("2026-10-05", 400), inc("2026-10-06", 100), exp("2026-10-10", 120), bill("2026-10-10", 300)]
+    const r = calcSpendable({ ...base, opening: o, transactions: txs })
+    expect(r.todaySavingDeposits).toBe(0)
+    expect(r.startOfTodayBalance).toBe(6000 + 100 - 400 - 300)
+    expect(r.balanceNow).toBe(6000 + 100 - 400 - 300 - 120)
+    expect(r.todayExpense).toBe(120)
+    // กำกับ kind regular ให้ผลเท่ากับไม่กำกับ
+    const same = calcSpendable({ ...base, opening: o, transactions: txs.map((t) => ({ ...t, kind: t.kind ?? "regular" })) })
+    expect(same).toEqual(r)
+  })
+
+  it("ฝากวันนี้ -> ยอดลด แต่ไม่นับเป็นวันนี้ใช้ไป และแสดงใน todaySavingDeposits", () => {
+    const r = calcSpendable({ ...base, transactions: [sav("2026-10-10", 1000), sav("2026-10-10", 500, "investment")] })
+    expect(r.todaySavingDeposits).toBe(1500)
+    expect(r.todayExpense).toBe(0)
+    expect(r.todayBillPayments).toBe(0)
+    expect(r.startOfTodayBalance).toBe(4500)
+    expect(r.balanceNow).toBe(4500)
+    expect(r.todayBudget).toBeCloseTo(450)
+    expect(r.availableToday).toBeCloseTo(450)
+    expect(r.state).toBe("ok")
+  })
+
+  it("ฝากวันนี้ให้ผลเท่าจ่ายบิลยอดเดียวกัน", () => {
+    const a = calcSpendable({ ...base, transactions: [sav("2026-10-10", 1000)] })
+    const b = calcSpendable({ ...base, transactions: [bill("2026-10-10", 1000)] })
+    expect({ ...a, todaySavingDeposits: 0 }).toEqual({ ...b, todayBillPayments: 0 })
+  })
+
+  it("ฝากเมื่อวาน = หักเหมือนรายจ่ายเมื่อวาน ไม่เข้า todaySavingDeposits", () => {
+    const o = { amount: 6000, opening_date: "2026-10-01" }
+    const a = calcSpendable({ ...base, opening: o, transactions: [sav("2026-10-09", 1000)] })
+    const b = calcSpendable({ ...base, opening: o, transactions: [exp("2026-10-09", 1000)] })
+    expect(a).toEqual(b)
+    expect(a.todaySavingDeposits).toBe(0)
+  })
+
+  it("ถอนเงินเก็บ/ลงทุน -> ยอดใช้ได้เพิ่มเหมือนรายรับ", () => {
+    const r = calcSpendable({ ...base, transactions: [wdr("2026-10-10", 2000), wdr("2026-10-10", 1000, "investment")] })
+    const asIncome = calcSpendable({ ...base, transactions: [inc("2026-10-10", 3000)] })
+    expect(r.incomeToToday).toBe(3000)
+    expect(r.balanceNow).toBe(9000)
+    expect(r.todaySavingDeposits).toBe(0)
+    expect(r).toEqual(asIncome)
+  })
+
+  it("ฝากเกินเงินที่มี -> ติดลบ แต่ todayExpense ยังเป็น 0", () => {
+    const r = calcSpendable({ ...base, transactions: [sav("2026-10-10", 7000)] })
+    expect(r.state).toBe("negative")
+    expect(r.overBy).toBe(1000)
+    expect(r.todayExpense).toBe(0)
+  })
+
+  it("ฝากในอนาคต/ก่อนวันตั้งยอดไม่นับ", () => {
+    const r = calcSpendable({ ...base, transactions: [sav("2026-10-11", 500), sav("2026-10-09", 500)] })
+    expect(r.todaySavingDeposits).toBe(0)
+    expect(r.balanceNow).toBe(6000)
+    expect(r.excludedBeforeOpening).toBe(1)
+  })
+})
