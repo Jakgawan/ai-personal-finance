@@ -204,7 +204,6 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles,
       setAmountHint("")
       setName(item.name)
       setCategory(item.category || "")
-      setKind("regular")
       setShowDetails(true)
     }, 500)
   }
@@ -293,8 +292,10 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles,
       setName(data.name || "")
       setAmount(data.amount ? sanitizeAmount(String(data.amount)) : "")
       setAmountHint("")
-      setType(data.type === "income" ? "income" : "expense")
-      setKind("regular")
+      const aiType: "expense" | "income" = data.type === "income" ? "income" : "expense"
+      setType(aiType)
+      // จ่ายบิลใช้ได้เฉพาะรายจ่าย; ประเภทอื่นคงที่ผู้ใช้เลือกไว้
+      if (aiType === "income") setKind(prev => (prev === "bill_payment" ? "regular" : prev))
       setCategory(mode === "full" ? (data.category || "") : "")
       setInputMode("form")
       if (data.name || (mode === "full" && data.category)) setShowDetails(true)
@@ -376,7 +377,7 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles,
         if (hit) matched = hit.name
       }
       setCategory(matched)
-      setKind("regular")
+      if (newType === "income") setKind(prev => (prev === "bill_payment" ? "regular" : prev))
       setShowDetails(true)
       setInputMode("form")
     } catch (err) {
