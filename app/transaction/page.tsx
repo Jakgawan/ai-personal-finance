@@ -7,9 +7,13 @@ import { formatDate } from "@/lib/utils"
 import ScanSlip from "@/app/components/ScanSlip"
 import ConfirmModal from "@/app/components/ConfirmModal"
 import { showToast } from "@/app/components/Toast"
-import { BarChart2, CalendarDays, List, ChevronLeft, ChevronRight, Info, Receipt } from "lucide-react"
-import BillPaymentBadge from "@/app/components/BillPaymentBadge"
+import { BarChart2, CalendarDays, List, ChevronLeft, ChevronRight, Info } from "lucide-react"
+import KindBadge from "@/app/components/KindBadge"
+import KindSelector, { type FormKind } from "@/app/components/KindSelector"
+import { useWithdrawWarning } from "@/app/components/useWithdrawWarning"
+import { kindLabel } from "@/lib/kind-label"
 import { pickActiveOpening } from "@/lib/opening-balance"
+import { isSavingKind } from "@/lib/savings"
 
 type Transaction = {
   id: string
@@ -63,7 +67,7 @@ export default function TransactionPage() {
   const [category, setCategory] = useState("")
   const [cycleId, setCycleId] = useState("")
   const [note, setNote] = useState("")
-  const [isBillPayment, setIsBillPayment] = useState(false)
+  const [kind, setKind] = useState<FormKind>("regular")
   const [loading, setLoading] = useState(false)
 
   const [initialLoading, setInitialLoading] = useState(true)
@@ -137,8 +141,8 @@ export default function TransactionPage() {
     return matchSearch && matchMonth && matchCycle && matchType && matchCat
   })
 
-  const totalIncome = filtered.filter(t => t.type === "income").reduce((s, t) => s + Number(t.amount), 0)
-  const totalExpense = filtered.filter(t => t.type === "expense").reduce((s, t) => s + Number(t.amount), 0)
+  const totalIncome = filtered.filter(t => t.type === "income" && !isSavingKind(t.kind)).reduce((s, t) => s + Number(t.amount), 0)
+  const totalExpense = filtered.filter(t => t.type === "expense" && !isSavingKind(t.kind)).reduce((s, t) => s + Number(t.amount), 0)
 
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE)
 
@@ -164,7 +168,7 @@ export default function TransactionPage() {
     setDate(new Date().toISOString().split("T")[0])
     setType("expense")
     setCategory(""); setCycleId(""); setNote("")
-    setIsBillPayment(false)
+    setKind("regular")
     setShowModal(true)
   }
 
@@ -172,15 +176,32 @@ export default function TransactionPage() {
     setEditId(t.id)
     setName(t.name); setAmount(String(t.amount)); setDate(t.date)
     setType(t.type); setCategory(t.category); setCycleId(t.cycle_id || ""); setNote(t.note || "")
-    setIsBillPayment(t.kind === "bill_payment")
+    setKind(
+      t.kind === "bill_payment" || t.kind === "saving" || t.kind === "investment" ? t.kind : "regular"
+    )
     setShowModal(true)
   }
 
   // แก้ไข: await fetchAll() ก่อนปิด modal
   // ทำให้ข้อมูลใหม่โหลดเสร็จก่อนที่ modal จะปิด
   // ผู้ใช้เห็นรายการใหม่ทันทีโดยไม่ต้องรีเพจ
+  const amountNum: number = Number(amount)
+  const amountValid: boolean = amount.trim() !== "" && Number.isFinite(amountNum) && amountNum > 0
+
+  const withdrawWarning: string = useWithdrawWarning({
+    open: showModal,
+    type: type === "income" ? "income" : "expense",
+    kind,
+    amount: amountNum,
+    excludeId: editId,
+  })
+
   const handleSubmit = async () => {
-  if (!name || !amount || !date) return
+    if (!name) return
+    if (!amountValid || !date || (type !== "income" && type !== "expense")) {
+      showToast("กรอกจำนวนเงินให้ถูกต้อง", "error")
+      return
+    }
     setLoading(true)
 
     const { data: { user } } = await supabase.auth.getUser()
@@ -190,9 +211,9 @@ export default function TransactionPage() {
     }
 
     const payload = {
-      name, amount: Number(amount), date, type, category,
+      name, amount: amountNum, date, type, category,
       cycle_id: cycleId || null, note: note || null, user_id: user.id,
-      kind: type === "expense" && isBillPayment ? "bill_payment" : "regular",
+      kind: type === "income" && kind === "bill_payment" ? "regular" : kind,
     }
 
    if (editId) {
@@ -245,17 +266,18 @@ export default function TransactionPage() {
         รายจ่าย: t.type === "expense" ? Number(t.amount) : "",
         คงเหลือ: running,
         หมายเหตุ: t.note || "-",
+        ประเภท: kindLabel(t.kind, t.type),
       }
     })
     const totalRow = {
       วันที่: "", รายการ: "รวมทั้งหมด", หมวด: "",
       รายรับ: totalIncome, รายจ่าย: totalExpense,
-      คงเหลือ: totalIncome - totalExpense, หมายเหตุ: "",
+      คงเหลือ: totalIncome - totalExpense, หมายเหตุ: "", ประเภท: "",
     }
     const ws = XLSX.utils.json_to_sheet([...rows, {}, totalRow])
     ws["!cols"] = [
       { wch: 14 }, { wch: 25 }, { wch: 15 },
-      { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 20 },
+      { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 20 }, { wch: 14 },
     ]
     rows.forEach((row, i) => {
       const rowIndex = i + 2
@@ -421,7 +443,7 @@ export default function TransactionPage() {
                 <thead className="bg-gray-50 border-b border-gray-200">
                   <tr>
                     {["#", "วันที่", "รายการ", "หมวด", "รายรับ (฿)", "รายจ่าย (฿)", "หมายเหตุ", "จัดการ"].map(h => (
-                      <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-500">{h}</th>
+                      <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
                 </thead>
@@ -431,12 +453,12 @@ export default function TransactionPage() {
                   ) : (
                     paginated.map((t, i) => (
                       <tr key={t.id} className="border-b border-gray-100 hover:bg-gray-50">
-                        <td className="px-4 py-3 text-gray-400">{(page - 1) * PAGE_SIZE + i + 1}</td>
-                        <td className="px-4 py-3 text-gray-600">{formatDate(t.date)}</td>
-                        <td className="px-4 py-3 font-medium text-gray-800">
+                        <td className="px-4 py-3 text-gray-400 whitespace-nowrap">{(page - 1) * PAGE_SIZE + i + 1}</td>
+                        <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{formatDate(t.date)}</td>
+                        <td className="px-4 py-3 font-medium text-gray-800 min-w-[11rem]">
                           <span className="inline-flex items-center gap-1.5 flex-wrap">
                             {t.name}
-                            {t.kind === "bill_payment" && <BillPaymentBadge />}
+                            <KindBadge kind={t.kind} type={t.type} />
                           </span>
                           {openingDate && t.date < openingDate && (
                             <span className="mt-0.5 flex items-center gap-1 text-xs font-normal text-gray-400">
@@ -444,15 +466,15 @@ export default function TransactionPage() {
                             </span>
                           )}
                         </td>
-                        <td className="px-4 py-3 text-gray-500">{t.category || "-"}</td>
-                        <td className="px-4 py-3 font-semibold text-[#1D9E75]">
+                        <td className="px-4 py-3 text-gray-500 whitespace-nowrap">{t.category || "-"}</td>
+                        <td className="px-4 py-3 font-semibold text-[#1D9E75] whitespace-nowrap">
                           {t.type === "income" ? `฿${Number(t.amount).toLocaleString()}` : ""}
                         </td>
-                        <td className="px-4 py-3 font-semibold text-[#D85A30]">
+                        <td className="px-4 py-3 font-semibold text-[#D85A30] whitespace-nowrap">
                           {t.type === "expense" ? `฿${Number(t.amount).toLocaleString()}` : ""}
                         </td>
-                        <td className="px-4 py-3 text-gray-400 text-xs">{t.note || "-"}</td>
-                        <td className="px-4 py-3 flex gap-2">
+                        <td className="px-4 py-3 text-gray-400 text-xs min-w-[8rem]">{t.note || "-"}</td>
+                        <td className="px-4 py-3 flex gap-2 whitespace-nowrap">
                           <button onClick={() => openEditModal(t)} className="text-xs text-[#378ADD] hover:underline">แก้ไข</button>
                           <button onClick={() => handleDelete(t.id)} className="text-xs text-[#D85A30] hover:underline">ลบ</button>
                         </td>
@@ -508,8 +530,8 @@ export default function TransactionPage() {
                 const day = i + 1
                 const dateStr = `${calYear}-${String(calMonth + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`
                 const dayTx = txByDay[dateStr] || []
-                const dayIncome = dayTx.filter(t => t.type === "income").reduce((s, t) => s + Number(t.amount), 0)
-                const dayExpense = dayTx.filter(t => t.type === "expense").reduce((s, t) => s + Number(t.amount), 0)
+                const dayIncome = dayTx.filter(t => t.type === "income" && !isSavingKind(t.kind)).reduce((s, t) => s + Number(t.amount), 0)
+                const dayExpense = dayTx.filter(t => t.type === "expense" && !isSavingKind(t.kind)).reduce((s, t) => s + Number(t.amount), 0)
                 const isToday = dateStr === new Date().toISOString().split("T")[0]
                 const isSelected = selectedDay === dateStr
                 return (
@@ -537,13 +559,13 @@ export default function TransactionPage() {
                   <div className="flex-1 bg-green-50 rounded-xl p-3 text-center">
                     <p className="text-xs text-gray-500">รายรับ</p>
                     <p className="text-sm font-bold text-[#1D9E75]">
-                      ฿{selectedDayTx.filter(t => t.type === "income").reduce((s, t) => s + Number(t.amount), 0).toLocaleString()}
+                      ฿{selectedDayTx.filter(t => t.type === "income" && !isSavingKind(t.kind)).reduce((s, t) => s + Number(t.amount), 0).toLocaleString()}
                     </p>
                   </div>
                   <div className="flex-1 bg-red-50 rounded-xl p-3 text-center">
                     <p className="text-xs text-gray-500">รายจ่าย</p>
                     <p className="text-sm font-bold text-[#D85A30]">
-                      ฿{selectedDayTx.filter(t => t.type === "expense").reduce((s, t) => s + Number(t.amount), 0).toLocaleString()}
+                      ฿{selectedDayTx.filter(t => t.type === "expense" && !isSavingKind(t.kind)).reduce((s, t) => s + Number(t.amount), 0).toLocaleString()}
                     </p>
                   </div>
                 </div>
@@ -556,7 +578,7 @@ export default function TransactionPage() {
                         <div>
                           <p className="text-sm font-medium text-gray-800 flex items-center gap-1.5">
                             {t.name}
-                            {t.kind === "bill_payment" && <BillPaymentBadge />}
+                            <KindBadge kind={t.kind} type={t.type} />
                           </p>
                           <p className="text-xs text-gray-400">{t.category || "-"}</p>
                         </div>
@@ -577,7 +599,7 @@ export default function TransactionPage() {
                     setDate(selectedDay!)
                     setType("expense")
                     setCategory(""); setCycleId(""); setNote("")
-                    setIsBillPayment(false)
+                    setKind("regular")
                     setShowModal(true)
                   }}
                   className="w-full mt-4 border border-dashed border-gray-300 text-gray-500 rounded-lg py-2 text-sm hover:border-[#1D9E75] hover:text-[#1D9E75] transition-colors"
@@ -603,32 +625,24 @@ export default function TransactionPage() {
                   className={`flex-1 py-2 rounded-lg text-sm font-medium border transition-colors ${type === "expense" ? "bg-[#D85A30] text-white border-[#D85A30]" : "border-gray-200 text-gray-600"}`}>
                   รายจ่าย
                 </button>
-                <button onClick={() => setType("income")}
+                <button onClick={() => { setType("income"); if (kind === "bill_payment") setKind("regular") }}
                   className={`flex-1 py-2 rounded-lg text-sm font-medium border transition-colors ${type === "income" ? "bg-[#1D9E75] text-white border-[#1D9E75]" : "border-gray-200 text-gray-600"}`}>
                   รายรับ
                 </button>
               </div>
-              {type === "expense" && (
-                <label className="flex items-center gap-3 min-h-[44px] px-3 rounded-lg border border-gray-200 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={isBillPayment}
-                    onChange={(e) => setIsBillPayment(e.target.checked)}
-                    className="w-5 h-5 accent-[#D85A30] shrink-0"
-                  />
-                  <Receipt size={18} className="text-gray-500 shrink-0" />
-                  <span className="flex flex-col leading-tight">
-                    <span className="text-sm font-medium text-gray-800">จ่ายบิล/ชำระหนี้</span>
-                    <span className="text-xs text-gray-400">ไม่นับเป็นค่าใช้จ่ายของวันนี้</span>
-                  </span>
-                </label>
-              )}
+              <KindSelector type={type === "income" ? "income" : "expense"} kind={kind} onChange={setKind} />
               <input placeholder="วันที่" type="date" value={date} onChange={(e) => setDate(e.target.value)}
                 className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75] text-gray-800" />
               <input placeholder="ชื่อรายการ" value={name} onChange={(e) => setName(e.target.value)}
                 className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75] text-gray-800" />
               <input placeholder="จำนวน (฿)" type="number" value={amount} onChange={(e) => setAmount(e.target.value)}
                 className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75] text-gray-800" />
+              {amount.trim() !== "" && !amountValid && (
+                <p className="text-[0.75rem] text-[#D85A30] -mt-2">จำนวนเงินต้องมากกว่า 0</p>
+              )}
+              {amountValid && withdrawWarning && (
+                <p className="text-[0.75rem] text-amber-600 -mt-2">{withdrawWarning}</p>
+              )}
               <select value={category} onChange={(e) => setCategory(e.target.value)}
                 className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none text-gray-800">
                   <option value="">-- หมวดหมู่ --</option>
@@ -647,7 +661,7 @@ export default function TransactionPage() {
             <div className="flex gap-3 mt-5">
               <button onClick={() => setShowModal(false)}
                 className="flex-1 border border-gray-200 rounded-lg py-2 text-sm hover:bg-gray-50 text-gray-700">ยกเลิก</button>
-              <button onClick={handleSubmit} disabled={loading || !name || !amount || !date}
+              <button onClick={handleSubmit} disabled={loading || !name || !amountValid || !date}
                 className="flex-1 bg-[#1D9E75] text-white rounded-lg py-2 text-sm hover:bg-[#178a64] disabled:opacity-50">
                 {loading ? "กำลังบันทึก..." : "บันทึก"}
               </button>

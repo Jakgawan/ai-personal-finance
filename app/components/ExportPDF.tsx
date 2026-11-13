@@ -3,6 +3,8 @@
 import { useState } from "react"
 import { supabase } from "@/lib/supabase"
 import { FileText, Loader2 } from "lucide-react"
+import { isSavingKind } from "@/lib/savings"
+import { kindLabel } from "@/lib/kind-label"
 
 type Transaction = {
   name: string
@@ -11,6 +13,7 @@ type Transaction = {
   type: string
   category: string
   note?: string
+  kind?: string | null
 }
 
 export default function ExportPDF() {
@@ -31,10 +34,10 @@ export default function ExportPDF() {
     const transactions: Transaction[] = tx || []
 
     const totalIncome = transactions
-      .filter(t => t.type === "income")
+      .filter(t => t.type === "income" && !isSavingKind(t.kind))
       .reduce((s, t) => s + Number(t.amount), 0)
     const totalExpense = transactions
-      .filter(t => t.type === "expense")
+      .filter(t => t.type === "expense" && !isSavingKind(t.kind))
       .reduce((s, t) => s + Number(t.amount), 0)
     const balance = totalIncome - totalExpense
 
@@ -94,7 +97,7 @@ export default function ExportPDF() {
             ${transactions.map(t => `
               <tr>
                 <td>${t.date}</td>
-                <td>${t.name}</td>
+                <td>${t.name}${kindLabel(t.kind, t.type) ? ` <span style="color:#888">(${kindLabel(t.kind, t.type)})</span>` : ""}</td>
                 <td>${t.category || "-"}</td>
                 <td>${t.note || "-"}</td>
                 <td class="tx-income" style="text-align:right">${t.type === "income" ? "฿" + Number(t.amount).toLocaleString() : ""}</td>

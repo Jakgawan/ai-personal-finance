@@ -10,13 +10,15 @@ import CategoriesSection from "./components/CategoriesSection"
 import RecurringSection from "./components/RecurringSection"
 import DisplaySection from "./components/DisplaySection"
 import NotificationsSection from "./components/NotificationsSection"
-import { ChevronLeft, User, CalendarDays, Tag, RefreshCw, Target, Bell, Globe } from "lucide-react"
+import SavingsSection from "./components/SavingsSection"
+import { ChevronLeft, User, CalendarDays, Tag, RefreshCw, Target, Bell, Globe, PiggyBank } from "lucide-react"
 
 const menuItems = [
   { id: "profile", label: "โปรไฟล์", icon: User },
   { id: "paycycles", label: "รายได้และรอบเงิน", icon: CalendarDays },
   { id: "categories", label: "หมวดหมู่", icon: Tag },
   { id: "recurring", label: "รายการซ้ำ", icon: RefreshCw },
+  { id: "savings", label: "เงินเก็บและเงินลงทุน", icon: PiggyBank },
   { id: "goals", label: "เป้าหมาย", icon: Target },
   { id: "notifications", label: "แจ้งเตือน", icon: Bell },
   { id: "display", label: "การแสดงผล", icon: Globe },
@@ -79,6 +81,7 @@ function SettingsContent() {
         {active === "categories" && <CategoriesSection />}
         {active === "recurring" && <RecurringSection />}
         {active === "display" && <DisplaySection />}
+        {active === "savings" && <SavingsSection />}
         {active === "notifications" && <NotificationsSection />}
         {active === "goals" && (
           <div className="text-gray-400 text-sm">Coming soon...</div>

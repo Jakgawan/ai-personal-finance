@@ -87,4 +87,28 @@ describe("getPeriodTransition", () => {
     expect(getPeriodTransition({ ...base, prevPeriodStart: "2026-09-20" })).toMatchObject({ prevStart: "2026-10-05" })
     expect(getPeriodTransition({ ...base, prevPeriodStart: null })).toMatchObject({ prevStart: "2026-10-05" })
   })
+
+  it("ถอนเงินเก็บ/ลงทุนไม่นับเป็นเงินเข้าของรอบใหม่ (ยังถาม income-check)", () => {
+    const r = getPeriodTransition({
+      ...base,
+      transactions: [
+        base.transactions[0],
+        { date: "2026-10-20", type: "income", amount: 5000, kind: "saving" },
+        { date: "2026-10-20", type: "income", amount: 5000, kind: "investment" },
+      ],
+    })
+    expect(r).toEqual({ kind: "income-check", payday: "2026-10-20" })
+  })
+
+  it("ฝาก/ถอนก่อนวันเงินเข้ากระทบยอดเหลือของรอบก่อนเหมือนรายจ่าย/รายรับ", () => {
+    const r = getPeriodTransition({
+      ...base,
+      transactions: [
+        { date: "2026-10-10", type: "expense", amount: 300, kind: "saving" },
+        { date: "2026-10-11", type: "income", amount: 100, kind: "investment" },
+        { date: "2026-10-20", type: "income", amount: 15000 },
+      ],
+    })
+    expect(r).toMatchObject({ kind: "carry", leftover: 1000 - 300 + 100 })
+  })
 })

@@ -90,4 +90,19 @@ describe("topItems", () => {
     const rows = [tx("12.5"), tx(12.5), tx("12.499")]
     expect(topItems(rows, "expense", TODAY)).toEqual([{ name: "ข้าว", amount: 12.5, category: "อาหาร", count: 3 }])
   })
+
+  it("ไม่นับ kind = saving / investment (ทั้งฝากและถอน)", () => {
+    const rows = [
+      tx(500, "2026-10-10", "expense", "ออม", "ออม", "saving"),
+      tx(500, "2026-10-11", "expense", "ออม", "ออม", "saving"),
+      tx(500, "2026-10-10", "expense", "หุ้น", "ลงทุน", "investment"),
+      tx(500, "2026-10-11", "expense", "หุ้น", "ลงทุน", "investment"),
+      tx(500, "2026-10-10", "income", "ถอน", null, "saving"),
+      tx(500, "2026-10-11", "income", "ถอน", null, "investment"),
+    ]
+    expect(topItems(rows, "expense", TODAY)).toEqual([])
+    expect(topItems(rows, "income", TODAY)).toEqual([])
+    const mixed = [...rows, tx(60), tx(60)]
+    expect(topItems(mixed, "expense", TODAY)).toEqual([{ name: "ข้าว", amount: 60, category: "อาหาร", count: 2 }])
+  })
 })
