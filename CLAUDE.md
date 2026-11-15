@@ -34,6 +34,12 @@ Next.js (App Router), TypeScript, Tailwind CSS v4, Supabase (auth + database), V
 - **ห้ามแสดงค่า env ออกมาเด็ดขาด** (ทั้ง main และทุก agent) — เช็คได้แค่ว่ามี/ไม่มี เช่น `[ -n "$VAR" ] && echo set` ห้าม `echo $VAR`, `env`, `printenv`, `cat .env*` หรือ log ค่าในโค้ด
 - **Gemini ใช้ free tier — ห้ามทำให้เสียเงินหรือเปลืองโควต้า:** ระหว่างทดสอบห้ามเรียก `/api/chat`, `/api/ocr`, `/api/parse-transaction` หรือ Gemini โดยตรง ถ้างานไหนจำเป็นต้องเรียก ให้ขออนุญาตผู้ใช้ก่อน และเรียกให้น้อยที่สุด (1-2 ครั้ง) ห้ามวนลูปหรือยิงซ้ำอัตโนมัติ, ห้ามเปลี่ยนรุ่นโมเดล Gemini ในโค้ดโดยไม่ถามผู้ใช้
 
+## Skill ภายนอก
+
+- **Impeccable** (ติดตั้ง 2026-11-15, ผู้ใช้เลือกแบบ ข): `.claude/skills/impeccable/` = `SKILL.md` + `reference/` + LICENSE/NOTICE จาก [pbakaus/impeccable](https://github.com/pbakaus/impeccable) v4.9.1 commit `2b86d9c` (Apache 2.0) — **ไม่ได้ติดตั้งโฟลเดอร์ `scripts/`** (launcher ที่ดาวน์โหลด binary จาก GitHub releases) จึงไม่มีตัวตรวจอัตโนมัติ: เมื่อ skill สั่งรัน `scripts/impeccable ...` ให้ทำตามข้อ "Launcher unavailable" ของ skill (อ่านบริบทเอง ไม่ต้องหาวิธีรัน) และห้ามดาวน์โหลด binary/`npx impeccable` เอง
+- กติกาใช้งาน: ใช้แค่ `audit` / `critique` / `polish` (และ `layout`/`clarify`/`adapt` แบบเสนอ) → **รายงานผลให้ผู้ใช้เลือกข้อที่จะแก้ก่อน** แล้วแก้ผ่าน coder ตาม workflow ปกติ; **ห้ามรันโดยไม่ถาม:** `init`, `document`, `extract`, `hooks`, `live`, `generate`, `pin`, `foundations` และคำสั่งเปลี่ยนโทน (`bolder`, `overdrive`, `delight`, `colorize`, `typeset`, `animate`) — ห้ามสร้าง PRODUCT.md/DESIGN.md/`.impeccable/` หรือแก้ `next.config`/settings โดยไม่ได้รับอนุมัติ; **Design System และกฎใน CLAUDE.md ชนะคำแนะนำของ skill เสมอ** (สี/rem token/Lucide เท่านั้น/โครง mobile navigation); แอปนี้ = โหมด Operate (เน้นแม่นยำ เรียบร้อย ไม่หวือหวา)
+- อัปเดตเวอร์ชัน: clone ใหม่ → อ่าน diff ของ `SKILL.md`/`reference/` ก่อนแทนที่ → commit แยก
+
 ## Design System
 
 - สีหลัก: เขียว `#1D9E75` (primary/income), แดง `#D85A30` (expense/negative), น้ำเงิน `#378ADD` (info)
