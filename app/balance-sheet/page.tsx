@@ -5,6 +5,8 @@ import { supabase } from "@/lib/supabase"
 import ConfirmModal from "@/app/components/ConfirmModal"
 import { showToast } from "@/app/components/Toast"
 import { Lightbulb } from "lucide-react"
+import { todayInBangkok } from "@/lib/income-schedule"
+import { netSavedInRange } from "@/lib/savings"
 
 type Asset = {
   id: string
@@ -88,6 +90,36 @@ export default function BalanceSheetPage() {
   }
 
   useEffect(() => { fetchAll() }, [])
+
+  // เก็บได้จริงเดือนนี้ (ปฏิทิน เวลาไทย) = ฝาก − ถอน ของเงินเก็บ+ลงทุน; โหลดไม่สำเร็จ = ซ่อนบรรทัด
+  const [savedThisMonth, setSavedThisMonth] = useState<number | null>(null)
+  useEffect(() => {
+    let cancelled = false
+    const load = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user || cancelled) return
+        const today = todayInBangkok()
+        const monthStart = `${today.slice(0, 7)}-01`
+        const lastDay = new Date(Date.UTC(Number(today.slice(0, 4)), Number(today.slice(5, 7)), 0)).getUTCDate()
+        const monthEnd = `${today.slice(0, 7)}-${String(lastDay).padStart(2, "0")}`
+        const { data, error } = await supabase
+          .from("transactions")
+          .select("amount, type, kind, date")
+          .eq("user_id", user.id)
+          .in("kind", ["saving", "investment"])
+          .gte("date", monthStart)
+          .lte("date", monthEnd)
+        if (cancelled) return
+        if (error) { setSavedThisMonth(null); return }
+        setSavedThisMonth(netSavedInRange((data || []) as { amount: number | string; type: string; kind: string | null; date: string }[], monthStart, monthEnd))
+      } catch {
+        if (!cancelled) setSavedThisMonth(null)
+      }
+    }
+    load()
+    return () => { cancelled = true }
+  }, [])
 
   const totalAssets = assets.reduce((s, a) => s + Number(a.value), 0)
 
@@ -655,6 +687,13 @@ export default function BalanceSheetPage() {
   <input type="number" value={savingInput} onChange={e => setSavingInput(e.target.value)}
     placeholder="เช่น 5000"
     className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75] text-gray-800" />
+  {savedThisMonth !== null && (
+    <div className="flex items-center justify-between gap-2 mt-2 text-xs text-gray-500">
+      <span>เก็บได้จริงเดือนนี้ <span className="tabular-nums font-semibold text-gray-700">{savedThisMonth < 0 ? "-" : ""}฿{Math.abs(savedThisMonth).toLocaleString()}</span></span>
+      <button type="button" onClick={() => setSavingInput(String(Math.max(0, savedThisMonth)))}
+        className="shrink-0 px-2 py-1 rounded-md border border-gray-200 text-[#1D9E75] hover:bg-gray-50">ใช้ยอดนี้</button>
+    </div>
+  )}
   {incomeInput && Number(incomeInput) > 0 && (
     <div className="bg-green-50 rounded-lg p-2 mt-2 text-xs text-gray-600">
       <p className="font-semibold text-[#1D9E75] mb-1 inline-flex items-center gap-1"><Lightbulb size={14} className="text-[#1D9E75]" /> แนะนำเป้าออม</p>

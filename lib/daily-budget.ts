@@ -7,6 +7,7 @@ export type BudgetTransaction = {
   type: string
   amount: number | string
   category?: string | null
+  kind?: string | null
 }
 
 // cycle-negative = เงินหมด/ติดลบตั้งแต่ก่อนวันนี้ (ไม่ว่าวันนี้จะใช้เพิ่มหรือไม่), over = ต้นวันยังมีเงิน แต่วันนี้ใช้เกินงบรายวัน
@@ -167,6 +168,7 @@ export function pickInsight(
     const acc: Record<string, number> = {}
     transactions.forEach(t => {
       if (t.type !== "expense" || !t.category || t.date < from || t.date > to) return
+      if (t.kind === "saving" || t.kind === "investment") return // เก็บเงิน/ลงทุนไม่ใช่การใช้จ่ายตามหมวด
       acc[t.category] = (acc[t.category] || 0) + safeAmount(t.amount)
     })
     return acc

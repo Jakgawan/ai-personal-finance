@@ -7,6 +7,20 @@ import ReactMarkdown from "react-markdown"
 import ConfirmModal from "@/app/components/ConfirmModal"
 import { showToast } from "@/app/components/Toast"
 import { MessageCircle } from "lucide-react"
+import { pickActiveOpening } from "@/lib/opening-balance"
+import { todayInBangkok, getNextIncomeDate, getPreviousIncomeDate } from "@/lib/income-schedule"
+import { calcSpendable, getCurrentPeriod } from "@/lib/spendable"
+import { summarizePeriod, buildFinancialContext, pickRecent } from "@/lib/period-summary"
+
+type Transaction = {
+  name: string
+  amount: number
+  type: string
+  date: string
+  kind: string | null
+  envelope_id: string | null
+  created_at: string
+}
 
 type Message = {
   id?: string
@@ -20,6 +34,7 @@ export default function AIChatPage() {
   const [input, setInput] = useState("")
   const [loading, setLoading] = useState(false)
   const [financialContext, setFinancialContext] = useState("")
+  const [contextReady, setContextReady] = useState(false)
   const [confirmState, setConfirmState] = useState<{ message: string; onConfirm: () => void } | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
 
@@ -44,36 +59,76 @@ export default function AIChatPage() {
     setMessages((data || []) as Message[])
   }
 
+  const CONTEXT_LOAD_FAILED = "โหลดข้อมูลการเงินของผู้ใช้ไม่สำเร็จ จึงไม่มีตัวเลขการเงิน ห้ามเดาหรือสมมติตัวเลข ให้แจ้งผู้ใช้ว่าดูข้อมูลไม่ได้ในตอนนี้"
+
   const loadFinancialContext = async () => {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        setFinancialContext(CONTEXT_LOAD_FAILED)
+        return
+      }
+      const [txRes, srcRes, cycleRes, profRes, openRes, assetRes, liabRes] = await Promise.all([
+        supabase.from("transactions").select("name, amount, type, date, kind, envelope_id, created_at").eq("user_id", user.id).order("date", { ascending: false }),
+        supabase.from("income_sources").select("schedule_type, monthly_days").eq("user_id", user.id),
+        supabase.from("pay_cycles").select("start_day").eq("user_id", user.id),
+        supabase.from("financial_profile").select("target_date").eq("user_id", user.id).maybeSingle(),
+        supabase.from("opening_balances").select("amount, opening_date, created_at").eq("user_id", user.id),
+        supabase.from("assets").select("value").eq("user_id", user.id),
+        supabase.from("liabilities_long").select("balance").eq("user_id", user.id),
+      ])
 
-    const [{ data: tx }, { data: assets }, { data: liab }] = await Promise.all([
-      supabase.from("transactions").select("name, amount, type, category, date").eq("user_id", user.id).order("date", { ascending: false }).limit(20),
-      supabase.from("assets").select("name, value, asset_group").eq("user_id", user.id),
-      supabase.from("liabilities_long").select("name, balance").eq("user_id", user.id),
-    ])
+      if (txRes.error || srcRes.error || cycleRes.error || profRes.error || openRes.error || assetRes.error || liabRes.error) {
+        // โหลดไม่ครบ -> ไม่ส่งตัวเลขศูนย์ให้ AI
+        setFinancialContext(CONTEXT_LOAD_FAILED)
+        showToast("โหลดข้อมูลการเงินไม่สำเร็จ", "error")
+        return
+      }
 
-    const income = tx?.filter(t => t.type === "income").reduce((s, t) => s + Number(t.amount), 0) || 0
-    const expense = tx?.filter(t => t.type === "expense").reduce((s, t) => s + Number(t.amount), 0) || 0
-    const totalAssets = assets?.reduce((s, a) => s + Number(a.value), 0) || 0
-    const totalLiab = liab?.reduce((s, l) => s + Number(l.balance), 0) || 0
+      const tx: Transaction[] = (txRes.data || []) as Transaction[]
+      const incomeSources = (srcRes.data || []) as { schedule_type: string; monthly_days: number[] | null }[]
+      const cycles = (cycleRes.data || []) as { start_day: number }[]
+      const targetDate: string | null = (profRes.data as { target_date: string | null } | null)?.target_date ?? null
+      const activeOpening = pickActiveOpening((openRes.data || []) as { amount: number | string; opening_date: string; created_at: string }[])
 
-    const context = `
-รายรับรวม: ฿${income.toLocaleString()}
-รายจ่ายรวม: ฿${expense.toLocaleString()}
-คงเหลือ: ฿${(income - expense).toLocaleString()}
-สินทรัพย์รวม: ฿${totalAssets.toLocaleString()}
-หนี้สินระยะยาว: ฿${totalLiab.toLocaleString()}
-ความมั่งคั่งสุทธิ: ฿${(totalAssets - totalLiab).toLocaleString()}
-รายการล่าสุด: ${tx?.slice(0, 5).map(t => `${t.name} ${t.type === "income" ? "+" : "-"}฿${t.amount}`).join(", ")}
-    `.trim()
+      // ช่วงรอบและวิธีนับเดียวกับหน้าแรก
+      const today = todayInBangkok()
+      const next = getNextIncomeDate(today, { incomeSources, payCycles: cycles, targetDate })
+      const prev = getPreviousIncomeDate(today, { incomeSources, payCycles: cycles })
+      const period = getCurrentPeriod(today, prev?.date ?? null, next.date, activeOpening?.opening_date ?? today)
+      const { income, expense } = summarizePeriod(tx, period, today)
+      const spend = activeOpening
+        ? calcSpendable({
+            today,
+            opening: { amount: Number(activeOpening.amount), opening_date: activeOpening.opening_date },
+            transactions: tx,
+            nextIncomeDate: next.date,
+          })
+        : null
 
-    setFinancialContext(context)
+      const totalAssets = (assetRes.data || []).reduce((s, a) => s + Number(a.value), 0)
+      const totalLiab = (liabRes.data || []).reduce((s, l) => s + Number(l.balance), 0)
+
+      setFinancialContext(buildFinancialContext({
+        period,
+        income,
+        expense,
+        balanceNow: spend ? spend.balanceNow : null,
+        daysLeftInclToday: period.daysLeftInclToday,
+        totalAssets,
+        totalLiabilities: totalLiab,
+        recent: pickRecent(tx, today, 20),
+      }))
+    } catch {
+      setFinancialContext(CONTEXT_LOAD_FAILED)
+      showToast("โหลดข้อมูลการเงินไม่สำเร็จ", "error")
+    } finally {
+      setContextReady(true)
+    }
   }
 
   const sendMessage = async () => {
-    if (!input.trim() || loading) return
+    if (!input.trim() || loading || !contextReady) return
 
     const userMsg: Message = { role: "user", content: input.trim() }
     const newMessages = [...messages, userMsg]
@@ -171,7 +226,8 @@ export default function AIChatPage() {
                 <button
                   key={q}
                   onClick={() => setInput(q)}
-                  className="text-xs bg-white border border-gray-200 rounded-full px-3 py-1.5 text-gray-600 hover:border-[#1D9E75] hover:text-[#1D9E75] transition-colors"
+                  disabled={!contextReady}
+                  className="text-xs bg-white border border-gray-200 rounded-full px-3 py-1.5 text-gray-600 hover:border-[#1D9E75] hover:text-[#1D9E75] transition-colors disabled:opacity-50"
                 >
                   {q}
                 </button>
@@ -239,12 +295,15 @@ export default function AIChatPage() {
           />
           <button
             onClick={sendMessage}
-            disabled={loading || !input.trim()}
+            disabled={loading || !contextReady || !input.trim()}
             className="bg-[#1D9E75] text-white rounded-xl px-4 py-2.5 text-sm hover:bg-[#178a64] disabled:opacity-50 transition-colors shrink-0"
           >
             ส่ง
           </button>
         </div>
+        {!contextReady && (
+          <p className="text-xs text-gray-400 text-center mt-2">กำลังโหลดข้อมูลการเงิน...</p>
+        )}
         <p className="text-xs text-gray-400 text-center mt-2">Shift+Enter เพื่อขึ้นบรรทัดใหม่</p>
       </div>
 

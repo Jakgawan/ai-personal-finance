@@ -1,4 +1,5 @@
 import { addDays } from "./income-schedule"
+import { isSavingKind } from "./savings"
 
 type TxLike = {
   name: string | null
@@ -27,7 +28,7 @@ export function topItems(
   const groups = new Map<string, { name: string; amount: number; category: string | null; count: number; latest: string }>()
   for (const t of txs) {
     if (t.type !== type) continue
-    if (t.kind === "bill_payment") continue
+    if (t.kind === "bill_payment" || isSavingKind(t.kind)) continue
     if (typeof t.date !== "string" || t.date < from || t.date > today) continue
     const n = Number(t.amount)
     if (!Number.isFinite(n) || n <= 0) continue

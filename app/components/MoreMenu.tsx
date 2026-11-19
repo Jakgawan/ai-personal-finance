@@ -7,7 +7,7 @@ import { removePushSubscriptionOnSignOut } from "@/lib/push-client"
 import {
   CalendarDays, Scale, MessageCircle,
   Settings, LogOut, MoreHorizontal, ChevronLeft, X,
-  Tag, RefreshCw, Target, User, Bell, Globe,
+  Tag, RefreshCw, Target, User, Bell, Globe, PiggyBank,
   type LucideIcon,
 } from "lucide-react"
 
@@ -57,6 +57,7 @@ const MORE_SIMPLE: Tile[] = [
 
 const SETTINGS_TILES: Tile[] = [
   { kind: "link", label: "โปรไฟล์", icon: User, href: "/settings?tab=profile" },
+  { kind: "link", label: "เงินเก็บและเงินลงทุน", icon: PiggyBank, href: "/settings?tab=savings" },
   { kind: "link", label: "แจ้งเตือน", icon: Bell, href: "/settings?tab=notifications" },
   { kind: "link", label: "การแสดงผล", icon: Globe, href: "/settings?tab=display" },
 ]

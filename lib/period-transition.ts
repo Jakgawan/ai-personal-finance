@@ -2,6 +2,7 @@
 // วันที่เป็น string 'YYYY-MM-DD' เทียบด้วย string ตรงๆ ได้
 import type { Tx, Opening } from "./spendable"
 import { addDays } from "./income-schedule"
+import { isSavingKind } from "./savings"
 
 export type CarryoverPref = "ask" | "carry" | "reset"
 export type CarryAction = "ask" | "auto-carry" | "auto-reset" | "negative" | "zero"
@@ -39,7 +40,7 @@ export function getPeriodTransition(input: {
 
   // ขั้น 1: เงินเข้าแล้วหรือยัง (มีรายรับวันที่ >= payday แล้วหรือไม่)
   const hasIncome = input.transactions.some(
-    (t) => t.type === "income" && t.date >= payday && t.date >= opening.opening_date && t.date <= input.today
+    (t) => t.type === "income" && !isSavingKind(t.kind) && t.date >= payday && t.date >= opening.opening_date && t.date <= input.today
   )
   if (!hasIncome && input.incomePromptDismissed !== payday) {
     return { kind: "income-check", payday }

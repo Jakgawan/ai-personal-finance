@@ -1,12 +1,18 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import { supabase } from "@/lib/supabase"
-import { Plus, Loader2, X, ChevronDown, ChevronUp, Receipt } from "lucide-react"
+import { Plus, Loader2, X, ChevronDown, ChevronUp, Camera } from "lucide-react"
+import KindSelector, { type FormKind } from "./KindSelector"
+import { useWithdrawWarning } from "./useWithdrawWarning"
 import { showToast } from "./Toast"
 import CategoryIcon from "./CategoryIcon"
 import { todayLocal } from "@/lib/recurring"
 import { topItems, type TopItem } from "@/lib/quick-amounts"
+import { isValidDateString } from "@/lib/date-valid"
+import { prepareSlipImage } from "@/lib/slip-image"
+import { hasSlipConsent, setSlipConsent } from "@/lib/slip-consent"
+import SlipConsentNotice from "./SlipConsentNotice"
 
 type Category = { id: string; name: string; type: string; icon: string; color?: string }
 type Cycle = { id: string; name: string }
@@ -21,6 +27,7 @@ type Props = {
   initialAmount?: number | null
   initialType?: "expense" | "income"
   initialDate?: string | null
+  initialKind?: "saving" | null
 }
 
 // รับเฉพาะตัวเลขกับจุดทศนิยม 1 จุด, ทศนิยมไม่เกิน 2 ตำแหน่ง
@@ -33,7 +40,7 @@ function sanitizeAmount(raw: string): string {
   return `${intPart}.${decPart}`
 }
 
-export default function QuickAddModal({ open, onClose, mode, categories, cycles, initialAmount, initialType, initialDate }: Props) {
+export default function QuickAddModal({ open, onClose, mode, categories, cycles, initialAmount, initialType, initialDate, initialKind }: Props) {
   const [name, setName] = useState("")
   const [amount, setAmount] = useState("")
   const [date, setDate] = useState(todayLocal())
@@ -42,10 +49,20 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles,
   const [cycleId, setCycleId] = useState("")
   const [loading, setLoading] = useState(false)
 
-  const [inputMode, setInputMode] = useState<"form" | "ai">("form")
+  const [inputMode, setInputMode] = useState<"form" | "ai" | "slip">("form")
   const [aiText, setAiText] = useState("")
   const [aiLoading, setAiLoading] = useState(false)
   const [aiError, setAiError] = useState("")
+
+  // แท็บสแกนสลิป
+  const [slipScanning, setSlipScanning] = useState(false)
+  const [slipError, setSlipError] = useState("")
+  const [slipConsented, setSlipConsented] = useState<boolean>(() => hasSlipConsent())
+  const [amountHint, setAmountHint] = useState("")
+  const [dateHint, setDateHint] = useState("")
+  const slipFileRef = useRef<HTMLInputElement>(null)
+  const slipScanIdRef = useRef<number>(0)
+  const slipAbortRef = useRef<AbortController | null>(null)
 
   const [showDetails, setShowDetails] = useState(false)
   const [showAllCategories, setShowAllCategories] = useState(false)
@@ -53,7 +70,8 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles,
   const [categoryDropdownOpen, setCategoryDropdownOpen] = useState(false)
   const [categoryUsage, setCategoryUsage] = useState<{ category: string; type: string }[]>([])
 
-  const [isBillPayment, setIsBillPayment] = useState(false)
+  const [kind, setKind] = useState<FormKind>("regular")
+  const withdrawWarning = useWithdrawWarning({ open, type, kind, amount: Number(amount) })
 
   type RecentTx = { name: string | null; amount: number | string; type: string; date: string; category: string | null; kind?: string | null }
   const [recentTx, setRecentTx] = useState<RecentTx[]>([])
@@ -110,15 +128,28 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles,
   // เปิดพร้อมค่าเริ่มต้น -> ไปแท็บฟอร์ม ใส่ประเภท/จำนวนให้ (ไม่ focus อะไร)
   useEffect(() => {
     if (!open) return
-    if (initialType === undefined && (initialAmount === undefined || initialAmount === null) && !initialDate) return
+    if (initialType === undefined && (initialAmount === undefined || initialAmount === null) && !initialDate && !initialKind) return
     setInputMode("form")
     if (initialType) setType(initialType)
+    if (initialKind) setKind(initialKind)
     if (initialDate) {
       setDate(initialDate)
       if (initialDate !== todayLocal()) setShowDetails(true)
     }
     if (initialAmount !== undefined && initialAmount !== null) setAmount(sanitizeAmount(String(initialAmount)))
-  }, [open, initialAmount, initialType, initialDate])
+  }, [open, initialAmount, initialType, initialDate, initialKind])
+
+  // ยกเลิกการสแกนที่ค้างอยู่ ผลที่ตอบกลับมาทีหลังจะถูกทิ้ง
+  const cancelSlip = useCallback(() => {
+    slipAbortRef.current?.abort()
+    slipAbortRef.current = null
+    slipScanIdRef.current += 1
+    setSlipScanning(false)
+  }, [])
+
+  useEffect(() => {
+    return () => cancelSlip()
+  }, [cancelSlip])
 
   const clearPressTimer = () => {
     if (pressTimer.current) {
@@ -132,12 +163,13 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles,
     clearPressTimer()
     setName(""); setAmount(""); setDate(todayLocal())
     setType("expense"); setCategory(""); setCycleId("")
-    setIsBillPayment(false)
+    setKind("regular")
     setInputMode("form"); setAiText(""); setAiError(""); setShowAllCategories(false)
     setShowDetails(false)
     setRecentTx([])
     setCategorySearch(""); setCategoryDropdownOpen(false)
-  }, [open])
+    cancelSlip(); setSlipError(""); setAmountHint(""); setDateHint("")
+  }, [open, cancelSlip])
 
   if (!open) return null
 
@@ -171,6 +203,7 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles,
       pressTimer.current = null
       longPressed.current = true
       setAmount(sanitizeAmount(String(item.amount)))
+      setAmountHint("")
       setName(item.name)
       setCategory(item.category || "")
       setShowDetails(true)
@@ -260,14 +293,100 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles,
       }
       setName(data.name || "")
       setAmount(data.amount ? sanitizeAmount(String(data.amount)) : "")
-      setType(data.type === "income" ? "income" : "expense")
+      setAmountHint("")
+      const aiType: "expense" | "income" = data.type === "income" ? "income" : "expense"
+      setType(aiType)
+      // จ่ายบิลใช้ได้เฉพาะรายจ่าย; ประเภทอื่นคงที่ผู้ใช้เลือกไว้
+      if (aiType === "income") setKind(prev => (prev === "bill_payment" ? "regular" : prev))
       setCategory(mode === "full" ? (data.category || "") : "")
       setInputMode("form")
       if (data.name || (mode === "full" && data.category)) setShowDetails(true)
     } catch {
       setAiError("แปลงข้อความไม่สำเร็จ กรุณาลองใหม่")
+    } finally {
+      setAiLoading(false)
     }
-    setAiLoading(false)
+  }
+
+  const switchTab = (next: "form" | "ai" | "slip") => {
+    if (inputMode === "slip" && next !== "slip") {
+      cancelSlip()
+      setSlipError("")
+    }
+    setInputMode(next)
+  }
+
+  const handleSlipFile = async (file: File) => {
+    slipAbortRef.current?.abort()
+    const controller = new AbortController()
+    slipAbortRef.current = controller
+    slipScanIdRef.current += 1
+    const myId = slipScanIdRef.current
+    const isCurrent = (): boolean => myId === slipScanIdRef.current
+    setSlipScanning(true)
+    setSlipError("")
+
+    const fail = () => {
+      if (isCurrent()) setSlipError("อ่านสลิปไม่สำเร็จ ลองรูปอื่นหรือกรอกเอง")
+    }
+
+    try {
+      const prepared = await prepareSlipImage(file)
+      if (!isCurrent()) return
+      const res = await fetch("/api/ocr", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ imageBase64: prepared.base64, mimeType: prepared.mimeType }),
+        signal: controller.signal,
+      })
+      if (!isCurrent()) return
+      if (!res.ok) {
+        fail()
+        return
+      }
+      const json = await res.json()
+      if (!isCurrent()) return
+      if (json?.success !== true || !json.data) {
+        fail()
+        return
+      }
+      const d = json.data
+      const newType: "expense" | "income" = d.type === "income" ? "income" : "expense"
+      const ocrAmount = Number(d.amount)
+      if (d.amount !== null && d.amount !== undefined && Number.isFinite(ocrAmount) && ocrAmount > 0) {
+        setAmount(sanitizeAmount(String(ocrAmount)))
+        setAmountHint("")
+      } else {
+        setAmount("")
+        setAmountHint("อ่านยอดเงินจากสลิปไม่ได้ กรอกเอง")
+      }
+      if (isValidDateString(d.date)) {
+        setDate(d.date)
+        setDateHint("")
+      } else {
+        setDate(todayLocal())
+        setDateHint("อ่านวันที่จากสลิปไม่ได้ ใช้วันนี้แทน ตรวจก่อนบันทึก")
+      }
+      setType(newType)
+      setName(typeof d.name === "string" ? d.name : "")
+      // ใส่หมวดเฉพาะที่ตรงกับหมวดของผู้ใช้เท่านั้น (AI อาจตอบชื่อที่ไม่มีอยู่จริง)
+      let matched = ""
+      if (mode === "full" && typeof d.category === "string") {
+        const wanted = d.category.trim().toLowerCase()
+        const hit = wanted
+          ? categories.find(c => (!c.type || c.type === newType) && c.name.trim().toLowerCase() === wanted)
+          : undefined
+        if (hit) matched = hit.name
+      }
+      setCategory(matched)
+      if (newType === "income") setKind(prev => (prev === "bill_payment" ? "regular" : prev))
+      setShowDetails(true)
+      setInputMode("form")
+    } catch (err) {
+      if (!(err instanceof DOMException && err.name === "AbortError")) fail()
+    } finally {
+      if (isCurrent()) setSlipScanning(false)
+    }
   }
 
   const handleSave = async () => {
@@ -286,7 +405,7 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles,
       type,
       category: category || null,
       cycle_id: cycleId || null,
-      kind: type === "expense" && isBillPayment ? "bill_payment" : "regular",
+      kind: type === "income" && kind === "bill_payment" ? "regular" : kind,
     })
     if (error) {
       showToast("บันทึกไม่สำเร็จ ลองใหม่อีกครั้ง", "error")
@@ -307,16 +426,66 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles,
           <button onClick={onClose} aria-label="ปิด" className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
         </div>
 
-        <div className="px-6 flex gap-2 mb-3">
-          <button onClick={() => setInputMode("form")}
-            className={`flex-1 py-2 rounded-lg text-sm font-medium border transition-colors ${inputMode === "form" ? "bg-gray-800 text-white border-gray-800" : "border-gray-200 text-gray-600"}`}>
+        <div className="px-6 flex gap-1.5 mb-3">
+          <button onClick={() => switchTab("form")}
+            className={`flex-1 py-2 px-1 whitespace-nowrap rounded-lg text-sm font-medium border transition-colors ${inputMode === "form" ? "bg-gray-800 text-white border-gray-800" : "border-gray-200 text-gray-600"}`}>
             กรอกฟอร์ม
           </button>
-          <button onClick={() => setInputMode("ai")}
-            className={`flex-1 py-2 rounded-lg text-sm font-medium border transition-colors ${inputMode === "ai" ? "bg-gray-800 text-white border-gray-800" : "border-gray-200 text-gray-600"}`}>
+          <button onClick={() => switchTab("ai")}
+            className={`flex-1 py-2 px-1 whitespace-nowrap rounded-lg text-sm font-medium border transition-colors ${inputMode === "ai" ? "bg-gray-800 text-white border-gray-800" : "border-gray-200 text-gray-600"}`}>
             พิมพ์บอก AI
           </button>
+          <button onClick={() => switchTab("slip")}
+            className={`flex-1 py-2 px-1 whitespace-nowrap rounded-lg text-sm font-medium border transition-colors flex items-center justify-center gap-1 ${inputMode === "slip" ? "bg-gray-800 text-white border-gray-800" : "border-gray-200 text-gray-600"}`}>
+            <Camera size={14} className="hidden min-[390px]:inline-block" />
+            สแกนสลิป
+          </button>
         </div>
+
+        {inputMode === "slip" && (
+          <div className="px-6 pb-6 flex flex-col gap-2">
+            {!slipConsented && (
+              <SlipConsentNotice
+                onAccept={() => {
+                  setSlipConsent()
+                  setSlipConsented(true)
+                  slipFileRef.current?.click()
+                }}
+              />
+            )}
+            {slipConsented && (
+            <button
+              type="button"
+              disabled={slipScanning}
+              onClick={() => slipFileRef.current?.click()}
+              className={`w-full border-2 border-dashed border-gray-200 rounded-xl p-6 text-center transition-colors ${slipScanning ? "cursor-not-allowed opacity-60" : "cursor-pointer hover:border-[#1D9E75]"}`}
+            >
+              <Camera size={32} className="text-gray-400 mx-auto mb-2" />
+              <p className="text-sm text-gray-500">กดเพื่อเลือกรูปสลิป</p>
+              <p className="text-xs text-gray-400 mt-1">รองรับ JPG, PNG</p>
+            </button>
+            )}
+            <input
+              ref={slipFileRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={e => {
+                const file = e.target.files?.[0]
+                e.target.value = ""
+                if (file) handleSlipFile(file)
+              }}
+            />
+            {slipScanning && (
+              <p className="text-sm text-gray-500 flex items-center justify-center gap-1.5 py-1">
+                <Loader2 size={14} className="animate-spin" />
+                กำลังอ่านสลิป...
+              </p>
+            )}
+            {slipError && <p className="text-xs text-[#D85A30]">{slipError}</p>}
+            <p className="text-xs text-gray-400">อ่านเสร็จแล้วตรวจสอบผลลัพธ์ก่อนกดบันทึก</p>
+          </div>
+        )}
 
         {inputMode === "ai" && (
           <div className="px-6 pb-4 flex flex-col gap-2">
@@ -348,30 +517,16 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles,
         {inputMode === "form" && (
           <div className="px-6 pb-6 flex flex-col gap-3">
             <div className="flex gap-3">
-              <button onClick={() => setType("expense")}
+              <button onClick={() => { setType("expense") }}
                 className={`flex-1 py-2 rounded-lg text-sm font-medium border transition-colors ${type === "expense" ? "bg-[#D85A30] text-white border-[#D85A30]" : "border-gray-200 text-gray-600"}`}>
                 รายจ่าย
               </button>
-              <button onClick={() => setType("income")}
+              <button onClick={() => { setType("income"); if (kind === "bill_payment") setKind("regular") }}
                 className={`flex-1 py-2 rounded-lg text-sm font-medium border transition-colors ${type === "income" ? "bg-[#1D9E75] text-white border-[#1D9E75]" : "border-gray-200 text-gray-600"}`}>
                 รายรับ
               </button>
             </div>
-            {type === "expense" && (
-              <label className="flex items-center gap-3 min-h-[44px] px-3 rounded-lg border border-gray-200 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={isBillPayment}
-                  onChange={e => setIsBillPayment(e.target.checked)}
-                  className="w-5 h-5 accent-[#D85A30] shrink-0"
-                />
-                <Receipt size={18} className="text-gray-500 shrink-0" />
-                <span className="flex flex-col leading-tight">
-                  <span className="text-sm font-medium text-gray-800">จ่ายบิล/ชำระหนี้</span>
-                  <span className="text-xs text-gray-400">ไม่นับเป็นค่าใช้จ่ายของวันนี้</span>
-                </span>
-              </label>
-            )}
+            <KindSelector type={type} kind={kind} onChange={setKind} />
             <div>
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[1.5rem] font-semibold text-gray-400 pointer-events-none">฿</span>
@@ -381,7 +536,7 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles,
                   inputMode="decimal"
                   autoFocus
                   value={amount}
-                  onChange={e => setAmount(sanitizeAmount(e.target.value))}
+                  onChange={e => { setAmount(sanitizeAmount(e.target.value)); setAmountHint("") }}
                   onKeyDown={e => {
                     if (e.key === "Enter" && canSave) handleSave()
                   }}
@@ -389,6 +544,8 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles,
                 />
               </div>
               {amountError && <p className="text-xs text-[#D85A30] mt-1">{amountError}</p>}
+              {!amountError && amountHint && <p className="text-xs text-gray-500 mt-1">{amountHint}</p>}
+              {!amountError && withdrawWarning && <p className="text-xs text-amber-600 mt-1">{withdrawWarning}</p>}
             </div>
 
             <button
@@ -445,9 +602,10 @@ export default function QuickAddModal({ open, onClose, mode, categories, cycles,
             <input
               type="date"
               value={date}
-              onChange={e => setDate(e.target.value)}
+              onChange={e => { setDate(e.target.value); setDateHint("") }}
               className="border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#1D9E75] text-gray-800"
             />
+            {dateHint && <p className="text-xs text-gray-500 -mt-2">{dateHint}</p>}
             <input
               placeholder="ชื่อรายการ เช่น ข้าวเที่ยง (ไม่บังคับ)"
               value={name}
