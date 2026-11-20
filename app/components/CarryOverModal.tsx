@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { CalendarCheck, X, Loader2 } from "lucide-react"
-import { formatMoney } from "@/lib/daily-budget"
+import { formatAmount } from "@/lib/daily-budget"
 
 type Props = {
   open: boolean
@@ -51,7 +51,7 @@ export default function CarryOverModal({ open, leftover, prevRangeLabel, saving,
 
         <p className="text-sm text-gray-700">
           รอบก่อน ({prevRangeLabel}) เหลือเงิน{" "}
-          <span className="font-semibold tabular-nums text-[#1D9E75]">฿{formatMoney(leftover)}</span>
+          <span className="font-semibold tabular-nums text-[#1D9E75]">฿{formatAmount(leftover)}</span>
         </p>
 
         <label className="flex items-center gap-2 mt-4 text-sm text-gray-700 min-h-11 cursor-pointer">

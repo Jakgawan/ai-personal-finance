@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { summarizePeriod, buildFinancialContext, pickRecent, type RecentTx } from "./period-summary"
+import { summarizePeriod, summarizeExpenseByCategory, buildFinancialContext, pickRecent, type RecentTx } from "./period-summary"
 
 const period = { start: "2026-10-20", end: "2026-11-04" }
 
@@ -172,5 +172,84 @@ describe("buildFinancialContext ป้ายเก็บเงิน/ลงท�
     expect(lines.find(l => l.includes(" c "))).toContain("(ถอนเงินเก็บ)")
     expect(lines.find(l => l.includes(" d "))).toContain("(ถอนเงินลงทุน)")
     expect(lines.find(l => l.includes(" e "))).not.toMatch(/\(.*เงิน|ลงทุน/)
+  })
+})
+
+describe("summarizeExpenseByCategory", () => {
+  const T = "2026-11-03"
+  it("นับเฉพาะรายจ่ายในรอบและไม่เกินวันนี้ ตัดเก็บเงิน/ลงทุน รวมจ่ายบิล ไม่นับรายรับ", () => {
+    const txs = [
+      { date: "2026-10-19", type: "expense", amount: 999, category: "อาหาร" }, // ก่อนรอบ
+      { date: "2026-10-20", type: "expense", amount: 10, category: "อาหาร" }, // start
+      { date: "2026-11-03", type: "expense", amount: 20, category: "อาหาร" }, // today
+      { date: "2026-11-04", type: "expense", amount: 500, category: "อาหาร" }, // เกินวันนี้
+      { date: "2026-11-05", type: "expense", amount: 500, category: "อาหาร" }, // เกินรอบ
+      { date: "2026-10-25", type: "expense", amount: 5000, category: "ออม", kind: "saving" },
+      { date: "2026-10-26", type: "expense", amount: 4000, category: "ลงทุน", kind: "investment" },
+      { date: "2026-10-27", type: "expense", amount: 300, category: "บัตร", kind: "bill_payment" },
+      { date: "2026-10-28", type: "income", amount: 700, category: "เงินเดือน" },
+    ]
+    expect(summarizeExpenseByCategory(txs, period, T)).toEqual([
+      { category: "บัตร", amount: 300 },
+      { category: "อาหาร", amount: 30 },
+    ])
+  })
+
+  it("หมวด null/ว่าง/เว้นวรรค -> ไม่ระบุหมวด และตัดช่องว่างรวมหมวดเดียวกัน", () => {
+    const txs = [
+      { date: "2026-10-21", type: "expense", amount: 1, category: null },
+      { date: "2026-10-21", type: "expense", amount: 2, category: "" },
+      { date: "2026-10-21", type: "expense", amount: 4, category: "   " },
+      { date: "2026-10-21", type: "expense", amount: 8 },
+      { date: "2026-10-22", type: "expense", amount: 10, category: "อาหาร " },
+      { date: "2026-10-22", type: "expense", amount: 20, category: "อาหาร" },
+    ]
+    expect(summarizeExpenseByCategory(txs, period, T)).toEqual([
+      { category: "อาหาร", amount: 30 },
+      { category: "ไม่ระบุหมวด", amount: 15 },
+    ])
+  })
+
+  it("เรียงมากไปน้อย ยอดเท่ากันเรียงชื่อ และจำกัดจำนวน", () => {
+    const txs = [
+      { date: "2026-10-21", type: "expense", amount: 50, category: "b" },
+      { date: "2026-10-21", type: "expense", amount: 50, category: "a" },
+      { date: "2026-10-21", type: "expense", amount: 90, category: "c" },
+      { date: "2026-10-21", type: "expense", amount: 5, category: "d" },
+    ]
+    expect(summarizeExpenseByCategory(txs, period, T).map(x => x.category)).toEqual(["c", "a", "b", "d"])
+    expect(summarizeExpenseByCategory(txs, period, T, 2).map(x => x.category)).toEqual(["c", "a"])
+  })
+
+  it("ไม่มีรายจ่าย -> อาร์เรย์ว่าง", () => {
+    expect(summarizeExpenseByCategory([], period, T)).toEqual([])
+  })
+})
+
+describe("buildFinancialContext แยกตามหมวด และป้ายหนี้", () => {
+  const base = {
+    period, income: 1, expense: 1, balanceNow: 1 as number | null, daysLeftInclToday: 1,
+    totalAssets: 0, totalLiabilities: 400, recent: [] as RecentTx[],
+  }
+  it("ใช้ป้ายหนี้สินรวม ไม่ใช่ระยะยาวอย่างเดียว", () => {
+    const out = buildFinancialContext(base)
+    expect(out).toContain(`หนี้สินรวม (ระยะสั้นและระยะยาว): ฿${(400).toLocaleString()}`)
+    expect(out).not.toContain("หนี้สินระยะยาว:")
+  })
+  it("มี byCategory -> มีบล็อกก่อนรายการล่าสุด", () => {
+    const out = buildFinancialContext({ ...base, byCategory: [{ category: "อาหาร", amount: 1500 }, { category: "เดินทาง", amount: 200 }] })
+    const lines = out.split("\n")
+    const h = lines.indexOf("รายจ่ายรอบนี้แยกตามหมวด (มากไปน้อย, รวมจ่ายบิล):")
+    expect(h).toBeGreaterThan(-1)
+    expect(lines[h + 1]).toBe(`- อาหาร: ฿${(1500).toLocaleString()}`)
+    expect(lines[h + 2]).toBe(`- เดินทาง: ฿${(200).toLocaleString()}`)
+    expect(lines.indexOf("รายการล่าสุด 20 รายการ:")).toBe(h + 3)
+  })
+  it("byCategory ว่าง -> บอกว่ายังไม่มีรายจ่าย", () => {
+    const out = buildFinancialContext({ ...base, byCategory: [] })
+    expect(out).toContain("- (ยังไม่มีรายจ่ายในรอบนี้)")
+  })
+  it("ไม่ส่ง byCategory -> ไม่มีบล็อก", () => {
+    expect(buildFinancialContext(base)).not.toContain("แยกตามหมวด")
   })
 })
