@@ -12,7 +12,7 @@ import { showToast } from "@/app/components/Toast"
 import { pickActiveOpening } from "@/lib/opening-balance"
 import CategoryIcon from "@/app/components/CategoryIcon"
 import KindBadge from "@/app/components/KindBadge"
-import { pickInsight, formatMoney, formatThaiShortDate } from "@/lib/daily-budget"
+import { pickInsight, formatMoney, formatAmount, formatThaiShortDate } from "@/lib/daily-budget"
 import { todayInBangkok, addDays, getNextIncomeDate, getPreviousIncomeDate, type IncomeSourceSchedule } from "@/lib/income-schedule"
 import { calcSpendable, getCurrentPeriod, toLegacyBudget } from "@/lib/spendable"
 import { calcCarryIn } from "@/lib/period-carry-in"
@@ -139,9 +139,9 @@ function calcFinancialScore(
   return { score: Math.max(0, Math.min(100, score)), details }
 }
 
-// แสดงเงินแบบมีเครื่องหมาย: ติดลบ -> -฿X, ใกล้ 0 (< 0.5) -> ฿0
+// แสดงเงินแบบมีเครื่องหมาย: ติดลบ -> -฿X, ใกล้ 0 (< 0.5) -> ฿0 ให้ตรงกับ roundZero ในสูตร
 const signedMoney = (x: number): string =>
-  Math.abs(x) < 0.5 ? "฿0" : x < 0 ? `-฿${formatMoney(Math.abs(x))}` : `฿${formatMoney(x)}`
+  Math.abs(x) < 0.5 ? "฿0" : x < 0 ? `-฿${formatAmount(Math.abs(x))}` : `฿${formatAmount(x)}`
 
 const getScoreColor = (score: number) => {
   if (score >= 80) return { text: "text-[#1D9E75]", label: "ยอดเยี่ยม" }
@@ -691,7 +691,7 @@ export default function Dashboard() {
         <div className="bg-white rounded-xl p-4 shadow-sm mb-3 md:mb-4 flex items-start gap-3">
           <TriangleAlert size={18} className="text-[#D85A30] shrink-0 mt-0.5" />
           <p className="flex-1 text-sm text-gray-700">
-            รอบก่อนติดลบ ฿{formatMoney(Math.abs(activeOpening.leftover))} อาจลืมจดรายรับ
+            รอบก่อนติดลบ ฿{formatAmount(Math.abs(activeOpening.leftover))} อาจลืมจดรายรับ
           </p>
           <button
             type="button"
@@ -780,7 +780,7 @@ export default function Dashboard() {
               <>
                 <p className="text-sm opacity-90">ใช้เกินไปแล้ว</p>
                 <p className="text-[2.5rem] tabular-nums leading-tight font-bold mt-1">
-                  {`฿${formatMoney(spend.overBy)}`}
+                  {`฿${formatAmount(spend.overBy)}`}
                 </p>
                 <p className="text-sm opacity-90 mt-3">ถ้าตัวเลขไม่ตรงกับเงินจริง กด ปรับยอดเงิน ได้</p>
               </>
@@ -797,17 +797,17 @@ export default function Dashboard() {
                 <div className="h-2 rounded-full bg-white transition-all" style={{ width: `${spentPct}%` }} />
               </div>
               <p className="text-sm mt-3">
-                วันนี้ใช้ไป <span className="font-semibold tabular-nums">฿{formatMoney(spend.todayExpense)}</span>
+                วันนี้ใช้ไป <span className="font-semibold tabular-nums">฿{formatAmount(spend.todayExpense)}</span>
                 {" "}จาก <span className="font-semibold tabular-nums">฿{formatMoney(Math.max(0, spend.todayBudget))}</span>
               </p>
               {spend.todayBillPayments > 0 && (
                 <p className="text-xs opacity-90 mt-1">
-                  จ่ายบิลวันนี้ <span className="font-semibold tabular-nums">฿{formatMoney(spend.todayBillPayments)}</span> (ไม่นับในใช้ไป)
+                  จ่ายบิลวันนี้ <span className="font-semibold tabular-nums">฿{formatAmount(spend.todayBillPayments)}</span> (ไม่นับในใช้ไป)
                 </p>
               )}
               {spend.todaySavingDeposits > 0 && (
                 <p className="text-xs opacity-90 mt-1">
-                  เก็บเงิน/ลงทุนวันนี้ <span className="font-semibold tabular-nums">฿{formatMoney(spend.todaySavingDeposits)}</span> (ไม่นับในใช้ไป)
+                  เก็บเงิน/ลงทุนวันนี้ <span className="font-semibold tabular-nums">฿{formatAmount(spend.todaySavingDeposits)}</span> (ไม่นับในใช้ไป)
                 </p>
               )}
               <p className="text-sm opacity-90 mt-1">
@@ -828,7 +828,7 @@ export default function Dashboard() {
           {spend && activeOpening && activeOpening.source === "carryover" && activeOpening.leftover !== null && activeOpening.leftover > 0 && activeOpening.opening_date === period.start && (
             <p className="text-xs opacity-90 mt-3">
               เหลือจากรอบที่แล้ว ({formatThaiShortDate(activeOpening.leftover_from ?? prevStart)} – {formatThaiShortDate(prevEnd)}){" "}
-              <span className="font-semibold tabular-nums">฿{formatMoney(activeOpening.leftover)}</span>
+              <span className="font-semibold tabular-nums">฿{formatAmount(activeOpening.leftover)}</span>
             </p>
           )}
           {activeOpening && (
@@ -871,7 +871,7 @@ export default function Dashboard() {
         ].map((card) => (
           <div key={card.label} className="bg-white rounded-xl p-3 md:p-4 shadow-sm">
             <p className="text-xs text-gray-500 mb-1">{card.label}</p>
-            <p className={`text-lg md:text-xl font-bold tabular-nums ${card.color}`}>฿{formatMoney(card.value)}</p>
+            <p className={`text-lg md:text-xl font-bold tabular-nums ${card.color}`}>฿{formatAmount(card.value)}</p>
             {card.pct !== null && (
               <p className={`text-xs mt-1 ${Number(card.pct) >= 0 ? "text-[#1D9E75]" : "text-[#D85A30]"}`}>
                 {Number(card.pct) >= 0 ? "▲" : "▼"} {Math.abs(Number(card.pct))}% จากรอบก่อน
@@ -884,7 +884,7 @@ export default function Dashboard() {
             <p className="text-xs text-gray-500">คงเหลือรอบนี้</p>
             <p className={`text-lg md:text-xl font-bold tabular-nums ${spend.balanceNow < -0.5 ? "text-[#D85A30]" : "text-gray-800"}`}>{signedMoney(spend.balanceNow)}</p>
             {carryIn !== null && carryIn > 0.5 && (
-              <p className="text-xs text-gray-400 mt-0.5">ยกมา <span className="tabular-nums">฿{formatMoney(carryIn)}</span></p>
+              <p className="text-xs text-gray-400 mt-0.5">ยกมา <span className="tabular-nums">฿{formatAmount(carryIn)}</span></p>
             )}
           </div>
         )}
@@ -920,11 +920,11 @@ export default function Dashboard() {
           <div className="grid grid-cols-2 gap-3">
             <div className="min-w-0">
               <p className="text-xs text-gray-500">เงินเก็บ</p>
-              <p className="text-lg md:text-xl font-bold tabular-nums text-gray-800 truncate">{hideSaving ? "฿••••" : `฿${formatMoney(savingsTotals.saving)}`}</p>
+              <p className="text-lg md:text-xl font-bold tabular-nums text-gray-800 truncate">{hideSaving ? "฿••••" : `฿${formatAmount(savingsTotals.saving)}`}</p>
             </div>
             <div className="min-w-0">
               <p className="text-xs text-gray-500">เงินลงทุน</p>
-              <p className="text-lg md:text-xl font-bold tabular-nums text-gray-800 truncate">{hideSaving ? "฿••••" : `฿${formatMoney(savingsTotals.investment)}`}</p>
+              <p className="text-lg md:text-xl font-bold tabular-nums text-gray-800 truncate">{hideSaving ? "฿••••" : `฿${formatAmount(savingsTotals.investment)}`}</p>
             </div>
           </div>
         </div>
@@ -952,7 +952,7 @@ export default function Dashboard() {
                     {t.category && <p className="text-xs text-gray-400 truncate">{t.category}</p>}
                   </div>
                   <p className={`text-sm font-semibold tabular-nums ${t.type === "income" ? "text-[#1D9E75]" : "text-[#D85A30]"}`}>
-                    {t.type === "income" ? "+" : "-"}฿{formatMoney(Number(t.amount))}
+                    {t.type === "income" ? "+" : "-"}฿{formatAmount(Number(t.amount))}
                   </p>
                 </div>
               )
@@ -1012,7 +1012,7 @@ export default function Dashboard() {
           <BarChart data={last6Months} barGap={4}>
             <XAxis dataKey="label" tick={{ fontSize: 11 }} />
             <YAxis tick={{ fontSize: 11 }} />
-            <Tooltip formatter={(v) => `฿${Number(v ?? 0).toLocaleString()}`} />
+            <Tooltip formatter={(v) => `฿${formatAmount(Number(v ?? 0))}`} />
             <Bar dataKey="income" name="รายรับ" fill="#1D9E75" radius={[4, 4, 0, 0]} />
             <Bar dataKey="expense" name="รายจ่าย" fill="#D85A30" radius={[4, 4, 0, 0]} />
           </BarChart>
@@ -1044,7 +1044,7 @@ export default function Dashboard() {
                   {expenseByCategory.map((c, i) => (
                     <div key={c.name}>
                       <div className="flex justify-between text-xs text-gray-600 mb-1">
-                        <span>{c.name}</span><span>฿{c.value.toLocaleString()}</span>
+                        <span>{c.name}</span><span>฿{formatAmount(c.value)}</span>
                       </div>
                       <div className="h-2 bg-gray-100 rounded-full">
                         <div className="h-2 rounded-full" style={{ width: `${(c.value / totalExpenseForPct) * 100}%`, backgroundColor: COLORS[i % COLORS.length] }} />
@@ -1060,7 +1060,7 @@ export default function Dashboard() {
                       {expenseByCategory.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                     </Pie>
                     <Legend />
-                    <Tooltip formatter={(v) => `฿${Number(v ?? 0).toLocaleString()}`} />
+                    <Tooltip formatter={(v) => `฿${formatAmount(Number(v ?? 0))}`} />
                   </PieChart>
                 </ResponsiveContainer>
               )}
@@ -1069,7 +1069,7 @@ export default function Dashboard() {
                   <BarChart data={expenseByCategory}>
                     <XAxis dataKey="name" tick={{ fontSize: 11 }} />
                     <YAxis tick={{ fontSize: 11 }} />
-                    <Tooltip formatter={(v) => `฿${Number(v ?? 0).toLocaleString()}`} />
+                    <Tooltip formatter={(v) => `฿${formatAmount(Number(v ?? 0))}`} />
                     <Bar dataKey="value" radius={[4, 4, 0, 0]}>
                       {expenseByCategory.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                     </Bar>
@@ -1092,7 +1092,7 @@ export default function Dashboard() {
                           <span className="w-2 h-2 rounded-full inline-block" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
                           {c.name}
                         </td>
-                        <td className="py-2 text-right">฿{c.value.toLocaleString()}</td>
+                        <td className="py-2 text-right">฿{formatAmount(c.value)}</td>
                         <td className="py-2 text-right text-gray-500">{((c.value / totalExpenseForPct) * 100).toFixed(1)}%</td>
                       </tr>
                     ))}
@@ -1138,9 +1138,9 @@ export default function Dashboard() {
                         </span>
                       </td>
                       <td className={`px-4 py-3 font-semibold ${t.type === "income" ? "text-[#1D9E75]" : "text-[#D85A30]"}`}>
-                        {t.type === "income" ? "+" : "-"}฿{Number(t.amount).toLocaleString()}
+                        {t.type === "income" ? "+" : "-"}฿{formatAmount(Number(t.amount))}
                       </td>
-                      <td className="px-4 py-3 text-gray-700">฿{t.balance.toLocaleString()}</td>
+                      <td className="px-4 py-3 text-gray-700">{t.balance < 0 ? "-" : ""}฿{formatAmount(Math.abs(t.balance))}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -1157,9 +1157,9 @@ export default function Dashboard() {
                   </div>
                   <div className="text-right ml-3">
                     <p className={`text-sm font-semibold ${t.type === "income" ? "text-[#1D9E75]" : "text-[#D85A30]"}`}>
-                      {t.type === "income" ? "+" : "-"}฿{Number(t.amount).toLocaleString()}
+                      {t.type === "income" ? "+" : "-"}฿{formatAmount(Number(t.amount))}
                     </p>
-                    <p className="text-xs text-gray-400">คงเหลือ ฿{t.balance.toLocaleString()}</p>
+                    <p className="text-xs text-gray-400">คงเหลือ {t.balance < 0 ? "-" : ""}฿{formatAmount(Math.abs(t.balance))}</p>
                   </div>
                 </div>
               ))}

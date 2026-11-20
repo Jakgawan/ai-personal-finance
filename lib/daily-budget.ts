@@ -75,6 +75,15 @@ export function formatMoney(n: number): string {
   return Math.round(n).toLocaleString(undefined, { maximumFractionDigits: 0 })
 }
 
+// ยอดที่ผู้ใช้กรอก/ผลรวมของยอดที่กรอก: จำนวนเต็มแสดงไม่มีทศนิยม, มีเศษแสดง 2 ตำแหน่ง
+export function formatAmount(n: number): string {
+  if (!Number.isFinite(n)) return "0"
+  const r = Math.round(n * 100) / 100
+  const v = r === 0 ? 0 : r // กัน -0
+  if (Number.isInteger(v)) return v.toLocaleString(undefined, { maximumFractionDigits: 0 })
+  return v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+}
+
 // 'YYYY-MM-DD' -> '25 ต.ค.'
 export function formatThaiShortDate(dateStr: string): string {
   const [, m, d] = dateStr.split("-").map(Number)
@@ -185,9 +194,9 @@ export function pickInsight(
           { text: "สัปดาห์นี้หมวด " },
           { text: cat, bold: true },
           { text: " ใช้ไป " },
-          { text: `฿${formatMoney(a)}`, bold: true },
+          { text: `฿${formatAmount(a)}`, bold: true },
           { text: " มากกว่าสัปดาห์ก่อน " },
-          { text: `฿${formatMoney(b)}`, bold: true },
+          { text: `฿${formatAmount(b)}`, bold: true },
         ],
         caption: "คำนวณจากรายการที่คุณบันทึก 7 วันล่าสุด",
       }
