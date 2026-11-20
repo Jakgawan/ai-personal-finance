@@ -10,7 +10,7 @@ import { MessageCircle } from "lucide-react"
 import { pickActiveOpening } from "@/lib/opening-balance"
 import { todayInBangkok, getNextIncomeDate, getPreviousIncomeDate } from "@/lib/income-schedule"
 import { calcSpendable, getCurrentPeriod } from "@/lib/spendable"
-import { summarizePeriod, buildFinancialContext, pickRecent } from "@/lib/period-summary"
+import { summarizePeriod, buildFinancialContext, pickRecent, summarizeExpenseByCategory } from "@/lib/period-summary"
 
 type Transaction = {
   name: string
@@ -20,6 +20,7 @@ type Transaction = {
   kind: string | null
   envelope_id: string | null
   created_at: string
+  category?: string | null
 }
 
 type Message = {
@@ -69,7 +70,7 @@ export default function AIChatPage() {
         return
       }
       const [txRes, srcRes, cycleRes, profRes, openRes, assetRes, liabRes] = await Promise.all([
-        supabase.from("transactions").select("name, amount, type, date, kind, envelope_id, created_at").eq("user_id", user.id).order("date", { ascending: false }),
+        supabase.from("transactions").select("name, amount, type, date, kind, envelope_id, created_at, category").eq("user_id", user.id).order("date", { ascending: false }),
         supabase.from("income_sources").select("schedule_type, monthly_days").eq("user_id", user.id),
         supabase.from("pay_cycles").select("start_day").eq("user_id", user.id),
         supabase.from("financial_profile").select("target_date").eq("user_id", user.id).maybeSingle(),
@@ -118,6 +119,7 @@ export default function AIChatPage() {
         totalAssets,
         totalLiabilities: totalLiab,
         recent: pickRecent(tx, today, 20),
+        byCategory: summarizeExpenseByCategory(tx, period, today),
       }))
     } catch {
       setFinancialContext(CONTEXT_LOAD_FAILED)
@@ -305,6 +307,7 @@ export default function AIChatPage() {
           <p className="text-xs text-gray-400 text-center mt-2">กำลังโหลดข้อมูลการเงิน...</p>
         )}
         <p className="text-xs text-gray-400 text-center mt-2">Shift+Enter เพื่อขึ้นบรรทัดใหม่</p>
+        <p className="text-xs text-gray-400 text-center mt-1">คำตอบจาก AI อาจคลาดเคลื่อน ใช้ประกอบการตัดสินใจเท่านั้น ไม่ใช่คำแนะนำจากผู้เชี่ยวชาญการเงิน</p>
       </div>
 
       <ConfirmModal

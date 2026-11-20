@@ -30,6 +30,26 @@ export function summarizePeriod(
   return { income, expense }
 }
 
+// รายจ่ายรอบนี้แยกตามหมวด — กติกานับเดียวกับ summarizePeriod (รวมจ่ายบิล ไม่นับเก็บเงิน/ลงทุน)
+export function summarizeExpenseByCategory(
+  transactions: (SummaryTx & { category?: string | null })[],
+  period: { start: string; end: string },
+  today: string,
+  limit = 10
+): { category: string; amount: number }[] {
+  const totals = new Map<string, number>()
+  for (const t of transactions) {
+    if (!(t.date >= period.start && t.date <= period.end && t.date <= today)) continue
+    if (isSavingKind(t.kind)) continue
+    if (t.type !== "expense") continue
+    const name = (t.category ?? "").trim() || "ไม่ระบุหมวด"
+    totals.set(name, (totals.get(name) ?? 0) + Number(t.amount))
+  }
+  return Array.from(totals, ([category, amount]) => ({ category, amount }))
+    .sort((a, b) => (b.amount !== a.amount ? b.amount - a.amount : a.category < b.category ? -1 : a.category > b.category ? 1 : 0))
+    .slice(0, limit)
+}
+
 // ป้ายท้ายบรรทัดรายการล่าสุด (ว่างถ้าเป็นรายการปกติ)
 function kindSuffix(t: SummaryTx): string {
   const label = kindLabel(t.kind, t.type)
@@ -45,6 +65,7 @@ export function buildFinancialContext(input: {
   totalAssets: number
   totalLiabilities: number
   recent: RecentTx[]
+  byCategory?: { category: string; amount: number }[]
 }): string {
   const money = (n: number): string => `฿${n.toLocaleString()}`
   const recent = input.recent.slice(0, 20)
@@ -56,10 +77,18 @@ export function buildFinancialContext(input: {
       ? "เงินคงเหลือตอนนี้: ยังไม่ได้ตั้งยอดเงิน"
       : `เงินคงเหลือตอนนี้: ${money(input.balanceNow)}`,
     `สินทรัพย์รวม: ${money(input.totalAssets)}`,
-    `หนี้สินระยะยาว: ${money(input.totalLiabilities)}`,
+    `หนี้สินรวม (ระยะสั้นและระยะยาว): ${money(input.totalLiabilities)}`,
     `ความมั่งคั่งสุทธิ: ${money(input.totalAssets - input.totalLiabilities)}`,
-    "รายการล่าสุด 20 รายการ:",
   ]
+  if (input.byCategory) {
+    lines.push("รายจ่ายรอบนี้แยกตามหมวด (มากไปน้อย, รวมจ่ายบิล):")
+    if (input.byCategory.length === 0) {
+      lines.push("- (ยังไม่มีรายจ่ายในรอบนี้)")
+    } else {
+      for (const c of input.byCategory) lines.push(`- ${c.category}: ${money(c.amount)}`)
+    }
+  }
+  lines.push("รายการล่าสุด 20 รายการ:")
   if (recent.length === 0) {
     lines.push("(ยังไม่มีรายการ)")
   } else {
